@@ -5,6 +5,7 @@ import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentE
 import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
 import { adaptDesk } from "../src/data/desk.ts";
+import { builtLabel, clockEt, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../src/lib/stamps.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled } from "../src/lib/shareCard.ts";
 import { results, rings, sampleTickets } from "../src/data/sampleBoard.ts";
 import { winRateBand } from "../src/ui/bits.ts";
@@ -214,5 +215,57 @@ assert.equal(liveDesk.rings.find((ring) => ring.label === "Edge")?.pct, 100);
 assert.equal(liveDesk.privateStats?.edgeUnits, "-8.27u");
 assert.match(liveDesk.standings.leagues.NCAAB.note, /SAMPLE/);
 assert.equal(liveDesk.results[0].legs[0].beatClose, null);
+
+assert.equal(clockEt(1793883413.5), "7:56 AM ET");
+assert.equal(clockEt("2026-11-05 07:13 AM ET"), "7:13 AM ET");
+assert.equal(clockEt("2026-11-05 16:45 ET"), "4:45 PM ET");
+assert.equal(clockEt("4:45 PM"), "4:45 PM ET");
+assert.equal(updatedLabel(undefined), null);
+const afternoon = Date.UTC(2026, 10, 5, 20, 0, 0);
+const fresh = updatedLabel(afternoon / 1000 - 20 * 60, afternoon);
+assert.equal(fresh?.stale, false);
+assert.match(fresh?.text ?? "", /^Updated /);
+const old = updatedLabel(afternoon / 1000 - 120 * 60, afternoon);
+assert.equal(old?.stale, true);
+const night = Date.UTC(2026, 10, 5, 7, 0, 0);
+assert.equal(updatedLabel(night / 1000 - 120 * 60, night)?.stale, false);
+assert.equal(heistLabel(null), null);
+assert.equal(heistLabel({ final: false }), "Building…");
+assert.equal(heistLabel({ final: "4:45 PM" }), "Final 4:45 PM ET");
+assert.equal(heistLabel({ final: true }), "Final");
+assert.equal(builtLabel({}), null);
+assert.equal(builtLabel({ built: "2026-11-05 10:12 AM ET" }), "Built 10:12 AM ET");
+assert.equal(injuryLabel({ checked_et: "2026-11-05 08:20 AM ET", stage: "10am" }), "Injury check 8:20 AM ET · 10am");
+assert.equal(injuryLabel({ checked_et: "2026-11-05 08:20 AM ET" }), "Injury check 8:20 AM ET");
+assert.equal(lockLabel({}), null);
+assert.equal(lockLabel({ checked_et: "2026-11-05 07:57 AM ET" }), "Lock check 7:57 AM ET");
+assert.equal(standingsLabel({ updated: "2026-11-05 07:56 AM ET" }), "Updated 7:56 AM ET");
+assert.equal(uiBuildLabel("1793870900"), "UI build · 4:28 AM ET");
+assert.equal(uiBuildLabel(undefined), null);
+const stamped = adaptDesk(
+  {
+    generated: 1793883413,
+    ui_build: "1793870900",
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    heist: { final: false, legs: [], msg: "Not enough bought-down legs yet" },
+    edge: { built: "2026-11-05 10:12 AM", picks: [{ sport: "NHL", pick: "Anton Frondell Over 0.5 Assists", hr: "+275", result: "Pending" }] },
+    safe100: {},
+    dk: { fetched: "2026-11-05 09:58 ET" },
+    late_injury: { checked_et: "2026-11-05 08:20 AM ET", stage: "10am" },
+    lock_check: { checked_et: "2026-11-05 07:57 AM ET" },
+    standings: { updated: "2026-11-05 07:56 AM ET", leagues: {} },
+    results_v2: { rows: [] },
+  },
+  ncaab,
+);
+assert.equal(stamped.updated?.text, "Updated 7:56 AM ET");
+assert.equal(stamped.heistStamp, "Building…");
+assert.equal(stamped.tickets.find((item) => item.productKey === "edge")?.stamp, "Built 10:12 AM ET");
+assert.equal(stamped.tickets.find((item) => item.productKey === "safe"), undefined);
+assert.equal(stamped.dkPrices, "DK prices 9:58 AM ET");
+assert.equal(stamped.injuryCheck, "Injury check 8:20 AM ET · 10am");
+assert.equal(stamped.lockCheck, "Lock check 7:57 AM ET");
+assert.equal(stamped.standingsUpdated, "Updated 7:56 AM ET");
+assert.equal(stamped.uiBuild, "UI build · 4:28 AM ET");
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

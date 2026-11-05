@@ -56,6 +56,14 @@ export type Board = {
   privateStats: PrivateStats | null;
   /** Raw desk `teamvs` object. ESPN is preferred; this is the fallback rank table. */
   teamVs: unknown;
+  updated: { text: string; stale: boolean } | null;
+  heistStamp: string | null;
+  injuryCheck: string | null;
+  lockCheck: string | null;
+  dkPrices: string | null;
+  standingsUpdated: string | null;
+  uiBuild: string | null;
+  teamBuilt: string | null;
 };
 
 const ALIAS: Record<string, string> = { NYK: "NY" };
@@ -95,6 +103,14 @@ export function loadBoard(): Board {
     standings: fallbackStandings,
     privateStats: null,
     teamVs: null,
+    updated: null,
+    heistStamp: null,
+    injuryCheck: null,
+    lockCheck: null,
+    dkPrices: null,
+    standingsUpdated: null,
+    uiBuild: null,
+    teamBuilt: null,
   };
 }
 

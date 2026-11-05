@@ -15,6 +15,7 @@ import type {
   WhyBlock,
 } from "./types.ts";
 import { formatSigned } from "../lib/format.ts";
+import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
 export const DESK_URL = "https://bucinamazin.github.io/desk-dashboard/parlay/data.json";
 
@@ -195,7 +196,16 @@ function playFrom(row: Row, id: string, statuses: Map<string, PlayerStatus>): Pl
   };
 }
 
-function ticket(id: string, productKey: string, title: string, meta: string, plays: Play[], group: Ticket["group"], odds?: string): Ticket | null {
+function ticket(
+  id: string,
+  productKey: string,
+  title: string,
+  meta: string,
+  plays: Play[],
+  group: Ticket["group"],
+  odds?: string,
+  stamp?: string | null,
+): Ticket | null {
   if (!plays.length) return null;
   return {
     id,
@@ -207,6 +217,7 @@ function ticket(id: string, productKey: string, title: string, meta: string, pla
     ticketOdds: odds,
     rules: ["Shown as published in the desk file. ParlayBOT does not regrade or reprice these plays."],
     group,
+    stamp: stamp || undefined,
   };
 }
 
@@ -236,14 +247,6 @@ function dateLabel(iso: string): string {
   const when = new Date(`${iso}T12:00:00Z`);
   if (Number.isNaN(when.getTime())) return iso;
   return new Intl.DateTimeFormat("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "America/New_York" }).format(when);
-}
-
-function etStamp(value: unknown): string {
-  const n = num(value);
-  if (n == null) return "";
-  const when = new Date(n > 1e12 ? n : n * 1000);
-  if (Number.isNaN(when.getTime())) return "";
-  return when.toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 function recordLine(value: unknown): { w: number; l: number; p: number; units: number | null; pct: number | null } {
@@ -454,18 +457,17 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   const statuses = statusIndex(data.player_status);
   const tickets: Ticket[] = [];
   const notices: string[] = [];
-  const stamp = etStamp(data.generated);
-  if (stamp) notices.push(`Desk file ${stamp} ET. Read only.`);
 
-  const heist = isRow(data.heist) ? data.heist : {};
-  const heistPlays = takePlays(rowsOf(heist.legs), "heist", statuses, new Set());
-  const heistTicket = ticket("heist", "heist", "THE HEIST", str(heist.msg) || str(heist.status) || "Desk", heistPlays, "main", oddsOf(heist.odds) ?? undefined);
+  const heist = isRow(data.heist) ? data.heist : null;
+  const heistPlays = takePlays(rowsOf(heist?.legs), "heist", statuses, new Set());
+  const heistMark = heistLabel(heist);
+  const heistTicket = ticket("heist", "heist", "THE HEIST", heist ? str(heist.msg) || str(heist.status) || "Desk" : "Desk", heistPlays, "main", heist ? oddsOf(heist.odds) ?? undefined : undefined, heistMark);
   if (heistTicket) tickets.push(heistTicket);
-  else if (str(heist.msg) || str(heist.status)) notices.push(`THE HEIST: ${str(heist.msg) || str(heist.status)}. No legs in the file.`);
+  else if (heist && (str(heist.msg) || str(heist.status))) notices.push(`THE HEIST: ${str(heist.msg) || str(heist.status)}. No legs in the file.`);
 
   const safe = isRow(data.safe100) ? data.safe100 : {};
   const safePlays = takePlays(rowsOf(safe.legs ?? safe.plays), "safe", statuses, new Set());
-  const safeTicket = ticket("safe", "safe", "Safe +100", "Desk", safePlays, "main");
+  const safeTicket = ticket("safe", "safe", "Safe +100", "Desk", safePlays, "main", undefined, builtLabel(safe));
   if (safeTicket) tickets.push(safeTicket);
 
   const potdSeen = new Set<string>();
@@ -480,7 +482,9 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     potdRows.push(value.potd);
   }
   const potdPlays = takePlays(potdRows, "potd", statuses, potdSeen);
-  const potdTicket = ticket("potd", "potd", "POTD", "Official ticket plus sport boards. A repeated pick is shown once.", potdPlays, "official");
+  const potdBuilt = rowsOf(today.tickets).map((item) => (/potd/i.test(str(item.name)) ? builtLabel(item) : null)).find(Boolean)
+    ?? Object.values(sports).map((value) => (isRow(value) && isRow(value.potd) ? builtLabel(value.potd) : null)).find(Boolean);
+  const potdTicket = ticket("potd", "potd", "POTD", "Official ticket plus sport boards. A repeated pick is shown once.", potdPlays, "official", undefined, potdBuilt);
   if (potdTicket) tickets.push(potdTicket);
 
   for (const item of rowsOf(today.tickets)) {
@@ -488,30 +492,30 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     if (/potd/i.test(name)) continue;
     if (/safe/i.test(name)) {
       const plays = takePlays(legsOrSelf(item), "safe-ticket", statuses, new Set());
-      const card = ticket("safe", "safe", name, str(item.desc) || "Desk", plays, "main", oddsOf(item.odds) ?? undefined);
+      const card = ticket("safe", "safe", name, str(item.desc) || "Desk", plays, "main", oddsOf(item.odds) ?? undefined, builtLabel(item) ?? builtLabel(safe));
       if (card) tickets.push(card);
       else if (str(item.pick)) notices.push(`${name}: ${str(item.pick)}`);
       continue;
     }
     const plays = takePlays(legsOrSelf(item), `t-${norm(name).replace(/ /g, "-")}`, statuses, new Set());
-    const card = ticket(`parlay-${norm(name).replace(/ /g, "-")}`, "parlay", name, str(item.desc) || str(item.pick) || "Desk", plays, "official", oddsOf(item.odds) ?? undefined);
+    const card = ticket(`parlay-${norm(name).replace(/ /g, "-")}`, "parlay", name, str(item.desc) || str(item.pick) || "Desk", plays, "official", oddsOf(item.odds) ?? undefined, builtLabel(item));
     if (card) tickets.push(card);
   }
   for (const [sport, value] of Object.entries(sports)) {
     if (!isRow(value) || !isRow(value.parlay)) continue;
     const plays = takePlays(legsOrSelf(value.parlay), `parlay-${sport}`, statuses, new Set());
-    const card = ticket(`parlay-${sport}`, "parlay", `Parlay +100 · ${sport}`, str(value.parlay.pick) || sport, plays, "official", oddsOf(value.parlay.odds) ?? undefined);
+    const card = ticket(`parlay-${sport}`, "parlay", `Parlay +100 · ${sport}`, str(value.parlay.pick) || sport, plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay));
     if (card) tickets.push(card);
   }
 
   const edge = isRow(data.edge) ? data.edge : {};
   const edgePlays = takePlays(rowsOf(edge.picks), "edge", statuses, new Set());
-  const edgeTicket = ticket("edge", "edge", "Edge", str(edge.date) ? `Desk edge ${str(edge.date)}` : "Desk edge", edgePlays, "edge");
+  const edgeTicket = ticket("edge", "edge", "Edge", str(edge.date) ? `Desk edge ${str(edge.date)}` : "Desk edge", edgePlays, "edge", undefined, builtLabel(edge));
   if (edgeTicket) tickets.push(edgeTicket);
 
   const legday = isRow(data.legday) ? data.legday : {};
   const legPlays = takePlays(rowsOf(legday.board), "legday", statuses, new Set());
-  const legTicket = ticket("legday", "legday", "LEG DAY", str(legday.posted) || str(legday.date) || "Desk", legPlays, "props");
+  const legTicket = ticket("legday", "legday", "LEG DAY", str(legday.date) || "Desk", legPlays, "props", undefined, builtLabel(legday));
   if (legTicket) tickets.push(legTicket);
 
   const cappers: Capper[] = [];
@@ -571,5 +575,13 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     standings: adaptDeskStandings((isRow(data.standings) ? data.standings : {}) as DeskStandings, ncaab),
     privateStats: privateFrom(data, resultRows),
     teamVs: data.teamvs ?? null,
+    updated: updatedLabel(data.generated),
+    heistStamp: heistMark,
+    injuryCheck: injuryLabel(data.late_injury),
+    lockCheck: lockLabel(data.lock_check),
+    dkPrices: dkLabel(data.dk),
+    standingsUpdated: standingsLabel(data.standings),
+    uiBuild: uiBuildLabel(data.ui_build),
+    teamBuilt: builtLabel(data.teamvs),
   };
 }

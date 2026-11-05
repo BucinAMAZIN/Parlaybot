@@ -72,6 +72,8 @@ export type Ticket = {
   ticketOdds?: string;
   rules: string[];
   group: "main" | "official" | "edge" | "fun" | "props" | "cappers";
+  /** Section time already on the source object, such as Built or Final. */
+  stamp?: string;
 };
 
 export type SettledLeg = {
@@ -137,6 +139,8 @@ export type LiveFeed = {
   box: { headers: string[]; rows: { cells: string[]; mine: boolean; header?: string }[] };
   teamStats: { name: string; away: string; home: string }[];
   real: boolean;
+  /** Desk `teamvs.built`, only when this panel is showing that table. */
+  built?: string;
 };
 
 export type SeriesPoint = { day: string; profit: number; winRate: number | null };

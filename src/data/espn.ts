@@ -331,7 +331,7 @@ function deskRanks(teamVs: unknown, away: string, home: string): { name: string;
   return [];
 }
 
-function gameOf(event: EventRow, plays: Play[], teamVs: unknown): LiveGame {
+function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: string | null): LiveGame {
   const legs = plays.flatMap((play) => {
     const leg = legFor(play, event);
     return leg ? [leg] : [];
@@ -360,6 +360,7 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown): LiveGame {
       box: box(event.summary, names),
       teamStats: fromEspn.length ? fromEspn : fromDesk,
       real: true,
+      built: fromEspn.length ? undefined : teamBuilt || undefined,
     },
   };
 }
@@ -424,7 +425,7 @@ export async function attachLive(board: Board): Promise<void> {
       }
     }),
   );
-  const games = wanted.map((event) => gameOf(event, plays.filter((play) => matches(play, event)), board.teamVs));
+  const games = wanted.map((event) => gameOf(event, plays.filter((play) => matches(play, event)), board.teamVs, board.teamBuilt));
   const mood = moodOf(games);
   board.liveGames = games;
   board.liveTickets = board.tickets.flatMap((ticket) => {

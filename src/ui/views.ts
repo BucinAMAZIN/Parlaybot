@@ -70,13 +70,16 @@ export function visibleTickets(board: Board, state: AppState): Ticket[] {
   return out;
 }
 
-function shell(active: ViewId, inner: string, banner: string | null, feed: string): string {
+function shell(active: ViewId, inner: string, board: Board): string {
   const nav = NAV.map(
     ([id, label]) =>
       `<button type="button" class="${id === active ? "on" : ""}" data-act="nav" data-view="${id}">${label}${id === "live" ? `<i class="livedot">●</i>` : ""}</button>`,
   ).join("");
-  const bar = banner ? `<div class="samplebar">${esc(banner)}</div>` : "";
-  return `${bar}<div class="wrap" data-feed="${esc(feed)}"><header class="brand"><img class="logo" src="${asset("brand/parlaybot-header.png")}?v=visor" alt="ParlayBOT"><button type="button" class="gear" data-act="settings" aria-label="Settings">⚙</button></header><nav class="topnav">${nav}</nav>${inner}</div>`;
+  const bar = board.banner ? `<div class="samplebar">${esc(board.banner)}</div>` : "";
+  const updated = board.updated
+    ? `<div class="upd${board.updated.stale ? " stale" : ""}">${esc(board.updated.text)}</div>`
+    : "";
+  return `${bar}<div class="wrap" data-feed="${esc(board.feedMode)}"><header class="brand"><div class="brandmark"><img class="logo" src="${asset("brand/parlaybot-header.png")}?v=visor" alt="ParlayBOT">${updated}</div><button type="button" class="gear" data-act="settings" aria-label="Settings">⚙</button></header><nav class="topnav">${nav}</nav>${inner}</div>`;
 }
 
 function bookToggle(book: AppState["book"]): string {
@@ -108,7 +111,8 @@ function renderTicket(ticket: Ticket, state: AppState): string {
         : ticket.badge === "cappers"
           ? `<span class="tag un">CAPPERS</span>`
           : "";
-  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3><div class="sub">${esc(ticket.meta)}</div></div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected)).join("")}${offHtml}<div class="tfoot">${foot}</div></section>`;
+  const stamp = ticket.stamp ? `<div class="stamp">${esc(ticket.stamp)}</div>` : "";
+  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div></div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected)).join("")}${offHtml}<div class="tfoot">${foot}</div></section>`;
 }
 
 function productChips(board: Board, state: AppState): string {
@@ -154,14 +158,12 @@ function sliceSeries(points: SeriesPoint[], range: AppState["profitRange"], samp
 }
 
 export function renderPage(state: AppState, board: Board): string {
-  const banner = board.banner;
-  const feed = board.feedMode;
-  if (state.view === "today") return shell("today", today(state, board), banner, feed);
-  if (state.view === "live") return shell("live", live(state, board), banner, feed);
-  if (state.view === "results") return shell("results", results(state, board), banner, feed);
-  if (state.view === "stats") return shell("stats", stats(state, board), banner, feed);
-  if (state.view === "cappers") return shell("cappers", cappers(state, board), banner, feed);
-  return shell(state.standingsFrom === "stats" ? "stats" : "live", standingsView(state, board), banner, feed);
+  if (state.view === "today") return shell("today", today(state, board), board);
+  if (state.view === "live") return shell("live", live(state, board), board);
+  if (state.view === "results") return shell("results", results(state, board), board);
+  if (state.view === "stats") return shell("stats", stats(state, board), board);
+  if (state.view === "cappers") return shell("cappers", cappers(state, board), board);
+  return shell(state.standingsFrom === "stats" ? "stats" : "live", standingsView(state, board), board);
 }
 
 function today(state: AppState, board: Board): string {
@@ -193,9 +195,15 @@ function today(state: AppState, board: Board): string {
     state.book === "hr"
       ? "Showing plays live on Hard Rock. Legs are picked on Hard Rock. TD City hidden (no plays today)."
       : "Showing plays live on DraftKings · DK price incl. fee (Florida DK Predictions). Legs are picked on Hard Rock. TD City hidden (no plays today).";
-  const left = `${bookToggle(state.book)}${recapCard(board)}<div class="card"><h2>Last 14 days</h2><div class="sub">${esc(windowed.headline)}</div><div class="priv">🔒 Only you can see this</div>${chartSvg(windowed.points)}<div class="rings">${rings}</div></div>`;
+  const dkLine = board.dkPrices ? `<p class="stamp">${esc(board.dkPrices)}</p>` : "";
+  const left = `${bookToggle(state.book)}${dkLine}${recapCard(board)}<div class="card"><h2>Last 14 days</h2><div class="sub">${esc(windowed.headline)}</div><div class="priv">🔒 Only you can see this</div>${chartSvg(windowed.points)}<div class="rings">${rings}</div></div>`;
   const notes = board.notices.map((note) => `<p class="sub">${esc(note)}</p>`).join("");
-  const right = `<div class="sub" style="margin:2px 0 4px"><b>Games tonight</b> · tap a game for Feed · Box · VS</div>${games}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${notes}${blocks || `<p class="empty">No plays in this filter.</p>`}`;
+  const heistLine = board.heistStamp && !board.tickets.some((ticket) => ticket.productKey === "heist")
+    ? `<p class="stamprow"><b>THE HEIST</b> <span class="stamp">${esc(board.heistStamp)}</span></p>`
+    : "";
+  const injury = board.injuryCheck ? `<p class="stamp">${esc(board.injuryCheck)}</p>` : "";
+  const lock = board.lockCheck ? `<p class="stamp">${esc(board.lockCheck)}</p>` : "";
+  const right = `<div class="sub" style="margin:2px 0 4px"><b>Games tonight</b> · tap a game for Feed · Box · VS</div>${lock}${games}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${heistLine}${injury}${notes}${blocks || `<p class="empty">No plays in this filter.</p>`}`;
   return `<div class="sub date-line">${esc(board.dateLabel)}</div><div class="home"><div>${left}</div><div>${right}</div></div>`;
 }
 
@@ -354,7 +362,8 @@ function vsBody(game: LiveGame): string {
       .map((row) => `<tr><td>${esc(row.name)}</td><td>${esc(row.away)}</td><td>${esc(row.home)}</td></tr>`)
       .join("");
     const source = rowLooksRanked(rows) ? "Desk team ranks published in data.json" : "ESPN team stats. Values only — ranks are not invented.";
-    return `<div class="sub">${source}</div><div class="vsh"><b>${esc(game.away)} <span class="sub">vs</span> ${esc(game.home)}</b></div><table class="vst"><tr><th>Stat</th><th>${esc(game.away)}</th><th>${esc(game.home)}</th></tr>${body}</table>`;
+    const built = game.liveFeed?.built ? `<div class="stamp">${esc(game.liveFeed.built)}</div>` : "";
+    return `<div class="sub">${source}</div>${built}<div class="vsh"><b>${esc(game.away)} <span class="sub">vs</span> ${esc(game.home)}</b></div><table class="vst"><tr><th>Stat</th><th>${esc(game.away)}</th><th>${esc(game.home)}</th></tr>${body}</table>`;
   }
   if (game.id === "phi-cha") {
     const rows = [
@@ -416,7 +425,8 @@ function live(state: AppState, board: Board): string {
   const waiting = !!mood && mood.pre > 0 && !mood.hit && !mood.alive && !mood.dead;
   const mid = waiting ? (mood?.pre ?? 0) : alive;
   const midLabel = waiting ? "not started" : "alive";
-  return `<h1 style="font-size:1.75rem">Live</h1><div class="sub">Your legs in games now · ${esc(board.liveUpdated)}</div><div class="mood">${mascot(face, 64)}<div><b>${esc(title)}</b><div class="sub">${esc(detail)}</div></div></div><div class="sweatbox"><div><b class="W">${hit}</b>hit</div><div><b class="a">${mid}</b>${midLabel}</div><div><b class="L">${dead}</b>dead</div></div><section class="game"><div class="sub"><b>Tickets</b></div>${bars || `<p class="empty">No tracked props on an ESPN game yet.</p>`}</section>${games || `<p class="empty">ESPN scoreboard has not matched a game yet.</p>`}<div class="sub" style="margin:4px 0">${esc(board.liveNote)}</div><button type="button" class="linkrow" data-act="standings" data-from="live">Standings · NBA · NHL · NFL ›</button>`;
+  const lock = board.lockCheck ? `<p class="stamp">${esc(board.lockCheck)}</p>` : "";
+  return `<h1 style="font-size:1.75rem">Live</h1><div class="sub">Your legs in games now · ${esc(board.liveUpdated)}</div>${lock}<div class="mood">${mascot(face, 64)}<div><b>${esc(title)}</b><div class="sub">${esc(detail)}</div></div></div><div class="sweatbox"><div><b class="W">${hit}</b>hit</div><div><b class="a">${mid}</b>${midLabel}</div><div><b class="L">${dead}</b>dead</div></div><section class="game"><div class="sub"><b>Tickets</b></div>${bars || `<p class="empty">No tracked props on an ESPN game yet.</p>`}</section>${games || `<p class="empty">ESPN scoreboard has not matched a game yet.</p>`}<div class="sub" style="margin:4px 0">${esc(board.liveNote)}</div><button type="button" class="linkrow" data-act="standings" data-from="live">Standings · NBA · NHL · NFL ›</button>`;
 }
 
 function results(state: AppState, board: Board): string {
@@ -556,7 +566,8 @@ function standingsView(state: AppState, board: Board): string {
       return `<div class="sub" style="margin:10px 0 2px"><b>${esc(group.name)}</b></div><div class="sx"><table class="ftbl"><tr><th>Team</th>${head}</tr>${rows}</table></div>`;
     })
     .join("");
-  return `<button type="button" class="back" data-act="nav" data-view="${state.standingsFrom}">‹ Back</button><h1 style="font-size:1.75rem">Standings</h1><div class="sub">Six sports · ★ = team in one of your sample plays today · swipe tables sideways; team column stays put</div><div class="sub" style="margin-bottom:6px">${esc(league?.note ?? "")}</div><div class="lgtabs" role="tablist">${tabs}</div>${tables}`;
+  const when = board.standingsUpdated ? `<p class="stamp">${esc(board.standingsUpdated)}</p>` : "";
+  return `<button type="button" class="back" data-act="nav" data-view="${state.standingsFrom}">‹ Back</button><h1 style="font-size:1.75rem">Standings</h1>${when}<div class="sub">Six sports · ★ = team in one of your sample plays today · swipe tables sideways; team column stays put</div><div class="sub" style="margin-bottom:6px">${esc(league?.note ?? "")}</div><div class="lgtabs" role="tablist">${tabs}</div>${tables}`;
 }
 
 function sharePreview(card: ShareCard): string {
@@ -589,6 +600,7 @@ ${alertRow("Finals", "When a ticket settles", state.alerts.finals, "finals")}
 ${alertRow("NFL red zone / TD", "Your TD legs in the red zone", state.alerts.redzone, "redzone")}
 ${alertRow("Price moves on locked picks", "Off until you turn it on", state.alerts.price, "price")}
 <p class="sub">Saved on this phone. v1 has no push server, so these switches do not send alerts.</p>
+${board.uiBuild ? `<p class="stamp about">${esc(board.uiBuild)}</p>` : ""}
 <div class="tfoot"><button type="button" class="btn share" data-act="close">Close</button></div></div></div>`;
   }
   if (state.sheet.kind === "rules") {
