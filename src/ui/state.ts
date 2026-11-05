@@ -4,7 +4,7 @@ import type { LeagueId } from "../data/standings.ts";
 export type ViewId = "today" | "live" | "results" | "stats" | "cappers" | "standings";
 export type TextSize = "md" | "lg" | "xl";
 export type Panel = "feed" | "box" | "vs";
-export type SportFilter = "All" | "NHL" | "NBA" | "NFL" | "NCAA" | "NASCAR";
+export type SportFilter = "All" | "NHL" | "NBA" | "NFL" | "NCAAF" | "NCAAB" | "MLB" | "WNBA" | "NASCAR" | "Tennis" | "Other";
 
 export type Alerts = { locks: boolean; finals: boolean; redzone: boolean; price: boolean };
 

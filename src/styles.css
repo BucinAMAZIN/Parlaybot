@@ -104,6 +104,7 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .scroller::-webkit-scrollbar{display:none}
 .scroller button{flex:none;min-height:40px;display:flex;align-items:center;gap:6px;padding:0 14px;border-radius:999px;background:#161b22;border:1px solid #2c3542;color:#cfd6df;font-weight:700;font-size:.9375rem}
 .scroller button.on{background:#eef2f6;color:#0d1117}
+.scroller button.dim{opacity:.45}
 .scroller button i{font-style:normal;font-size:.75rem;opacity:.7}
 .scroller.sport button{min-height:34px;font-size:.8125rem;padding:0 12px}
 .book{display:flex;background:#161b22;border:1px solid #2c3542;border-radius:14px;padding:4px;gap:4px;margin:0 0 12px}

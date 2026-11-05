@@ -14,7 +14,7 @@ import {
 import { shareCardIsPrivate } from "./lib/shareCard.ts";
 import { canvasBlob, drawShareCard } from "./lib/shareImage.ts";
 import { canOpen, toLinkPlay } from "./ui/bits.ts";
-import { cardForShare, render } from "./ui/views.ts";
+import { cardForShare, render, sportsFor } from "./ui/views.ts";
 import { defaultState, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
 
 let board: Board = loadBoard();
@@ -166,7 +166,9 @@ function onClick(event: Event) {
     return;
   }
   if (act === "sport") {
-    state.sport = (action.dataset.key as AppState["sport"]) || "All";
+    const key = action.dataset.key || "All";
+    const allowed = key === "All" || sportsFor(board, state.product).some((item) => item.sport === key);
+    if (allowed) state.sport = key as AppState["sport"];
     paint(false);
     return;
   }

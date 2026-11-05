@@ -21,6 +21,8 @@ import {
   ringSvg,
   rinkSvg,
 } from "./bits.ts";
+import { noteVisible, sportCounts } from "../lib/cardFilter.ts";
+import { SPORT_ORDER, sportLabel } from "../lib/sport.ts";
 import type { AppState, SportFilter, ViewId } from "./state.ts";
 
 const NAV: [ViewId, string][] = [
@@ -30,8 +32,6 @@ const NAV: [ViewId, string][] = [
   ["stats", "Stats"],
   ["cappers", "Cappers"],
 ];
-
-const SPORTS: SportFilter[] = ["All", "NHL", "NBA", "NFL", "NCAA", "NASCAR"];
 
 const PRODUCTS: [string, string][] = [
   ["heist", "THE HEIST"],
@@ -46,16 +46,18 @@ const PRODUCTS: [string, string][] = [
   ["cappers", "Cappers"],
 ];
 
-const GROUP_LABEL: Record<string, string> = {
-  official: "Official",
-  edge: "Edge",
-  fun: "For fun",
-  props: "Props",
-  cappers: "Cappers",
-};
-
 function sportOk(sport: Play["sport"], filter: SportFilter): boolean {
   return filter === "All" || sport === filter;
+}
+
+function sectionPlays(board: Board, product: string | null): Play[] {
+  return board.tickets.flatMap((ticket) => (product && ticket.productKey !== product ? [] : ticket.plays));
+}
+
+export function sportsFor(board: Board, product: string | null): { sport: string; count: number }[] {
+  const present = sportCounts(sectionPlays(board, null), board.notices, null);
+  const scoped = sportCounts(sectionPlays(board, product), board.notices, product);
+  return SPORT_ORDER.filter((sport) => present.has(sport) || scoped.has(sport)).map((sport) => ({ sport, count: scoped.get(sport) ?? 0 }));
 }
 
 export function visibleTickets(board: Board, state: AppState): Ticket[] {
@@ -117,18 +119,34 @@ function renderTicket(ticket: Ticket, state: AppState): string {
 
 function productChips(board: Board, state: AppState): string {
   const buttons = PRODUCTS.map(([key, label]) => {
-    const count =
-      key === "nascar"
-        ? board.tickets.reduce((sum, ticket) => sum + ticket.plays.filter((play) => play.sport === "NASCAR").length, 0)
-        : board.tickets.reduce((sum, ticket) => sum + (ticket.productKey === key ? ticket.plays.length : 0), 0);
-    if (!count) return "";
+    const plays = board.tickets.filter((ticket) => ticket.productKey === key).flatMap((ticket) => ticket.plays);
+    const total = plays.length;
+    const filtered = state.sport === "All" ? total : plays.filter((play) => play.sport === state.sport).length;
+    const noted = board.notices.some((note) => note.section === key);
+    if (!total && !noted) return "";
     const on = state.product === key ? "on" : "";
-    return `<button type="button" class="${on}" data-act="product" data-key="${key}">${label}<i>${count}</i></button>`;
+    const dim = filtered === 0 ? " dim" : "";
+    return `<button type="button" class="${on}${dim}" data-act="product" data-key="${key}">${label}<i>${filtered}</i></button>`;
   }).join("");
-  const sports = SPORTS.map(
-    (sport) => `<button type="button" class="${state.sport === sport ? "on" : ""}" data-act="sport" data-key="${sport}">${sport}</button>`,
-  ).join("");
-  return `<nav class="scroller" aria-label="Products">${buttons}</nav><nav class="scroller sport" aria-label="Sport">${sports}</nav>`;
+  const sports = sportsFor(board, state.product);
+  const sportButtons = [`<button type="button" class="${state.sport === "All" ? "on" : ""}" data-act="sport" data-key="All">All</button>`]
+    .concat(
+      sports.map(({ sport, count }) => {
+        const dim = count === 0 ? " dim" : "";
+        return `<button type="button" class="${state.sport === sport ? "on" : ""}${dim}" data-act="sport" data-key="${esc(sport)}">${esc(sportLabel(sport))}<i>${count}</i></button>`;
+      }),
+    )
+    .join("");
+  return `<nav class="scroller" aria-label="Products">${buttons}</nav><nav class="scroller sport" aria-label="Sport">${sportButtons}</nav>`;
+}
+
+function playOnGame(play: Play, game: LiveGame): boolean {
+  const away = play.matchup?.away.abbr;
+  const home = play.matchup?.home.abbr;
+  if (away && home && [game.away, game.home].includes(away) && [game.away, game.home].includes(home)) return true;
+  const blob = `${play.gameText ?? ""} ${play.detail} ${play.name}`.toLowerCase();
+  const names = [game.away, game.home, game.awayName, game.homeName].map((name) => name.toLowerCase()).filter((name) => name.length > 2);
+  return names.filter((name) => blob.includes(name)).length >= 2;
 }
 
 function recapCard(board: Board): string {
@@ -172,38 +190,49 @@ function today(state: AppState, board: Board): string {
     .slice(0, 4)
     .map((ring) => ringSvg(ring.pct, ring.label))
     .join("");
+  const tickets = visibleTickets(board, state);
+  const visiblePlays = tickets.flatMap((ticket) => ticket.plays);
   const games = board.liveGames
-    .filter((game) => board.feedMode === "live" || game.id === "atl-nyk" || game.id === "okc-den")
+    .filter((game) => (board.feedMode === "live" || game.id === "atl-nyk" || game.id === "okc-den") && visiblePlays.some((play) => playOnGame(play, game)))
     .map((game) => renderGame(game, state, false))
     .join("");
-  const tickets = visibleTickets(board, state);
   const nascarAnchor = [...tickets].reverse().find((ticket) => ticket.plays.some((play) => play.sport === "NASCAR"))?.id;
-  let lastGroup = "";
-  const blocks = tickets
-    .map((ticket) => {
-      const label = GROUP_LABEL[ticket.group];
-      const head = label && label !== lastGroup ? `<h2 class="grouph">${label}</h2>` : "";
-      if (label) lastGroup = label;
-      const nascar =
-        ticket.id === nascarAnchor && board.nascar.rows.length
-          ? `<div class="card"><div class="sub">${esc(board.nascar.when)}</div><h2>Top-10 projection</h2><div class="sub">Display only · SAMPLE</div><table class="tbl">${board.nascar.rows.map((row) => `<tr><td>${esc(row[0])}</td><td class="sub">${esc(row[1])}</td><td>${esc(row[2])}</td></tr>`).join("")}</table></div>`
-          : "";
-      return `${head}${renderTicket(ticket, state)}${nascar}`;
+  const sections = ["heist", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
+  const blocks = sections
+    .map((section) => {
+      if (state.product && state.product !== section) return "";
+      const mine = tickets.filter((ticket) => ticket.productKey === section);
+      const notes = board.notices.filter((note) => note.section === section && noteVisible(note, state.product, state.sport));
+      const stamp = section === "heist" && board.heistStamp && !mine.length && noteVisible({ text: "", section: "heist", sport: null }, state.product, state.sport)
+        ? `<p class="stamprow"><b>THE HEIST</b> <span class="stamp">${esc(board.heistStamp)}</span></p>`
+        : "";
+      if (!mine.length && !notes.length && !stamp) return "";
+      const bareTitle: Record<string, string> = { first: "First Blood", lotto: "Lotto", cappers: "Cappers", props: "Prop Scout" };
+      const label = mine.length ? "" : (bareTitle[section] ?? "");
+      const head = label ? `<h2 class="grouph">${label}</h2>` : "";
+      const noteHtml = notes.map((note) => `<p class="sub">${esc(note.text)}</p>`).join("");
+      const bodies = mine
+        .map((ticket) => {
+          const nascar =
+            ticket.id === nascarAnchor && board.nascar.rows.length && (state.sport === "All" || state.sport === "NASCAR")
+              ? `<div class="card"><div class="sub">${esc(board.nascar.when)}</div><h2>Top-10 projection</h2><div class="sub">Display only · SAMPLE</div><table class="tbl">${board.nascar.rows.map((row) => `<tr><td>${esc(row[0])}</td><td class="sub">${esc(row[1])}</td><td>${esc(row[2])}</td></tr>`).join("")}</table></div>`
+              : "";
+          return `${renderTicket(ticket, state)}${nascar}`;
+        })
+        .join("");
+      const injury = board.injuryCheck && mine.some((ticket) => ticket.plays.some((play) => play.status)) ? `<p class="stamp">${esc(board.injuryCheck)}</p>` : "";
+      return `${head}${stamp}${noteHtml}${injury}${bodies}`;
     })
     .join("");
   const bookNote =
     state.book === "hr"
-      ? "Showing plays live on Hard Rock. Legs are picked on Hard Rock. TD City hidden (no plays today)."
-      : "Showing plays live on DraftKings · DK price incl. fee (Florida DK Predictions). Legs are picked on Hard Rock. TD City hidden (no plays today).";
+      ? "Showing plays live on Hard Rock. Legs are picked on Hard Rock."
+      : "Showing plays live on DraftKings · DK price incl. fee (Florida DK Predictions). Legs are picked on Hard Rock.";
   const dkLine = board.dkPrices ? `<p class="stamp">${esc(board.dkPrices)}</p>` : "";
   const left = `${bookToggle(state.book)}${dkLine}${recapCard(board)}<div class="card"><h2>Last 14 days</h2><div class="sub">${esc(windowed.headline)}</div><div class="priv">🔒 Only you can see this</div>${chartSvg(windowed.points)}<div class="rings">${rings}</div></div>`;
-  const notes = board.notices.map((note) => `<p class="sub">${esc(note)}</p>`).join("");
-  const heistLine = board.heistStamp && !board.tickets.some((ticket) => ticket.productKey === "heist")
-    ? `<p class="stamprow"><b>THE HEIST</b> <span class="stamp">${esc(board.heistStamp)}</span></p>`
-    : "";
-  const injury = board.injuryCheck ? `<p class="stamp">${esc(board.injuryCheck)}</p>` : "";
-  const lock = board.lockCheck ? `<p class="stamp">${esc(board.lockCheck)}</p>` : "";
-  const right = `<div class="sub" style="margin:2px 0 4px"><b>Games tonight</b> · tap a game for Feed · Box · VS</div>${lock}${games}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${heistLine}${injury}${notes}${blocks || `<p class="empty">No plays in this filter.</p>`}`;
+  const lock = board.lockCheck && games ? `<p class="stamp">${esc(board.lockCheck)}</p>` : "";
+  const gameHead = games ? `<div class="sub" style="margin:2px 0 4px"><b>Games tonight</b> · tap a game for Feed · Box · VS</div>${lock}${games}` : "";
+  const right = `${gameHead}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${blocks || `<p class="empty">No plays in this filter.</p>`}`;
   return `<div class="sub date-line">${esc(board.dateLabel)}</div><div class="home"><div>${left}</div><div>${right}</div></div>`;
 }
 
@@ -574,7 +603,7 @@ function gradedHit(record: { wins: number; losses: number }): string {
 function standingsView(state: AppState, board: Board): string {
   const league = board.standings.leagues[state.league];
   const tabs = LEAGUES.map(
-    (id) => `<button type="button" class="${id === state.league ? "on" : ""}" data-act="league" data-key="${id}">${id}</button>`,
+    (id) => `<button type="button" class="${id === state.league ? "on" : ""}" data-act="league" data-key="${id}">${esc(sportLabel(id))}</button>`,
   ).join("");
   const ncaab = state.league === "NCAAB" && (league?.groups.length ?? 0) > 1;
   const selectedName = league?.groups.some((group) => group.name === state.conference) ? state.conference : league?.groups[0]?.name ?? "";

@@ -6,12 +6,14 @@ import {
   type EdgePick,
 } from "./adaptEdgePicks.ts";
 import { edgePercent } from "../lib/format.ts";
+import { sportLabel } from "../lib/sport.ts";
 import type { Marker, Play, Sport, Ticket, WhyBlock } from "./types.ts";
 
-const SPORTS = new Set(["NHL", "NBA", "NFL", "NCAA", "NASCAR", "MLB", "WNBA"]);
+const SPORTS = new Set(["NHL", "NBA", "NFL", "NCAAF", "NCAAB", "NASCAR", "MLB", "WNBA", "Tennis"]);
 
 function asSport(sport: string): Sport {
-  if (sport === "NCAAF" || sport === "NCAAB") return "NCAA";
+  if (sport === "NCAA F" || sport === "NCAAF") return "NCAAF";
+  if (sport === "NCAAM" || sport === "NCAAB") return "NCAAB";
   if (SPORTS.has(sport)) return sport as Sport;
   return "NHL";
 }
@@ -35,12 +37,12 @@ function whyFor(pick: EdgePick): WhyBlock {
   const bullets = [
     `Edge ${pct} vs fair price ${pick.fair}`,
     `Hard Rock ${pick.hr}`,
-    `Rank ${pick.rank} on the ${pick.date} ${pick.sport} board`,
+    `Rank ${pick.rank} on the ${pick.date} ${sportLabel(pick.sport)} board`,
   ];
   if (pick.result) bullets.push(`Graded: ${pick.result}`);
   return {
     ours: false,
-    line: `Edge ${pct} vs fair ${pick.fair}, rank ${pick.rank} on the ${pick.sport} board`,
+    line: `Edge ${pct} vs fair ${pick.fair}, rank ${pick.rank} on the ${sportLabel(pick.sport)} board`,
     why: bullets,
     whyNot: ["No risk notes in the edge-picks feed"],
   };
@@ -52,7 +54,7 @@ export function presentEdgePick(pick: EdgePick): Play {
   return {
     id: `feed-${pick.date}-${pick.sport}-${pick.rank}-${slug(pick.pick)}`,
     name: pick.pick,
-    detail: `${pick.sport} · Edge ${pct} · fair ${pick.fair} · ${pick.game}`,
+    detail: `${sportLabel(asSport(pick.sport))} · Edge ${pct} · fair ${pick.fair} · ${pick.game}`,
     sport: asSport(pick.sport),
     hr: pick.hr,
     dk: null,

@@ -1,4 +1,4 @@
-export type Sport = "NHL" | "NBA" | "NFL" | "NCAA" | "NASCAR" | "MLB" | "WNBA";
+export type Sport = "NHL" | "NBA" | "NFL" | "NCAAF" | "NCAAB" | "NASCAR" | "MLB" | "WNBA" | "Tennis" | "Other";
 
 export type BookId = "hr" | "dk";
 
@@ -120,7 +120,7 @@ export type LiveTicket = {
 
 export type LiveGame = {
   id: string;
-  league: "NBA" | "NHL" | "NFL" | "MLB" | "NCAA" | "WNBA";
+  league: "NBA" | "NHL" | "NFL" | "MLB" | "NCAAF" | "NCAAB" | "WNBA";
   away: string;
   home: string;
   awayName: string;

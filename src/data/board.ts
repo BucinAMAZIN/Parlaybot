@@ -18,6 +18,7 @@ import {
 } from "./sampleBoard.ts";
 import { standings as fallbackStandings } from "./standings.ts";
 import type { ClvCard } from "./adaptClv.ts";
+import type { CardNote } from "../lib/cardFilter.ts";
 import type { Capper, LiveGame, LiveTicket, Mood, Play, Recap, SeriesPoint, SettledTicket, StandingsFile, Ticket } from "./types.ts";
 
 export type StatRow = { name: string; sub: string; right: string };
@@ -37,7 +38,7 @@ export type Board = {
   feedMode: "live" | "fallback";
   banner: string | null;
   slateDate: string;
-  notices: string[];
+  notices: CardNote[];
   tickets: Ticket[];
   cappers: Capper[];
   liveTickets: LiveTicket[];

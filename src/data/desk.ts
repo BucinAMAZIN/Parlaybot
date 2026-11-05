@@ -15,7 +15,9 @@ import type {
   Ticket,
   WhyBlock,
 } from "./types.ts";
+import type { CardNote } from "../lib/cardFilter.ts";
 import { formatSigned } from "../lib/format.ts";
+import { classifySport, sportLabel } from "../lib/sport.ts";
 import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
 export const DESK_URL = "https://bucinamazin.github.io/desk-dashboard/parlay/data.json";
@@ -49,14 +51,7 @@ function norm(value: string): string {
 }
 
 function sportOf(raw: string): Sport {
-  const s = raw.toUpperCase();
-  if (s.includes("WNBA")) return "WNBA";
-  if (s.includes("NBA")) return "NBA";
-  if (s.includes("NHL")) return "NHL";
-  if (s.includes("NFL")) return "NFL";
-  if (s.includes("MLB")) return "MLB";
-  if (s.includes("NASCAR")) return "NASCAR";
-  return "NCAA";
+  return classifySport(raw);
 }
 
 function oddsOf(...values: unknown[]): string | null {
@@ -172,7 +167,7 @@ function playFrom(row: Row, id: string, statuses: Map<string, PlayerStatus>): Pl
   return {
     id,
     name: pick,
-    detail: [sport, game, start].filter(Boolean).join(" · ") + alt,
+    detail: [sport === "Other" ? str(row.sport) || "Other" : sportLabel(sport), game, start].filter(Boolean).join(" · ") + alt,
     sport,
     hr: oddsOf(row.hr, row.odds, row.hr_now),
     dk: dkOff ? null : oddsOf(dk?.odds, row.dk_live, row.dk_odds),
@@ -460,14 +455,14 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   const iso = str(today.date);
   const statuses = statusIndex(data.player_status);
   const tickets: Ticket[] = [];
-  const notices: string[] = [];
+  const notices: CardNote[] = [];
 
   const heist = isRow(data.heist) ? data.heist : null;
   const heistPlays = takePlays(rowsOf(heist?.legs), "heist", statuses, new Set());
   const heistMark = heistLabel(heist);
   const heistTicket = ticket("heist", "heist", "THE HEIST", heist ? str(heist.msg) || str(heist.status) || "Desk" : "Desk", heistPlays, "main", heist ? oddsOf(heist.odds) ?? undefined : undefined, heistMark);
   if (heistTicket) tickets.push(heistTicket);
-  else if (heist && (str(heist.msg) || str(heist.status))) notices.push(`THE HEIST: ${str(heist.msg) || str(heist.status)}. No legs in the file.`);
+  else if (heist && (str(heist.msg) || str(heist.status))) notices.push({ text: `${str(heist.msg) || str(heist.status)}. No legs in the file.`, section: "heist", sport: null });
 
   const safe = isRow(data.safe100) ? data.safe100 : {};
   const safePlays = takePlays(rowsOf(safe.legs ?? safe.plays), "safe", statuses, new Set());
@@ -498,7 +493,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
       const plays = takePlays(legsOrSelf(item), "safe-ticket", statuses, new Set());
       const card = ticket("safe", "safe", name, str(item.desc) || "Desk", plays, "main", oddsOf(item.odds) ?? undefined, builtLabel(item) ?? builtLabel(safe));
       if (card) tickets.push(card);
-      else if (str(item.pick)) notices.push(`${name}: ${str(item.pick)}`);
+      else if (str(item.pick)) notices.push({ text: `${name}: ${str(item.pick)}`, section: "parlay", sport: null });
       continue;
     }
     const plays = takePlays(legsOrSelf(item), `t-${norm(name).replace(/ /g, "-")}`, statuses, new Set());
@@ -508,7 +503,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   for (const [sport, value] of Object.entries(sports)) {
     if (!isRow(value) || !isRow(value.parlay)) continue;
     const plays = takePlays(legsOrSelf(value.parlay), `parlay-${sport}`, statuses, new Set());
-    const card = ticket(`parlay-${sport}`, "parlay", `Parlay +100 · ${sport}`, str(value.parlay.pick) || sport, plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay));
+    const card = ticket(`parlay-${sport}`, "parlay", `Parlay +100 · ${sportLabel(sportOf(sport))}`, str(value.parlay.pick) || sport, plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay));
     if (card) tickets.push(card);
   }
 
@@ -543,12 +538,12 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   const capperTicket = ticket("cappers", "cappers", "Cappers", "Every play in today's file. A missing book id stays on the card.", capperPlays, "cappers");
   if (capperTicket) tickets.push(capperTicket);
   const quiet = cappers.filter((capper) => !capper.plays.length).map((capper) => capper.name);
-  if (quiet.length) notices.push(`No capper play today: ${quiet.join(", ")}.`);
+  if (quiet.length) notices.push({ text: `No capper play today: ${quiet.join(", ")}.`, section: "cappers", sport: null });
 
   const first = isRow(data.first_blood) ? data.first_blood : {};
-  if (!rowsOf(first.legs).length && str(first.rolled_off)) notices.push(str(first.rolled_off));
+  if (!rowsOf(first.legs).length && str(first.rolled_off)) notices.push({ text: str(first.rolled_off), section: "first", sport: null });
   const td = isRow(data.td_city) ? data.td_city : {};
-  if (!rowsOf(td.legs).length && str(td.rolled_off || td.msg)) notices.push(str(td.rolled_off || td.msg));
+  if (!rowsOf(td.legs).length && str(td.rolled_off || td.msg)) notices.push({ text: str(td.rolled_off || td.msg), section: "lotto", sport: null });
 
   const resultRows = rowsOf(isRow(data.results_v2) ? data.results_v2.rows : null);
   const graded = lastGraded(resultRows, iso || "9999");

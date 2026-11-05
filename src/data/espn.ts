@@ -11,10 +11,10 @@ const LVL: [string, string, LiveGame["league"], string][] = [
   ["baseball", "mlb", "MLB", ""],
   ["hockey", "nhl", "NHL", ""],
   ["football", "nfl", "NFL", ""],
-  ["football", "college-football", "NCAA", "&groups=80&limit=300"],
+  ["football", "college-football", "NCAAF", "&groups=80&limit=300"],
   ["basketball", "nba", "NBA", ""],
   ["basketball", "wnba", "WNBA", ""],
-  ["basketball", "mens-college-basketball", "NCAA", "&groups=50&limit=400"],
+  ["basketball", "mens-college-basketball", "NCAAB", "&groups=50&limit=400"],
 ];
 
 type Json = Record<string, unknown>;
