@@ -137,11 +137,11 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .mascot.fire{animation-name:e-fire}
 .mascot.cash{animation-name:e-cash}
 .mascot.hook{animation-name:e-hook}
-@keyframes e-ice{0%{background-image:url(/mascot/e-ice-0.png)}25%{background-image:url(/mascot/e-ice-1.png)}50%{background-image:url(/mascot/e-ice-2.png)}75%{background-image:url(/mascot/e-ice-3.png)}}
-@keyframes e-sweat{0%{background-image:url(/mascot/e-sweat-0.png)}25%{background-image:url(/mascot/e-sweat-1.png)}50%{background-image:url(/mascot/e-sweat-2.png)}75%{background-image:url(/mascot/e-sweat-3.png)}}
-@keyframes e-fire{0%{background-image:url(/mascot/e-fire-0.png)}25%{background-image:url(/mascot/e-fire-1.png)}50%{background-image:url(/mascot/e-fire-2.png)}75%{background-image:url(/mascot/e-fire-3.png)}}
-@keyframes e-cash{0%{background-image:url(/mascot/e-cash-0.png)}25%{background-image:url(/mascot/e-cash-1.png)}50%{background-image:url(/mascot/e-cash-2.png)}75%{background-image:url(/mascot/e-cash-3.png)}}
-@keyframes e-hook{0%{background-image:url(/mascot/e-hook-0.png)}25%{background-image:url(/mascot/e-hook-1.png)}50%{background-image:url(/mascot/e-hook-2.png)}75%{background-image:url(/mascot/e-hook-3.png)}}
+@keyframes e-ice{0%{background-image:var(--m-ice-0)}25%{background-image:var(--m-ice-1)}50%{background-image:var(--m-ice-2)}75%{background-image:var(--m-ice-3)}}
+@keyframes e-sweat{0%{background-image:var(--m-sweat-0)}25%{background-image:var(--m-sweat-1)}50%{background-image:var(--m-sweat-2)}75%{background-image:var(--m-sweat-3)}}
+@keyframes e-fire{0%{background-image:var(--m-fire-0)}25%{background-image:var(--m-fire-1)}50%{background-image:var(--m-fire-2)}75%{background-image:var(--m-fire-3)}}
+@keyframes e-cash{0%{background-image:var(--m-cash-0)}25%{background-image:var(--m-cash-1)}50%{background-image:var(--m-cash-2)}75%{background-image:var(--m-cash-3)}}
+@keyframes e-hook{0%{background-image:var(--m-hook-0)}25%{background-image:var(--m-hook-1)}50%{background-image:var(--m-hook-2)}75%{background-image:var(--m-hook-3)}}
 @media (prefers-reduced-motion:reduce){.mascot{animation:none;background-image:var(--still)}}
 .sweatbox{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0 12px}
 .sweatbox div{background:#141a22;border:1px solid #232c38;border-radius:12px;padding:10px;text-align:center}

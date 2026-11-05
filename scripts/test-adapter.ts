@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { adaptEdgePicks, flatUnitResult, gradeResult, inStarBand } from "../src/data/adaptEdgePicks.ts";
 import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentEdgeFeed.ts";
-import { draftKingsSlipLink, hardRockLegLink } from "../src/lib/links.ts";
+import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
+import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled } from "../src/lib/shareCard.ts";
 import { results, sampleTickets } from "../src/data/sampleBoard.ts";
 
@@ -67,17 +68,68 @@ assert.equal(flatUnitResult("−110", "loss"), -1);
 assert.equal(flatUnitResult("+100", "void"), 0);
 assert.equal(flatUnitResult("+100", "pending"), null);
 
-const hr = hardRockLegLink({ id: "x", name: "Test", hrEvent: "99", pinId: 5 });
-assert.equal(hr.status, "todo");
-assert.match(hr.detail, /hr_event=99/);
-assert.match(hr.detail, /pin_id=5/);
-const dk = draftKingsSlipLink([
-  { id: "a", name: "One" },
-  { id: "b", name: "Two" },
+const hrSid = "5027401214267097513";
+const hr = hardRockLegLink({ id: "x", name: "Test", hrSid });
+assert.equal(hr.status, "ready");
+if (hr.status === "ready") {
+  assert.equal(hr.url, `https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/${hrSid}`);
+}
+const hrStored = hardRockLegLink({
+  id: "x",
+  name: "Test",
+  hrSid,
+  hrLink: `https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/${hrSid}`,
+});
+assert.equal(hrStored.status, "ready");
+assert.equal(hardRockLegLink({ id: "x", name: "No id", hrSid: "not-a-sid" }).status, "missing");
+const slip = hardRockSlipLink([
+  { id: "a", name: "A", hrSid: "111" },
+  { id: "b", name: "B", hrSid: "222" },
+  { id: "c", name: "C" },
 ]);
-assert.equal(dk.status, "todo");
-assert.match(dk.detail, /2 plays/);
-assert.equal("url" in hr && hr.status === "ready", false);
+assert.equal(slip.status, "ready");
+if (slip.status === "ready") {
+  assert.equal(slip.url, "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/111,222");
+  assert.match(slip.detail ?? "", /Not on HR/);
+}
+
+const dkSid = "0QA385792709#2349946626_13L42648Q1-1115091407Q20";
+const dkLink = `https://sportsbook.draftkings.com/event/34937000?outcomes=${encodeURIComponent(dkSid)}`;
+const dkOne = draftKingsLegLink({ id: "d", name: "Davion", dkSid, dkLink });
+assert.equal(dkOne.status, "ready");
+if (dkOne.status === "ready") assert.equal(dkOne.url, dkLink);
+assert.equal(draftKingsLegLink({ id: "d", name: "No id" }).status, "missing");
+const dkTwoSid = "0QA385795123#2349948751_13L42648Q1-1318291850Q20";
+const dkTwoLink = `https://sportsbook.draftkings.com/event/34937000?outcomes=${encodeURIComponent(dkTwoSid)}`;
+const dk = draftKingsSlipLink([
+  { id: "a", name: "One", dkSid, dkLink },
+  { id: "b", name: "Two", dkSid: dkTwoSid, dkLink: dkTwoLink },
+]);
+assert.equal(dk.status, "legs");
+if (dk.status === "legs") {
+  assert.equal(dk.urls.length, 2);
+  assert.equal(dk.urls[0].url, dkLink);
+  assert.equal(dk.urls[1].url, dkTwoLink);
+  assert.match(dk.detail, /each leg opens on its own/i);
+  assert.ok(dk.urls.every((leg) => !leg.url.includes("dk.html") && !leg.url.startsWith("dksb:")));
+}
+
+const desk = JSON.parse(readFileSync(new URL("../fixtures/desk-standings.json", import.meta.url), "utf8"));
+const sampleNcaab = {
+  note: "NCAAB by conference · SAMPLE DATA",
+  columns: ["Conf", "Overall"],
+  groups: [{ name: "Big Ten", columns: ["Conf", "Overall"], rows: [] }],
+};
+const tables = adaptDeskStandings(desk, sampleNcaab);
+const count = (league: string) => tables.leagues[league].groups.reduce((sum, group) => sum + group.rows.length, 0);
+assert.equal(count("NHL"), 32);
+assert.equal(count("NFL"), 32);
+assert.equal(count("NBA"), 30);
+assert.ok(tables.leagues.NCAAB.note.includes("SAMPLE"));
+const phi = tables.leagues.NBA.groups.find((group) => group.name === "Atlantic")?.rows.find((row) => row.abbr === "PHI");
+assert.equal(phi?.cells[0], "7-1");
+assert.ok(tables.leagues.NHL.groups.every((group) => group.columns[0] === "W-L-OTL" && group.columns.includes("PTS")));
+assert.ok(!tables.leagues.NFL.note.toLowerCase().includes("omitted"));
 
 const heist = sampleTickets.find((item) => item.id === "heist");
 assert.ok(heist);

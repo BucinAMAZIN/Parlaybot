@@ -1,5 +1,6 @@
 import type { BookId, LegPace, Mood, Play, SeriesPoint, WhyBlock } from "../data/types.ts";
 import { esc } from "../lib/format.ts";
+import { draftKingsLegLink, hardRockLegLink, type LinkPlay } from "../lib/links.ts";
 
 export const PACE: Record<LegPace, { mood: Mood | null; color: string; label: string }> = {
   hit: { mood: "cash", color: "#76f53a", label: "✓ HIT · cashed" },
@@ -18,8 +19,13 @@ const MOOD_LABEL: Record<Mood, string> = {
   hook: "On the hook",
 };
 
+export function asset(path: string): string {
+  const base = import.meta.env.BASE_URL || "/";
+  return `${base}${path.replace(/^\//, "")}`;
+}
+
 export function mascot(mood: Mood, size: number): string {
-  return `<span class="mascot ${mood}" style="width:${size}px;height:${size}px;--still:url(/mascot/e-${mood}-0.png)" role="img" aria-label="${MOOD_LABEL[mood]}"></span>`;
+  return `<span class="mascot ${mood}" style="width:${size}px;height:${size}px;--still:url(${asset(`mascot/e-${mood}-0.png`)})" role="img" aria-label="${MOOD_LABEL[mood]}"></span>`;
 }
 
 export function bookName(book: BookId): string {
@@ -34,6 +40,21 @@ export function priceOn(play: Play, book: BookId): string | null {
   return book === "hr" ? play.hr : play.dk;
 }
 
+export function toLinkPlay(play: Play): LinkPlay {
+  return { id: play.id, name: play.name, hrSid: play.hrSid, hrLink: play.hrLink, dkSid: play.dkSid, dkLink: play.dkLink };
+}
+
+export function canOpen(play: Play, book: BookId): boolean {
+  const built = book === "hr" ? hardRockLegLink(toLinkPlay(play)) : draftKingsLegLink(toLinkPlay(play));
+  return built.status === "ready";
+}
+
+/** Main list: a real selection id, or a blocked play that still has this book's price. */
+export function listedOn(play: Play, book: BookId): boolean {
+  if (play.blocked && priceOn(play, book)) return true;
+  return canOpen(play, book);
+}
+
 export function renderWhy(block: WhyBlock): string {
   const tag = block.ours ? "Our read" : "Why";
   const ours = block.ours ? `<span class="ours">ours, not the capper's</span>` : "";
@@ -44,7 +65,7 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   const offered = priceOn(play, book);
   const odds = off ? play.hr ?? play.dk ?? "—" : offered ?? "—";
   const blocked = !off && play.blocked;
-  const check = !off && !blocked;
+  const check = !off && !blocked && canOpen(play, book);
   const checked = check && selected.has(play.id) ? "checked" : "";
   const fee = book === "dk" && !off && offered ? `<div class="feeline">DK price incl. fee</div>` : "";
   const ctx = play.matchup
@@ -70,7 +91,7 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   const chipRow = chips.length ? `<div class="chips">${chips.join("")}</div>` : "";
   const grade = play.gradeNote ? `<div class="sub ${play.gradeNote.tone}">${esc(play.gradeNote.text)}</div>` : "";
   let button: string;
-  if (off) button = `<span class="na">Not on ${bookCode(book)}</span>`;
+  if (off || (!blocked && !canOpen(play, book))) button = `<span class="na">Not on ${bookCode(book)}</span>`;
   else if (play.blocked === "started") button = `<span class="na">Blocked: game started</span>`;
   else if (play.blocked === "graded") button = `<span class="na">Graded · game over</span>`;
   else button = `<button type="button" class="btn ${book}" data-act="open" data-scope="leg" data-id="${esc(play.id)}">Open in ${bookName(book)}</button>`;

@@ -10,7 +10,7 @@ import {
 } from "./lib/links.ts";
 import { shareCardIsPrivate } from "./lib/shareCard.ts";
 import { canvasBlob, drawShareCard } from "./lib/shareImage.ts";
-import { priceOn } from "./ui/bits.ts";
+import { canOpen, toLinkPlay } from "./ui/bits.ts";
 import { cardForShare, render } from "./ui/views.ts";
 import { defaultState, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
 
@@ -25,7 +25,7 @@ let toastTimer = 0;
 function selectable(): Play[] {
   return [...state.selected]
     .map((id) => findPlay(board, id))
-    .filter((play): play is Play => !!play && !!priceOn(play, state.book) && !play.blocked);
+    .filter((play): play is Play => !!play && canOpen(play, state.book));
 }
 
 function applyChrome() {
@@ -60,7 +60,7 @@ function showToast(message: string) {
 }
 
 function toLink(play: Play): LinkPlay {
-  return { id: play.id, name: play.name, hrEvent: play.hrEvent, pinId: play.pinId };
+  return toLinkPlay(play);
 }
 
 function openScope(scope: string, id: string) {
@@ -73,8 +73,8 @@ function openScope(scope: string, id: string) {
   } else {
     plays = [...state.selected].map((playId) => findPlay(board, playId)).filter((play): play is Play => !!play);
   }
-  const ready = plays.filter((play) => priceOn(play, state.book) && !play.blocked);
-  const left = plays.filter((play) => !priceOn(play, state.book) || play.blocked);
+  const ready = plays.filter((play) => canOpen(play, state.book));
+  const left = plays.filter((play) => !canOpen(play, state.book));
   if (!ready.length) {
     showToast("Nothing to load. A play that is off this book, already started, or already graded stays on the card and is not added to a slip.");
     return;
@@ -93,7 +93,12 @@ function openScope(scope: string, id: string) {
   const extra = left.length ? ` Left off the slip: ${left.map((play) => play.name).join(", ")}.` : "";
   if (built.status === "ready") {
     window.open(built.url, "_blank", "noopener");
-    showToast(`Opened ${ready.length} play${ready.length === 1 ? "" : "s"}.${extra}`);
+    showToast(`${built.detail ? `${built.detail} ` : ""}Opened ${ready.length} play${ready.length === 1 ? "" : "s"}.${extra}`);
+    return;
+  }
+  if (built.status === "legs") {
+    for (const legLink of built.urls) window.open(legLink.url, "_blank", "noopener");
+    showToast(`${built.detail}${extra}`);
     return;
   }
   showToast(`${built.detail}${extra}`);
@@ -145,7 +150,7 @@ function onClick(event: Event) {
     state.book = action.dataset.book === "dk" ? "dk" : "hr";
     for (const id of [...state.selected]) {
       const play = findPlay(board, id);
-      if (!play || !priceOn(play, state.book) || play.blocked) state.selected.delete(id);
+      if (!play || !canOpen(play, state.book)) state.selected.delete(id);
     }
     savePrefs(state);
     paint(false);

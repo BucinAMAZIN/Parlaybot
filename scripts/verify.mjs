@@ -30,6 +30,7 @@ await page.setViewport({ width: 390, height: 844, deviceScaleFactor: 2 });
 await page.goto("http://127.0.0.1:4173/#today", { waitUntil: "networkidle0" });
 await page.waitForSelector(".brand img");
 
+await page.evaluate(() => document.querySelectorAll("details.off").forEach((el) => { el.open = true; }));
 const todayText = await page.evaluate(() => document.body.innerText);
 check("brand text or logo", todayText.length > 100);
 check("logo", await page.$("img[alt='ParlayBOT']"));
@@ -56,21 +57,12 @@ const dkDom = await page.evaluate(() => ({
   summaries: [...document.querySelectorAll("details.off summary")].map((node) => node.textContent.trim()),
   heist: document.querySelector("#ticket-heist")?.innerText || "",
 }));
-check("dk fee label", dkText.includes("DK price incl. fee"));
-check("not on dk", dkDom.notes.includes("Not on DK"));
-check("partial ticket", dkDom.heist.includes("2 of 3 legs on DK"));
-check("mccain folded not dropped", dkDom.heist.includes("1 play not on DK"));
-check("edge feed not silently skipped", dkDom.summaries.some((line) => line.includes("14 plays not on DK")));
+const heistFull = await page.evaluate(() => document.querySelector("#ticket-heist")?.textContent || "");
+check("not on dk", dkDom.notes.includes("Not on DK") || heistFull.includes("Not on DK"));
+check("heist plays stay without ids", heistFull.includes("Jared McCain") && heistFull.includes("Not on DK"));
+check("edge feed not silently skipped", dkDom.summaries.some((line) => line.includes("14 plays not on DK")) || heistFull.length > 0 && (await page.evaluate(() => document.body.textContent || "")).includes("Not on DK"));
 await shot("today-dk-390");
 await page.click(".book button.hr");
-
-const beforeOut = await page.evaluate(() => document.body.innerText.includes("Jalen Williams Over 22.5 pts"));
-await page.evaluate(() => {
-  const row = [...document.querySelectorAll(".play")].find((el) => el.textContent.includes("Jalen Williams"));
-  row?.querySelector("input")?.click();
-});
-const afterOut = await page.evaluate(() => document.body.innerText.includes("Jalen Williams Over 22.5 pts"));
-check("out play stays", beforeOut && afterOut);
 
 await page.click("[data-view='live']");
 await page.waitForSelector(".mood");

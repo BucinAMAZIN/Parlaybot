@@ -8,12 +8,14 @@ import { formatSigned, esc } from "../lib/format.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled, type ShareCard } from "../lib/shareCard.ts";
 import {
   PACE,
+  asset,
   bookCode,
   bookName,
+  canOpen,
   chartSvg,
   courtSvg,
   mascot,
-  priceOn,
+  listedOn,
   renderPlay,
   renderWhy,
   ringSvg,
@@ -73,7 +75,7 @@ function shell(active: ViewId, inner: string): string {
     ([id, label]) =>
       `<button type="button" class="${id === active ? "on" : ""}" data-act="nav" data-view="${id}">${label}${id === "live" ? `<i class="livedot">●</i>` : ""}</button>`,
   ).join("");
-  return `<div class="samplebar">SAMPLE DATA — Edge feed rows are the attached fixture</div><div class="wrap"><header class="brand"><img class="logo" src="/brand/parlaybot-header.png" alt="ParlayBOT"></header><nav class="topnav">${nav}</nav>${inner}</div>`;
+  return `<div class="samplebar">SAMPLE DATA — Edge feed rows are the attached fixture</div><div class="wrap"><header class="brand"><img class="logo" src="${asset("brand/parlaybot-header.png")}" alt="ParlayBOT"></header><nav class="topnav">${nav}</nav>${inner}</div>`;
 }
 
 function bookToggle(book: AppState["book"]): string {
@@ -82,13 +84,13 @@ function bookToggle(book: AppState["book"]): string {
 
 function renderTicket(ticket: Ticket, state: AppState): string {
   const book = state.book;
-  const on = ticket.plays.filter((play) => priceOn(play, book));
-  const off = ticket.plays.filter((play) => !priceOn(play, book));
+  const on = ticket.plays.filter((play) => listedOn(play, book));
+  const off = ticket.plays.filter((play) => !listedOn(play, book));
   const who = bookCode(book);
   const offHtml = off.length
     ? `<details class="off"><summary>${off.length} play${off.length === 1 ? "" : "s"} not on ${who}, tap to view ▾</summary>${off.map((play) => renderPlay(play, book, state.selected, true)).join("")}</details>`
     : "";
-  const openLegs = on.filter((play) => !play.blocked);
+  const openLegs = on.filter((play) => canOpen(play, book));
   const foot = off.length
     ? `<span class="na">${on.length} of ${on.length + off.length} legs on ${who}</span>`
     : openLegs.length
@@ -393,10 +395,10 @@ function cappers(state: AppState, board: Board): string {
     const blocks = items
       .map((capper) => {
         const plays = capper.plays.length
-          ? capper.plays.map((play) => renderPlay(play, state.book, state.selected, !priceOn(play, state.book))).join("")
+          ? capper.plays.map((play) => renderPlay(play, state.book, state.selected, !listedOn(play, state.book))).join("")
           : `<p class="empty">${esc(capper.note ?? "No play.")}</p>`;
-        const off = capper.plays.some((play) => !priceOn(play, state.book));
-        const body = off && capper.plays.length && capper.plays.every((play) => !priceOn(play, state.book))
+        const off = capper.plays.some((play) => !listedOn(play, state.book));
+        const body = off && capper.plays.length && capper.plays.every((play) => !listedOn(play, state.book))
           ? `<details class="off" open><summary>1 play not on ${bookCode(state.book)}, tap to view ▾</summary>${plays}</details>`
           : plays;
         return `<section class="ticket"><header><div><h3>${esc(capper.name)} <button type="button" class="info" data-act="rules" data-id="cappers" aria-label="Rules">i</button></h3><div class="sub">${esc(capper.record)}</div></div></header>${body}</section>`;
@@ -524,7 +526,7 @@ function alertRow(title: string, sub: string, on: boolean, key: string): string 
 export function renderSelbar(state: AppState, board: Board): string {
   const plays = [...state.selected]
     .map((id) => findPlay(board, id))
-    .filter((play): play is Play => !!play && !!priceOn(play, state.book) && !play.blocked);
+    .filter((play): play is Play => !!play && canOpen(play, state.book));
   if (!plays.length) return `<div class="selbar" id="sel" hidden></div>`;
   const label = state.book === "hr" ? `Load ${plays.length} in Hard Rock` : `Open ${plays.length} selected in DraftKings`;
   return `<div class="selbar" id="sel"><button type="button" class="btn ${state.book}" data-act="open" data-scope="selected">${label}</button></div>`;

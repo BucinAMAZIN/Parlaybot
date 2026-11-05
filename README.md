@@ -24,11 +24,11 @@ Screens are laid out for 360px and 390px, including the large-text settings (A /
 | Feed presenter | `src/data/presentEdgeFeed.ts` | Builds the Edge feed ticket, grades, and the flat-1u record from adapted rows. |
 | Fixture | `fixtures/edge-picks-sample.json` | Read-only snapshot of the current pick feed. |
 | Sample card | `src/data/sampleBoard.ts` | Heist, Safe +100, official tickets, cappers, props, live, and last night. Labeled sample. |
-| Standings | `src/data/standings.ts` and `src/data/standings.sample.json` | NBA, MLB, NCAAF, and NCAAB tables from the approved card. NHL is only the teams printed on that card. NFL rows were not in the bundle and are left blank. |
-| Book links | `src/lib/links.ts` | The only URL builder. Hard Rock and DraftKings formats are still TODOs, so Open tells you the ids instead of guessing a host. |
+| Standings adapter | `src/data/adaptStandings.ts` | `fixtures/desk-standings.json` is the desk snapshot for NBA, NHL, NFL, MLB, and NCAAF. NCAAB stays the labeled sample in `src/data/standings.sample.json`. |
+| Book links | `src/lib/links.ts` | Hard Rock betslip URL and DraftKings single-leg URL, matching the live desk. Multi-leg DK opens each leg on its own. No id means Not on HR or Not on DK. |
 | Share image | `src/lib/shareCard.ts` and `src/lib/shareImage.ts` | Ticket legs, odds, and result. No units, profit, or bankroll. |
 
-A book that does not offer a play says **Not on HR** or **Not on DK**. Those plays stay on the card. The edge-picks fixture has Hard Rock prices only, so every feed row says Not on DK.
+A play with no selection id for the active book says **Not on HR** or **Not on DK** and stays on the card. Hard Rock opens `https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/{id}`, one id or several joined with commas. DraftKings opens `https://sportsbook.draftkings.com/event/{event}?outcomes={id}` for one leg. Two or more DK legs open as separate singles, because the two-leg `dksb://sb/addbet` link did not open on the phone. The edge-picks fixture has Hard Rock prices and no DK Predictions ids, so those rows say Not on DK.
 
 **Alt line** is the single tag for a buy-down. The Heist ticket shows the before line, then the after line.
 

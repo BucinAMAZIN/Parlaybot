@@ -49,6 +49,12 @@ export type Play = {
   source: "sample" | "edge-feed";
   hrEvent?: string;
   pinId?: number;
+  /** Hard Rock betslip selection id (hr_sid). Not the event id. */
+  hrSid?: string;
+  hrLink?: string;
+  /** DraftKings Predictions selection id (dk_sid) and the phone-tested event link. */
+  dkSid?: string;
+  dkLink?: string;
   gradeNote?: { text: string; tone: "W" | "L" | "V" };
 };
 
