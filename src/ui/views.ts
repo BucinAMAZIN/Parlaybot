@@ -38,8 +38,8 @@ const PRODUCTS: [string, string][] = [
   ["potd", "POTD"],
   ["parlay", "Parlay +100"],
   ["edge", "Edge"],
-  ["legday", "LEG DAY"],
-  ["first", "First Blood · for fun"],
+  ["legday", "Props"],
+  ["first", "First Blood"],
   ["nascar", "NASCAR"],
   ["props", "Prop Scout"],
   ["cappers", "Cappers"],
@@ -126,12 +126,7 @@ function renderTicket(ticket: Ticket, state: AppState): string {
   const share = ticket.share
     ? `<button type="button" class="btn share" data-act="share" data-id="${esc(ticket.id)}" data-settled="0">Share as image</button>`
     : "";
-  const badge =
-    ticket.badge === "fun"
-      ? `<span class="tag un">FOR FUN</span>`
-      : ticket.badge === "cappers"
-          ? `<span class="tag un">CAPPERS</span>`
-          : "";
+  const badge = ticket.badge === "cappers" ? `<span class="tag un">CAPPERS</span>` : "";
   const stamp = ticket.stamp ? `<div class="stamp">${esc(ticket.stamp)}</div>` : "";
   return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div></div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected)).join("")}${offHtml}<div class="tfoot">${foot}</div></section>`;
 }

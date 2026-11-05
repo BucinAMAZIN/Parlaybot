@@ -169,7 +169,10 @@ export function statsCalendar(state: AppState, board: Board, from: string | null
 
 export function statsSections(state: AppState): string {
   return (["all", "heist", "safe", "edge", "cappers", "legday"] as const)
-    .map((key) => `<button type="button" class="${state.statsSection === key ? "on" : ""}" data-act="stats-section" data-key="${key}">${key === "all" ? "All sections" : key === "legday" ? "LEG DAY" : key[0].toUpperCase() + key.slice(1)}</button>`)
+    .map((key) => {
+      const label = key === "all" ? "All sections" : key === "legday" ? "Props" : key[0].toUpperCase() + key.slice(1);
+      return `<button type="button" class="${state.statsSection === key ? "on" : ""}" data-act="stats-section" data-key="${key}" aria-label="${label}">${label}</button>`;
+    })
     .join("");
 }
 

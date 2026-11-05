@@ -306,17 +306,17 @@ export const sampleTickets: Ticket[] = [
   {
     id: "legday",
     productKey: "legday",
-    title: "LEG DAY",
-    meta: "Official · 4 props · SAMPLE · no LEG DAY feed in v1",
+    title: "Props",
+    meta: "Official · 4 props · SAMPLE · no Props feed in v1",
     badge: "official",
     share: false,
     group: "official",
-    rules: ["LEG DAY is official.", "These four props are sample layout data. There is no LEG DAY feed in this build."],
+    rules: ["Props is official.", "These four props are sample layout data. There is no Props feed in this build."],
     plays: [
       basePlay({
         id: "leg-maxey",
         name: "Tyrese Maxey Over 22.5 pts",
-        detail: "LEG DAY · PHI vs CHA 7:00 PM · SAMPLE",
+        detail: "Props · PHI vs CHA 7:00 PM · SAMPLE",
         sport: "NBA",
         hr: "−125",
         dk: "−125",
@@ -330,7 +330,7 @@ export const sampleTickets: Ticket[] = [
       basePlay({
         id: "leg-jj",
         name: "Jalen Johnson Over 8.5 reb",
-        detail: "LEG DAY · ATL vs NYK 7:00 PM · SAMPLE",
+        detail: "Props · ATL vs NYK 7:00 PM · SAMPLE",
         sport: "NBA",
         hr: "−110",
         dk: "−110",
@@ -343,7 +343,7 @@ export const sampleTickets: Ticket[] = [
       basePlay({
         id: "leg-brown",
         name: "Jaylen Brown Over 24.5 pts",
-        detail: "LEG DAY · BOS vs MIL 7:30 PM · SAMPLE",
+        detail: "Props · BOS vs MIL 7:30 PM · SAMPLE",
         sport: "NBA",
         hr: "+105",
         dk: "+105",
@@ -356,7 +356,7 @@ export const sampleTickets: Ticket[] = [
       basePlay({
         id: "leg-murray",
         name: "Jamal Murray Over 21.5 pts",
-        detail: "LEG DAY · DEN vs PHX 9:00 PM · SAMPLE",
+        detail: "Props · DEN vs PHX 9:00 PM · SAMPLE",
         sport: "NBA",
         hr: "−140",
         dk: "−140",
@@ -376,7 +376,7 @@ export const sampleTickets: Ticket[] = [
     badge: "fun",
     share: true,
     group: "fun",
-    rules: ["First Blood is for fun. It never mixes into the official record.", "TD City has no plays today, so that product stays hidden.", "These five plays are sample layout data."],
+    rules: ["First Blood never mixes into the official record.", "TD City has no plays today, so that product stays hidden.", "These five plays are sample layout data."],
     plays: [
       funPlay("fb-suzuki", "Nick Suzuki first goal", "MTL", "WSH", "NHL", "+450", "+440"),
       funPlay("fb-ovi", "Alex Ovechkin first goal", "WSH", "MTL", "NHL", "+380", null),
@@ -530,7 +530,7 @@ export const rings: { pct: number; label: string }[] = [
   { pct: 45, label: "NHL Edge" },
   { pct: 54, label: "Cappers" },
   { pct: 50, label: "POTD" },
-  { pct: 58, label: "LEG DAY" },
+  { pct: 58, label: "Props" },
   { pct: 52, label: "Parlay +100" },
   { pct: 57, label: "NCAAM" },
 ];

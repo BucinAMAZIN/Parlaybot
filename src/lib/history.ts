@@ -11,7 +11,7 @@ const CATS: [string, string][] = [
   ["Edge", "Edge"],
   ["Cappers", "Cappers"],
   ["POTD", "POTD"],
-  ["LEG DAY", "LEG DAY"],
+  ["LEG DAY", "Props"],
   ["Parlay +100", "Parlay"],
   ["Alt lines", "Alt lines"],
 ];

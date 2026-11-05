@@ -441,7 +441,7 @@ function ringsFrom(rows: Row[]): Board["rings"] {
     ["Edge", "Edge"],
     ["Cappers", "Cappers"],
     ["POTD", "POTD"],
-    ["LEG DAY", "LEG DAY"],
+    ["LEG DAY", "Props"],
     ["Parlay +100", "Parlay"],
     ["Alt lines", "Alt lines"],
   ];
@@ -620,7 +620,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
 
   const legday = isRow(data.legday) ? data.legday : {};
   const legPlays = takePlays(rowsOf(legday.board), "legday", statuses, new Set());
-  const legTicket = ticket("legday", "legday", "LEG DAY", str(legday.date) || "Desk", legPlays, "props", undefined, builtLabel(legday));
+  const legTicket = ticket("legday", "legday", "Props", str(legday.date) || "Desk", legPlays, "props", undefined, builtLabel(legday));
   if (legTicket) tickets.push(legTicket);
 
   const cappers: Capper[] = [];
