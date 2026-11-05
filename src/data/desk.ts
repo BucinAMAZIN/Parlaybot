@@ -221,6 +221,7 @@ function ticket(
   group: Ticket["group"],
   odds?: string,
   stamp?: string | null,
+  board?: string,
 ): Ticket | null {
   if (!plays.length) return null;
   return {
@@ -234,7 +235,21 @@ function ticket(
     rules: ["Shown as published in the desk file. ParlayBOT does not regrade or reprice these plays."],
     group,
     stamp: stamp || undefined,
+    board,
   };
+}
+
+/** "ALL" is the prepared all-sports source. Any other feed key is that sport's own board. */
+export function preparedKey(key: string): string {
+  if (/^all$/i.test(key.trim())) return "ALL";
+  return sportOf(key);
+}
+
+/** A prepared board is shown on All only when it is the all-sports source, and on a sport only when the keys match. */
+export function showsPreparedBoard(board: string | undefined, sport: string): boolean {
+  if (!board) return true;
+  if (sport === "All") return board === "ALL";
+  return board === sport;
 }
 
 function rowsOf(value: unknown): Row[] {
@@ -545,22 +560,28 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   const safeTicket = ticket("safe", "safe", "Safe +100", "Desk", safePlays, "main", undefined, builtLabel(safe));
   if (safeTicket) tickets.push(safeTicket);
 
-  const potdSeen = new Set<string>();
-  const potdRows: Row[] = [];
+  const sports = isRow(today.sports) ? today.sports : {};
   for (const item of rowsOf(today.tickets)) {
     if (!/potd/i.test(str(item.name))) continue;
-    potdRows.push(...legsOrSelf(item));
+    const name = str(item.name) || "POTD";
+    const plays = takePlays(legsOrSelf(item), `potd-ticket-${norm(name).replace(/ /g, "-")}`, statuses, new Set());
+    const card = ticket(`potd-ticket-${norm(name).replace(/ /g, "-")}`, "potd", name, ["All sports · Best picks", str(item.desc) || str(item.pick)].filter(Boolean).join(" · "), plays, "official", oddsOf(item.odds) ?? undefined, builtLabel(item), "ALL");
+    if (card) tickets.push(card);
   }
-  const sports = isRow(today.sports) ? today.sports : {};
-  for (const value of Object.values(sports)) {
+  for (const [key, value] of Object.entries(sports)) {
     if (!isRow(value) || !isRow(value.potd)) continue;
-    potdRows.push(value.potd);
+    const board = preparedKey(key);
+    if (board === "ALL") {
+      const plays = takePlays(legsOrSelf(value.potd), "potd-all", statuses, new Set());
+      const card = ticket("potd-all", "potd", "POTD · All sports", ["Best picks", str(value.potd.desc) || str(value.potd.pick)].filter(Boolean).join(" · "), plays, "official", oddsOf(value.potd.odds) ?? undefined, builtLabel(value.potd), "ALL");
+      if (card) tickets.push(card);
+      continue;
+    }
+    if (board === "Other") continue;
+    const plays = takePlays(legsOrSelf(value.potd), `potd-${board}`, statuses, new Set(), key);
+    const card = ticket(`potd-${board}`, "potd", `POTD · ${sportLabel(board)}`, str(value.potd.desc) || str(value.potd.pick) || sportLabel(board), plays, "official", oddsOf(value.potd.odds) ?? undefined, builtLabel(value.potd), board);
+    if (card) tickets.push(card);
   }
-  const potdPlays = takePlays(potdRows, "potd", statuses, potdSeen);
-  const potdBuilt = rowsOf(today.tickets).map((item) => (/potd/i.test(str(item.name)) ? builtLabel(item) : null)).find(Boolean)
-    ?? Object.values(sports).map((value) => (isRow(value) && isRow(value.potd) ? builtLabel(value.potd) : null)).find(Boolean);
-  const potdTicket = ticket("potd", "potd", "POTD", "Official ticket plus sport boards. A repeated pick is shown once.", potdPlays, "official", undefined, potdBuilt);
-  if (potdTicket) tickets.push(potdTicket);
 
   for (const item of rowsOf(today.tickets)) {
     const name = str(item.name);
@@ -573,13 +594,21 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
       continue;
     }
     const plays = takePlays(legsOrSelf(item), `t-${norm(name).replace(/ /g, "-")}`, statuses, new Set());
-    const card = ticket(`parlay-${norm(name).replace(/ /g, "-")}`, "parlay", name, str(item.desc) || str(item.pick) || "Desk", plays, "official", oddsOf(item.odds) ?? undefined, builtLabel(item));
+    const card = ticket(`parlay-${norm(name).replace(/ /g, "-")}`, "parlay", name, ["All sports · Best picks", str(item.desc) || str(item.pick)].filter(Boolean).join(" · "), plays, "official", oddsOf(item.odds) ?? undefined, builtLabel(item), "ALL");
     if (card) tickets.push(card);
   }
   for (const [sport, value] of Object.entries(sports)) {
     if (!isRow(value) || !isRow(value.parlay)) continue;
-    const plays = takePlays(legsOrSelf(value.parlay), `parlay-${sport}`, statuses, new Set(), sport);
-    const card = ticket(`parlay-${sport}`, "parlay", `Parlay +100 · ${sportLabel(sportOf(sport))}`, str(value.parlay.pick) || sport, plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay));
+    const board = preparedKey(sport);
+    if (board === "ALL") {
+      const plays = takePlays(legsOrSelf(value.parlay), "parlay-all", statuses, new Set());
+      const card = ticket("parlay-all", "parlay", "Parlay +100 · All sports", ["Best picks", str(value.parlay.pick) || str(value.parlay.desc)].filter(Boolean).join(" · "), plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay), "ALL");
+      if (card) tickets.push(card);
+      continue;
+    }
+    if (board === "Other") continue;
+    const plays = takePlays(legsOrSelf(value.parlay), `parlay-${board}`, statuses, new Set(), sport);
+    const card = ticket(`parlay-${board}`, "parlay", `Parlay +100 · ${sportLabel(board)}`, str(value.parlay.pick) || sportLabel(board), plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay), board);
     if (card) tickets.push(card);
   }
 

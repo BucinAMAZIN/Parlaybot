@@ -1,5 +1,6 @@
 import type { Board } from "../data/board.ts";
 import { findPlay } from "../data/board.ts";
+import { showsPreparedBoard } from "../data/desk.ts";
 import { LEAGUES } from "../data/standings.ts";
 import type { LiveGame, LiveLeg, Play, SeriesPoint, Ticket, TicketPart } from "../data/types.ts";
 import { formatSigned, esc } from "../lib/format.ts";
@@ -19,7 +20,7 @@ import {
   ringSvg,
 } from "./bits.ts";
 import { sectionMatch, sportTitle } from "../data/gradeLabels.ts";
-import { noteVisible, sportCounts } from "../lib/cardFilter.ts";
+import { noteVisible } from "../lib/cardFilter.ts";
 import { matchingPlays, statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
 import { SPORT_ORDER, sportLabel } from "../lib/sport.ts";
 import type { AppState, SportFilter, ViewId } from "./state.ts";
@@ -48,22 +49,44 @@ function sportOk(sport: Play["sport"], filter: SportFilter): boolean {
   return filter === "All" || sport === filter;
 }
 
-function sectionPlays(board: Board, product: string | null): Play[] {
-  return board.tickets.flatMap((ticket) => (product && ticket.productKey !== product ? [] : ticket.plays));
+function countPlays(board: Board, product: string | null, sport: SportFilter): number {
+  let count = 0;
+  for (const ticket of board.tickets) {
+    if (product && ticket.productKey !== product) continue;
+    if (ticket.board) {
+      if (showsPreparedBoard(ticket.board, sport)) count += ticket.plays.length;
+      continue;
+    }
+    count += ticket.plays.filter((play) => sportOk(play.sport, sport)).length;
+  }
+  return count;
 }
 
 export function sportsFor(board: Board, product: string | null): { sport: string; count: number }[] {
-  const present = sportCounts(sectionPlays(board, null), board.notices, null);
-  const scoped = sportCounts(sectionPlays(board, product), board.notices, product);
-  return SPORT_ORDER.filter((sport) => present.has(sport) || scoped.has(sport)).map((sport) => ({ sport, count: scoped.get(sport) ?? 0 }));
+  const present = new Set<string>();
+  for (const ticket of board.tickets) {
+    if (ticket.board && ticket.board !== "ALL") present.add(ticket.board);
+    else if (!ticket.board) for (const play of ticket.plays) if (play.sport && play.sport !== "Other") present.add(play.sport);
+  }
+  for (const note of board.notices) if (note.sport && note.sport !== "Other") present.add(note.sport);
+  return SPORT_ORDER.filter((sport) => present.has(sport)).map((sport) => ({ sport, count: countPlays(board, product, sport) }));
 }
 
 export function visibleTickets(board: Board, state: AppState): Ticket[] {
   const out: Ticket[] = [];
   for (const ticket of board.tickets) {
-    let plays = ticket.plays.filter((play) => sportOk(play.sport, state.sport));
-    if (state.product === "nascar") plays = plays.filter((play) => play.sport === "NASCAR");
-    else if (state.product && ticket.productKey !== state.product) continue;
+    if (state.product === "nascar") {
+      const plays = ticket.plays.filter((play) => play.sport === "NASCAR");
+      if (plays.length) out.push({ ...ticket, plays });
+      continue;
+    }
+    if (state.product && ticket.productKey !== state.product) continue;
+    if (ticket.board) {
+      if (!showsPreparedBoard(ticket.board, state.sport)) continue;
+      out.push(ticket);
+      continue;
+    }
+    const plays = ticket.plays.filter((play) => sportOk(play.sport, state.sport));
     if (!plays.length) continue;
     out.push({ ...ticket, plays });
   }
@@ -115,9 +138,8 @@ function renderTicket(ticket: Ticket, state: AppState): string {
 
 function productChips(board: Board, state: AppState): string {
   const buttons = PRODUCTS.map(([key, label]) => {
-    const plays = board.tickets.filter((ticket) => ticket.productKey === key).flatMap((ticket) => ticket.plays);
-    const total = plays.length;
-    const filtered = state.sport === "All" ? total : plays.filter((play) => play.sport === state.sport).length;
+    const total = countPlays(board, key, "All");
+    const filtered = countPlays(board, key, state.sport);
     const noted = board.notices.some((note) => note.section === key);
     if (!total && !noted) return "";
     const on = state.product === key ? "on" : "";
@@ -125,7 +147,8 @@ function productChips(board: Board, state: AppState): string {
     return `<button type="button" class="${on}${dim}" data-act="product" data-key="${key}">${label}<i>${filtered}</i></button>`;
   }).join("");
   const sports = sportsFor(board, state.product);
-  const sportButtons = [`<button type="button" class="${state.sport === "All" ? "on" : ""}" data-act="sport" data-key="All">All</button>`]
+  const allLabel = state.product === "potd" || state.product === "parlay" ? "All sports · Best picks" : "All";
+  const sportButtons = [`<button type="button" class="${state.sport === "All" ? "on" : ""}" data-act="sport" data-key="All">${allLabel}</button>`]
     .concat(
       sports.map(({ sport, count }) => {
         const dim = count === 0 ? " dim" : "";
@@ -236,7 +259,15 @@ function today(state: AppState, board: Board): string {
   const gameHead = gameList.length
     ? `<div class="gameslot"><button type="button" class="gameshead" data-act="games-toggle" aria-expanded="${state.gamesOpen ? "true" : "false"}"><b>Today's Games</b><span class="sub">· ${gameList.length}</span>${lock}<span class="car">${state.gamesOpen ? "▴" : "▾"}</span></button>${state.gamesOpen ? gamesPanel(gameList, state) : ""}</div>`
     : "";
-  const right = `${gameHead}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${blocks || `<p class="empty">${board.tickets.length ? "No plays in this filter." : "No data yet"}</p>`}`;
+  const prepared = state.product === "potd" || state.product === "parlay";
+  const empty = !board.tickets.length
+    ? "No data yet"
+    : prepared
+      ? state.sport === "All"
+        ? "No all-sports pick in the file."
+        : "No prepared board for this sport."
+      : "No plays in this filter.";
+  const right = `${gameHead}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${blocks || `<p class="empty">${empty}</p>`}`;
   return `<div class="sub date-line">${esc(board.dateLabel)}</div><div class="home"><div>${left}</div><div>${right}</div></div>`;
 }
 

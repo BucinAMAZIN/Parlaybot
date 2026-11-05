@@ -13,7 +13,7 @@ import { normProp, normSide, normSport } from "../src/data/gradeLabels.ts";
 import { classifySport, sportLabel } from "../src/lib/sport.ts";
 import { adaptClv } from "../src/data/adaptClv.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
-import { adaptDesk } from "../src/data/desk.ts";
+import { adaptDesk, showsPreparedBoard } from "../src/data/desk.ts";
 import { builtLabel, clockEt, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../src/lib/stamps.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled } from "../src/lib/shareCard.ts";
 import { results, rings, sampleTickets } from "../src/data/sampleBoard.ts";
@@ -472,5 +472,49 @@ const counted = adaptDesk(
 assert.equal(counted.grades.length, 2);
 assert.equal(counted.results.find((ticket) => ticket.title.includes("Safe"))?.legs.filter((leg) => leg.ticket).length, 2);
 assert.equal(counted.results.find((ticket) => ticket.title.includes("Safe"))?.legs.find((leg) => leg.result === "W")?.parts?.length, 1);
+
+assert.equal(showsPreparedBoard("ALL", "All"), true);
+assert.equal(showsPreparedBoard("ALL", "NHL"), false);
+assert.equal(showsPreparedBoard("NHL", "NHL"), true);
+assert.equal(showsPreparedBoard("NHL", "All"), false);
+assert.equal(showsPreparedBoard(undefined, "NHL"), true);
+const prepared = adaptDesk(
+  {
+    today: {
+      date: "2026-11-05",
+      tickets: [
+        { name: "POTD", pick: "Official Player Over 1.5 Points", odds: "-110", hr_sid: "111" },
+        { name: "+100 ticket", odds: "+130", legs: [
+          { pick: "Overall One Over 0.5 Points", odds: "-150", hr_sid: "222", ctx: { record: { A: "1-2-3", B: "4-5-6" } } },
+          { pick: "Overall Two Over 1.5 Shots", odds: "-200", hr_sid: "333", ctx: { record: { A: "1-2-3", B: "4-5-6" } } },
+        ] },
+      ],
+      sports: {
+        NHL: {
+          potd: { pick: "Sport Player Over 0.5 Points", sport: "NHL", odds: "-115", hr_sid: "444" },
+          parlay: { pick: "2-leg", odds: "+135", legs: [
+            { pick: "Leg A Over 0.5 Points", odds: "-185", hr_sid: "555" },
+            { pick: "Leg B Over 0.5 Assists", odds: "-190", hr_sid: "666" },
+          ] },
+        },
+        NBA: { potd: { pick: "Official Player Over 1.5 Points", sport: "NBA", odds: "-110", hr_sid: "111" } },
+        ALL: { potd: { pick: "All Board Player Over 0.5 Points", odds: "-125", hr_sid: "777", ctx: { record: { C: "9-6-1", D: "6-4-5" } } } },
+      },
+    },
+    results_v2: { rows: [] },
+  },
+  ncaab,
+);
+const potdBoards = prepared.tickets.filter((item) => item.productKey === "potd");
+assert.deepEqual(potdBoards.map((item) => item.board), ["ALL", "NHL", "NBA", "ALL"]);
+assert.deepEqual(potdBoards.find((item) => item.board === "NHL")?.plays.map((play) => play.name), ["Sport Player Over 0.5 Points"]);
+assert.equal(potdBoards.filter((item) => item.board === "ALL").flatMap((item) => item.plays).some((play) => play.name.includes("All Board")), true);
+assert.equal(potdBoards.filter((item) => item.board === "ALL").flatMap((item) => item.plays).some((play) => play.name.includes("Official")), true);
+const nhlParlay = prepared.tickets.find((item) => item.id === "parlay-NHL");
+const allParlay = prepared.tickets.find((item) => item.board === "ALL" && item.productKey === "parlay");
+assert.deepEqual(nhlParlay?.plays.map((play) => play.name), ["Leg A Over 0.5 Points", "Leg B Over 0.5 Assists"]);
+assert.equal(allParlay?.plays.some((play) => play.name.includes("Overall")), true);
+assert.equal(nhlParlay?.plays.some((play) => play.name.includes("Overall")), false);
+assert.equal(allParlay?.plays.some((play) => play.name.includes("Leg A")), false);
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

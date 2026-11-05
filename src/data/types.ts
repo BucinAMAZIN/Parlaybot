@@ -74,6 +74,11 @@ export type Ticket = {
   group: "main" | "official" | "edge" | "fun" | "props" | "cappers";
   /** Section time already on the source object, such as Built or Final. */
   stamp?: string;
+  /**
+   * Prepared POTD or +100 source. "ALL" is the all-sports ticket or ALL board.
+   * A sport id is only that sport's board. Unset tickets still filter by each play's sport.
+   */
+  board?: string;
 };
 
 /** One recorded leg of a historical ticket. Empty strings mean that field was not in the file. */
