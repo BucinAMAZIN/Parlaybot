@@ -1,9 +1,8 @@
-import { loadBoard, findPlay, type Board } from "./data/board.ts";
+import { emptyBoard, findPlay, type Board } from "./data/board.ts";
 import { adaptDesk, fetchDesk } from "./data/desk.ts";
+import { offlineBanner, readDeskCache, writeDeskCache } from "./data/deskCache.ts";
 import { attachLive } from "./data/espn.ts";
-import { standings as fallbackStandings } from "./data/standings.ts";
-import type { Play } from "./data/types.ts";
-import { edgeDates } from "./data/presentEdgeFeed.ts";
+import type { Play, StandingLeague } from "./data/types.ts";
 import {
   draftKingsLegLink,
   draftKingsSlipLink,
@@ -17,11 +16,27 @@ import { canOpen, toLinkPlay } from "./ui/bits.ts";
 import { cardForShare, render, sportsFor } from "./ui/views.ts";
 import { defaultState, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
 
-let board: Board = loadBoard();
+const EMPTY_NCAAB: StandingLeague = { note: "No data yet", columns: [], groups: [] };
+
+function boardFromRaw(raw: unknown, savedAt: string | null): Board {
+  const next = adaptDesk(raw, EMPTY_NCAAB);
+  next.cachedAt = savedAt;
+  return next;
+}
+
+function boardFromCache(): Board {
+  const cached = readDeskCache();
+  if (!cached) return emptyBoard();
+  try {
+    return boardFromRaw(cached.raw, cached.savedAt);
+  } catch {
+    return emptyBoard();
+  }
+}
+
+let board: Board = boardFromCache();
 const state: AppState = defaultState();
 loadPrefs(state);
-const latest = edgeDates(board.edgePicks)[0];
-if (latest) state.openDates.add(latest);
 
 let toastTimer = 0;
 
@@ -331,7 +346,7 @@ function onClick(event: Event) {
   if (act === "feed") {
     const game = action.dataset.game;
     if (!game) return;
-    const current = state.feedFilter[game] ?? { team: "All", period: game === "atl-nyk" ? "Q3" : "All" };
+    const current = state.feedFilter[game] ?? { team: "All", period: "All" };
     state.feedFilter[game] = {
       team: action.dataset.team ?? current.team,
       period: action.dataset.period ?? current.period,
@@ -444,7 +459,9 @@ async function refreshDesk() {
   refreshing = true;
   try {
     const raw = await fetchDesk();
-    const next = adaptDesk(raw, fallbackStandings.leagues.NCAAB);
+    const savedAt = new Date().toISOString();
+    writeDeskCache(raw, savedAt);
+    const next = boardFromRaw(raw, savedAt);
     try {
       await attachLive(next);
     } catch {
@@ -456,10 +473,30 @@ async function refreshDesk() {
     }
     paint(false);
   } catch {
-    if (board.feedMode !== "live") {
-      board = loadBoard();
-      paint(false);
+    const cached = board.feedMode === "live" ? null : readDeskCache();
+    if (board.feedMode === "live") {
+      board = { ...board, banner: offlineBanner(board.cachedAt) };
+    } else if (cached) {
+      try {
+        const next = boardFromRaw(cached.raw, cached.savedAt);
+        next.banner = offlineBanner(cached.savedAt);
+        try {
+          await attachLive(next);
+        } catch {
+          next.liveNote = "ESPN scoreboard did not load. Scores stay blank until it does.";
+        }
+        board = next;
+      } catch {
+        const next = emptyBoard();
+        next.banner = offlineBanner(null);
+        board = next;
+      }
+    } else {
+      const next = emptyBoard();
+      next.banner = offlineBanner(null);
+      board = next;
     }
+    paint(false);
   } finally {
     refreshing = false;
   }
