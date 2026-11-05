@@ -4,7 +4,9 @@ import { adaptEdgePicks, flatUnitResult, gradeResult, inStarBand } from "../src/
 import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentEdgeFeed.ts";
 import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
-import { sliceHistory } from "../src/lib/history.ts";
+import { fileBounds, historyScope, sliceHistory } from "../src/lib/history.ts";
+import { matchingPlays } from "../src/ui/statsScreen.ts";
+import { knownView, viewFromHash } from "../src/ui/state.ts";
 import { dedupePlays, playKey } from "../src/data/dedupePlays.ts";
 import { normProp, normSide, normSport } from "../src/data/gradeLabels.ts";
 import { classifySport, sportLabel } from "../src/lib/sport.ts";
@@ -404,5 +406,38 @@ assert.equal(stamped.injuryCheck, "Injury check 8:20 AM ET · 10am");
 assert.equal(stamped.lockCheck, "Lock check 7:57 AM ET");
 assert.equal(stamped.standingsUpdated, "Updated 7:56 AM ET");
 assert.equal(stamped.uiBuild, "UI build · 4:28 AM ET");
+
+assert.equal(viewFromHash("#stats"), "results");
+assert.equal(viewFromHash("#results"), "results");
+assert.equal(knownView("#nope"), null);
+assert.equal(viewFromHash(""), "today");
+const scopeAll = historyScope({ fileFirst: "2026-10-12", fileLast: "2026-11-04", from: "2026-10-12", to: "2026-11-04", range: "all", custom: false, clippedLabel: null });
+assert.match(scopeAll, /Oct 12 through Nov 4/);
+assert.match(scopeAll, /not in the feed/);
+const scope14 = historyScope({ fileFirst: "2026-10-12", fileLast: "2026-11-04", from: "2026-10-22", to: "2026-11-04", range: "14d", custom: false, clippedLabel: null });
+assert.match(scope14, /14D is Oct 22 through Nov 4/);
+assert.match(scope14, /All dates shows the whole file/);
+const graded = adaptDesk(
+  {
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    results_v2: { rows: [braunAlt, braunHeist, packersA, packersB] },
+    record: { chart: [["10/18", 1], ["10/28", 2], ["11/04", 3]] },
+  },
+  ncaab,
+);
+assert.equal(graded.grades.length, 3);
+assert.equal(graded.grades.filter((row) => row.play === "Christian Braun 4+ Rebs").length, 2);
+const braunRows = graded.grades.filter((row) => row.prop === "Rebounds");
+const regular = matchingPlays(graded.grades, "NBA", "Rebounds", false);
+const alts = matchingPlays(graded.grades, "NBA", "Rebounds", true);
+assert.equal(regular.length + alts.length, braunRows.length);
+assert.equal(new Set([...regular, ...alts]).size, braunRows.length);
+assert.equal(alts.length, 2);
+assert.deepEqual(alts.map((row) => row.cat).sort(), ["Alt lines", "The Heist"]);
+const bounds = fileBounds(graded.grades, graded.series, "all");
+assert.equal(bounds.first <= "2026-10-18" && bounds.last >= "2026-11-04", true);
+const nbaUnits = braunRows.reduce((sum, row) => sum + row.units, 0);
+const splitUnits = [...regular, ...alts].reduce((sum, row) => sum + row.units, 0);
+assert.equal(nbaUnits, splitUnits);
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

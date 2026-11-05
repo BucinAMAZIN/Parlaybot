@@ -161,6 +161,8 @@ export type GradeMark = {
   capper?: string;
   /** Set when this play was relabeled onto a real prop type, or landed in Misc. */
   detail?: string;
+  /** The desk pick text, for the Results list. It does not change the record. */
+  play?: string;
 };
 
 export type CapperGroup = "heist" | "an";

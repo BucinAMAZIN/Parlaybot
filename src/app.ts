@@ -15,7 +15,7 @@ import { canvasBlob, drawShareCard } from "./lib/shareImage.ts";
 import { canOpen, toLinkPlay } from "./ui/bits.ts";
 import { cardForShare, render, sportsFor } from "./ui/views.ts";
 import { disablePush, readPushDelivery, subscribePush } from "./lib/pushClient.ts";
-import { defaultState, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
+import { defaultState, knownView, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
 
 const EMPTY_NCAAB: StandingLeague = { note: "No data yet", columns: [], groups: [] };
 
@@ -168,7 +168,9 @@ function onClick(event: Event) {
     return;
   }
   if (act === "nav") {
-    state.view = (action.dataset.view as ViewId) || "today";
+    const requested = action.dataset.view === "stats" ? "results" : ((action.dataset.view as ViewId) || "today");
+    state.view = requested;
+    state.resultsPick = null;
     state.sheet = null;
     const hash = `#${state.view}`;
     if (location.hash !== hash) history.replaceState(null, "", hash);
@@ -328,8 +330,26 @@ function onClick(event: Event) {
     paint(false);
     return;
   }
+  if (act === "night-toggle") {
+    state.nightOpen = !state.nightOpen;
+    paint(false);
+    return;
+  }
+  if (act === "results-prop") {
+    const sport = action.dataset.sport || "";
+    const prop = action.dataset.prop || "";
+    if (!sport || !prop) return;
+    state.resultsPick = { sport, prop, alt: action.dataset.alt === "1" };
+    paint(true);
+    return;
+  }
+  if (act === "results-back") {
+    state.resultsPick = null;
+    paint(false);
+    return;
+  }
   if (act === "standings") {
-    state.standingsFrom = action.dataset.from === "stats" ? "stats" : "live";
+    state.standingsFrom = action.dataset.from === "results" || action.dataset.from === "stats" ? "results" : "live";
     state.view = "standings";
     history.replaceState(null, "", "#standings");
     paint(true);
@@ -468,13 +488,23 @@ export function start() {
     }
   });
   window.addEventListener("hashchange", () => {
-    const hash = location.hash.replace("#", "");
-    const views: ViewId[] = ["today", "live", "results", "stats", "cappers", "standings"];
-    if (!views.includes(hash as ViewId) || hash === state.view) return;
-    state.view = hash as ViewId;
+    if (location.hash === "#stats") {
+      history.replaceState(null, "", "#results");
+      if (state.view !== "results") {
+        state.view = "results";
+        state.sheet = null;
+        paint(true);
+      }
+      return;
+    }
+    const next = knownView(location.hash);
+    if (!next || next === state.view) return;
+    state.view = next;
+    state.resultsPick = null;
     state.sheet = null;
     paint(true);
   });
+  if (location.hash === "#stats") history.replaceState(null, "", "#results");
   paint(false);
   void refreshDesk();
   document.addEventListener("visibilitychange", () => {

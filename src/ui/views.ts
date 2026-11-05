@@ -3,7 +3,7 @@ import { findPlay } from "../data/board.ts";
 import { LEAGUES } from "../data/standings.ts";
 import type { LiveGame, LiveLeg, Play, SeriesPoint, Ticket } from "../data/types.ts";
 import { formatSigned, esc } from "../lib/format.ts";
-import { sliceHistory, unitChange, windowGrades, windowRings, windowWinRate, type RangeKey } from "../lib/history.ts";
+import { fileBounds, historyScope, sliceHistory, unitChange, windowGrades, windowRings, windowWinRate, type RangeKey } from "../lib/history.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled, type ShareCard } from "../lib/shareCard.ts";
 import {
   PACE,
@@ -18,9 +18,9 @@ import {
   renderWhy,
   ringSvg,
 } from "./bits.ts";
-import { sectionMatch } from "../data/gradeLabels.ts";
+import { sectionMatch, sportTitle } from "../data/gradeLabels.ts";
 import { noteVisible, sportCounts } from "../lib/cardFilter.ts";
-import { statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
+import { matchingPlays, statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
 import { SPORT_ORDER, sportLabel } from "../lib/sport.ts";
 import type { AppState, SportFilter, ViewId } from "./state.ts";
 
@@ -28,7 +28,6 @@ const NAV: [ViewId, string][] = [
   ["today", "Today"],
   ["live", "Live"],
   ["results", "Results"],
-  ["stats", "Stats"],
   ["cappers", "Cappers"],
 ];
 
@@ -156,7 +155,7 @@ function recapCard(board: Board): string {
 
 function rangeControl(state: AppState): string {
   return (["14d", "30d", "60d", "90d", "all"] as const)
-    .map((key) => `<button type="button" class="${!state.statsFrom && state.profitRange === key ? "on" : ""}" data-act="range" data-key="${key}">${key === "all" ? "All" : key.replace("d", "D")}</button>`)
+    .map((key) => `<button type="button" class="${key === "all" ? "all " : ""}${!state.statsFrom && state.profitRange === key ? "on" : ""}" data-act="range" data-key="${key}">${key === "all" ? "All" : key.replace("d", "D")}</button>`)
     .join("");
 }
 
@@ -174,9 +173,9 @@ function sectionSeries(board: Board, section: string): SeriesPoint[] {
   });
 }
 
-function chartWindow(board: Board, range: RangeKey, customFrom = "", customTo = "", section = "all"): { points: SeriesPoint[]; headline: string; note: string; rings: { pct: number; label: string }[]; ringsNote: string; from: string | null; to: string | null } {
+function chartWindow(board: Board, range: RangeKey, customFrom = "", customTo = "", section = "all"): { points: SeriesPoint[]; headline: string; note: string; rings: { pct: number; label: string }[]; ringsNote: string; from: string | null; to: string | null; starts: string | null } {
   const series = section === "all" ? board.series : sectionSeries(board, section);
-  if (!series.length) return { points: [], headline: "No data yet", note: "", rings: [], ringsNote: "", from: null, to: null };
+  if (!series.length) return { points: [], headline: "No data yet", note: "", rings: [], ringsNote: "", from: null, to: null, starts: null };
   const preset = sliceHistory(series, range);
   const windowed = customFrom && customTo
     ? { points: series.filter((point) => point.iso && point.iso >= customFrom && point.iso <= customTo), from: customFrom, to: customTo, starts: null as string | null }
@@ -187,16 +186,16 @@ function chartWindow(board: Board, range: RangeKey, customFrom = "", customTo = 
   const headline = delta == null ? "No chart in this file" : `${formatSigned(delta, 2)}u · ${rate == null ? "no graded tickets in this range" : `${rate}% win rate`}`;
   const note = windowed.starts ? `History starts ${windowed.starts}.` : "Running units from the desk chart.";
   const ringsNote = windowed.starts ? `History starts ${windowed.starts}. Win rates use the graded tickets on these dates.` : "Win rates use the graded tickets on these dates.";
-  return { points: windowed.points, headline, note, rings: windowRings(grades), ringsNote, from: windowed.from, to: windowed.to };
+  return { points: windowed.points, headline, note, rings: windowRings(grades), ringsNote, from: windowed.from, to: windowed.to, starts: windowed.starts };
 }
 
 export function renderPage(state: AppState, board: Board): string {
   if (state.view === "today") return shell("today", today(state, board), board);
   if (state.view === "live") return shell("live", live(state, board), board);
-  if (state.view === "results") return shell("results", results(state, board), board);
-  if (state.view === "stats") return shell("stats", stats(state, board), board);
+  if (state.view === "results" || state.view === "stats") return shell("results", results(state, board), board);
   if (state.view === "cappers") return shell("cappers", cappers(state, board), board);
-  return shell(state.standingsFrom === "stats" ? "stats" : "live", standingsView(state, board), board);
+  const from = state.standingsFrom === "stats" || state.standingsFrom === "results" ? "results" : "live";
+  return shell(from, standingsView(state, board), board);
 }
 
 function today(state: AppState, board: Board): string {
@@ -390,23 +389,93 @@ function live(state: AppState, board: Board): string {
   return `<h1 style="font-size:1.75rem">Live</h1><div class="sub">Your legs in games now${updated}</div>${lock}${moodBlock}<section class="game"><div class="sub"><b>Tickets</b></div>${bars || `<p class="empty">No data yet</p>`}</section>${games || `<p class="empty">No data yet</p>`}<div class="sub" style="margin:4px 0">${esc(board.liveNote)}</div><button type="button" class="linkrow" data-act="standings" data-from="live">Standings · NBA · NHL · NFL ›</button>`;
 }
 
-function results(_state: AppState, board: Board): string {
-  const cards = board.results
-    .map((ticket) => {
-      const legs = ticket.legs
-        .map(
-          (leg) =>
-            `<div class="leg"><div><b>${esc(leg.name)}</b><div class="sub">${esc(leg.stat)}</div><div>${leg.grade ? `<span class="grade">${esc(leg.grade)}</span>` : ""}${esc(leg.note)}</div>${leg.clvPct == null ? "" : `<div class="stamp clvchip ${leg.clvPct > 0 ? "W" : leg.clvPct < 0 ? "L" : ""}">${esc(signedPct(leg.clvPct))} CLV</div>`}${leg.beatClose == null ? "" : `<div class="sub clv ${leg.beatClose ? "W" : "L"}">${leg.beatClose ? "✓ Beat close" : "✗ Missed close"}</div>`}</div><span class="res ${leg.result}">${leg.result}</span></div>`,
-        )
-        .join("");
-      return `<section class="ticket"><header><div style="display:flex;gap:12px"><div class="thumb">Ticket<br>photo</div><div><h3>${esc(ticket.title)}</h3><div class="sub">${esc(ticket.meta)}</div></div></div><span style="display:flex;align-items:center;gap:6px">${mascot(ticket.mood, 40)}<span class="res ${ticket.result}" style="font-size:1.375rem">${ticket.result === "W" ? "Won" : ticket.result === "L" ? "Lost" : "Void"}</span></span></header>${legs}<div class="tfoot"><button type="button" class="btn share" data-act="share" data-id="${esc(ticket.id)}" data-settled="1">Share as image</button></div></section>`;
-    })
-    .join("");
-  const head = board.recap.when || board.recap.summary ? `${board.recap.when} · ${board.recap.summary}` : "";
-  const fbRows = [...board.fbLegs].reverse().map((leg) => `<tr><td>${esc(leg.date)} ${esc(leg.player)} <span class="sub">${esc(leg.team)} ${esc(leg.odds)}</span>${leg.note ? `<div class="sub">${esc(leg.note)}</div>` : ""}</td><td class="${leg.hit === "W" ? "W" : leg.hit === "L" ? "L" : ""}">${esc(leg.hit || "—")}</td></tr>`).join("");
-  const fb = board.fbLegs.length ? `<section class="ticket"><header><div><h3>First Blood legs</h3><div class="sub">${esc(board.fbNote || "Per-leg tracking. Not counted in the official win-loss.")}</div></div></header><table class="tbl">${fbRows}</table></section>` : "";
-  const empty = cards || fb ? "" : `<p class="empty">No data yet</p>`;
-  return `<h1 style="font-size:1.75rem">Last night</h1><div class="sub" style="margin-bottom:8px">${esc(head)}</div><div class="priv">🔒 Only you can see this</div>${cards}${fb}${empty}`;
+function weekday(iso: string): string {
+  const [year, month, date] = iso.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+function scopeLine(state: AppState, board: Board, windowed: { from: string | null; to: string | null; starts: string | null }): string {
+  const span = fileBounds(board.grades, board.series, state.statsSection);
+  return historyScope({
+    fileFirst: span.first,
+    fileLast: span.last,
+    from: windowed.from,
+    to: windowed.to,
+    range: state.statsFrom ? "14d" : state.profitRange,
+    custom: Boolean(state.statsFrom && state.statsTo),
+    clippedLabel: windowed.starts,
+  });
+}
+
+function nightBlock(state: AppState, board: Board): string {
+  const open = state.nightOpen;
+  const summary = board.recap.summary.replace(" · graded tickets in the desk file", "");
+  const tone = /^-|−/.test(board.recap.units.trim()) ? "L" : "W";
+  const cards = open
+    ? board.results
+        .map((ticket) => {
+          const legs = ticket.legs
+            .map((leg) => {
+              const capper = leg.name.match(/@[a-z0-9_]+/gi)?.join(", ") || leg.stat.match(/@[a-z0-9_]+/gi)?.join(", ") || "";
+              return `<div class="leg"><div><b>${esc(leg.name)}</b><div class="sub">${esc(leg.stat)}</div><div>${leg.grade ? `<span class="grade">${esc(leg.grade)}</span>` : ""}${esc(leg.note)}</div>${capper ? `<div class="via">via ${esc(capper)}</div>` : ""}${leg.clvPct == null ? "" : `<div class="stamp clvchip ${leg.clvPct > 0 ? "W" : leg.clvPct < 0 ? "L" : ""}">${esc(signedPct(leg.clvPct))} CLV</div>`}${leg.beatClose == null ? "" : `<div class="sub clv ${leg.beatClose ? "W" : "L"}">${leg.beatClose ? "✓ Beat close" : "✗ Missed close"}</div>`}</div><span class="res ${leg.result}">${leg.result === "W" ? "Won" : leg.result === "L" ? "Lost" : esc(leg.result)}</span></div>`;
+            })
+            .join("");
+          return `<section class="ticket"><header><div><h3>${esc(ticket.title)}</h3><div class="sub">${esc(ticket.meta)}</div></div><span style="display:flex;align-items:center;gap:6px">${mascot(ticket.mood, 40)}<span class="res ${ticket.result}">${ticket.result === "W" ? "Won" : ticket.result === "L" ? "Lost" : "Void"}</span></span></header>${legs}<div class="tfoot"><button type="button" class="btn share" data-act="share" data-id="${esc(ticket.id)}" data-settled="1">Share as image</button></div></section>`;
+        })
+        .join("")
+    : "";
+  const fbRows = open
+    ? [...board.fbLegs].reverse().map((leg) => `<tr><td>${esc(leg.date)} ${esc(leg.player)} <span class="sub">${esc(leg.team)} ${esc(leg.odds)}</span>${leg.note ? `<div class="sub">${esc(leg.note)}</div>` : ""}</td><td class="${leg.hit === "W" ? "W" : leg.hit === "L" ? "L" : ""}">${esc(leg.hit || "—")}</td></tr>`).join("")
+    : "";
+  const fb = open && board.fbLegs.length ? `<section class="ticket"><header><div><h3>First Blood legs</h3><div class="sub">${esc(board.fbNote || "Per-leg tracking. Not counted in the official win-loss.")}</div></div></header><table class="tbl">${fbRows}</table></section>` : "";
+  const empty = open && !cards && !fb ? `<p class="empty">No graded night in this file.</p>` : "";
+  return `<section class="night"><button type="button" class="nighthead" data-act="night-toggle" aria-expanded="${open}"><span class="nighttop"><b>Last night</b><span class="car">${open ? "▾" : "▸"}</span></span><span class="nightmeta">${esc(board.recap.when)} · ${esc(summary)} · <b class="${tone}">${esc(board.recap.units)}</b></span></button><p class="sub nightnote">Latest graded night in this file, ${esc(board.recap.when)}. The date filter below does not hide it.</p>${open ? `<div class="nightbody">${cards}${fb}${empty}</div>` : ""}</section>`;
+}
+
+function propList(state: AppState, board: Board, windowed: { from: string | null; to: string | null; starts: string | null }): string {
+  const pick = state.resultsPick;
+  if (!pick) return "";
+  const grades = windowGrades(board.grades, windowed.from, windowed.to).filter((grade) => sectionMatch(grade.cat, state.statsSection));
+  const rows = matchingPlays(grades, pick.sport, pick.prop, pick.alt);
+  const wins = rows.filter((row) => row.win).length;
+  const units = rows.reduce((sum, row) => sum + row.units, 0);
+  const pct = rows.length ? Math.round((wins / rows.length) * 100) : 0;
+  const byDate = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const list = byDate.get(row.date) ?? [];
+    list.push(row);
+    byDate.set(row.date, list);
+  }
+  const groups = [...byDate.keys()].sort().reverse().map((date) => {
+    const list = byDate.get(date) ?? [];
+    const dayWins = list.filter((row) => row.win).length;
+    const items = list
+      .map((row) => `<article class="hit"><span class="res ${row.win ? "W" : "L"}">${row.win ? "Won" : "Lost"}</span><div><b>${esc(row.play || row.detail || row.prop)}</b><div class="sub">${esc(weekday(row.date))} · ${esc(row.cat)}</div>${row.capper ? `<div class="via">via ${esc(row.capper)}</div>` : ""}</div></article>`)
+      .join("");
+    return `<h2>${esc(weekday(date))} · ${dayWins}-${list.length - dayWins}</h2>${items}`;
+  }).join("");
+  const title = `${sportTitle(pick.sport)} · ${pick.prop}${pick.alt ? " Alt" : ""}`;
+  const kind = pick.alt ? "Alt lines only. The same play in another product stays listed there too." : "Regular lines only. Alt lines stay on the Alt row, and the same play in another product stays listed there too.";
+  const body = groups || `<p class="empty">No graded plays for this prop in the dates you picked. All dates shows every graded day in this file.</p>`;
+  return `<button type="button" class="back" data-act="results-back">‹ Results</button><div class="hdr"><h1 style="font-size:1.75rem">${esc(title)}</h1><button type="button" class="stdchip" data-act="standings" data-from="results">Standings</button></div><div class="priv">🔒 Only you can see units and win rate</div><div class="ranges" role="tablist" aria-label="Date range in this file">${rangeControl(state)}</div><p class="sub">${rows.length} plays · ${wins}-${rows.length - wins} · ${esc(formatSigned(units, 2))}u · ${pct}%. ${esc(kind)} ${esc(scopeLine(state, board, windowed))}</p><nav class="scroller sport wrap" aria-label="Section">${statsSections(state)}</nav>${body}`;
+}
+
+function results(state: AppState, board: Board): string {
+  const windowed = chartWindow(board, state.profitRange, state.statsFrom, state.statsTo, state.statsSection);
+  const head = `<div class="hdr"><h1 style="font-size:1.75rem">Results</h1><button type="button" class="stdchip" data-act="standings" data-from="results">Standings</button></div><div class="priv">🔒 Only you can see units and win rate</div>`;
+  if (state.resultsPick) return propList(state, board, windowed);
+  if (!board.series.length && !board.grades.length && !board.clv && !board.results.length) return `${head}${nightBlock(state, board)}<p class="empty">No data yet</p>`;
+  const four = windowed.rings.slice(0, 4).map((ring) => ringSvg(ring.pct, ring.label)).join("");
+  return `${head}
+${nightBlock(state, board)}
+${statsCalendar(state, board, windowed.from, windowed.to)}
+<div class="ranges" role="tablist" aria-label="Date range in this file">${rangeControl(state)}</div>
+<p class="sub scope">${esc(scopeLine(state, board, windowed))}</p>
+<nav class="scroller sport wrap" aria-label="Section">${statsSections(state)}</nav>
+<div class="card"><h2>Profit</h2><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
+${four ? `<div class="card"><div class="rings">${four}</div></div>` : ""}
+${statsSports(state, board, windowed.from, windowed.to)}
+${clvCard(board, windowed.from, windowed.to, state.statsSection)}`;
 }
 
 function cappers(state: AppState, board: Board): string {
@@ -431,23 +500,6 @@ function cappers(state: AppState, board: Board): string {
   const note = quiet.length ? `<p class="sub">No play today: ${esc(quiet.join(", "))}. Those names are still in the file.</p>` : "";
   const body = withPlays.length ? group("Cappers", withPlays) : `<p class="empty">No data yet</p>`;
   return `<h1 style="font-size:1.75rem">Cappers</h1><div class="sub" style="margin-bottom:8px">${withPlays.length} with a play today · every play stays · ${bookName(state.book)} view</div>${bookToggle(state.book)}${note}${body}`;
-}
-
-function stats(state: AppState, board: Board): string {
-  const windowed = chartWindow(board, state.profitRange, state.statsFrom, state.statsTo, state.statsSection);
-  const rangeButtons = rangeControl(state);
-  const head = `<div class="hdr"><h1 style="font-size:1.75rem">Stats</h1><button type="button" class="stdchip" data-act="standings" data-from="stats">📊 Standings</button></div><div class="priv">🔒 Only you can see this</div>`;
-  if (!board.series.length && !board.grades.length && !board.clv) return `${head}<p class="empty">No data yet</p>`;
-  const four = windowed.rings.slice(0, 4).map((ring) => ringSvg(ring.pct, ring.label)).join("");
-  const rings = four ? `<div class="card"><div class="rings">${four}</div></div>` : `<p class="empty">No data yet</p>`;
-  return `${head}
-${statsCalendar(state, board, windowed.from, windowed.to)}
-<div class="ranges" role="tablist" aria-label="Chart range">${rangeButtons}</div>
-<nav class="scroller sport wrap" aria-label="Section">${statsSections(state)}</nav>
-<div class="card"><h2>Profit</h2><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
-${rings}
-${statsSports(state, board, windowed.from, windowed.to)}
-${clvCard(board, windowed.from, windowed.to, state.statsSection)}`;
 }
 
 function signedPct(n: number): string {
@@ -539,7 +591,8 @@ function standingsView(state: AppState, board: Board): string {
     .join("");
   const when = board.standingsUpdated ? `<p class="stamp">${esc(board.standingsUpdated)}</p>` : "";
   const body = tables || `<p class="empty">No data yet</p>`;
-  return `<button type="button" class="back" data-act="nav" data-view="${state.standingsFrom}">‹ Back</button><h1 style="font-size:1.75rem">Standings</h1>${when}<div class="sub">Six sports · ★ = a team on today's card · swipe tables sideways; team column stays put</div><div class="sub" style="margin-bottom:6px">${esc(league?.note ?? "")}</div><div class="lgtabs" role="tablist">${tabs}</div>${picker}${gameBlock}${body}`;
+  const back = state.standingsFrom === "stats" ? "results" : state.standingsFrom;
+  return `<button type="button" class="back" data-act="nav" data-view="${back}">‹ Back</button><h1 style="font-size:1.75rem">Standings</h1>${when}<div class="sub">Six sports · ★ = a team on today's card · swipe tables sideways; team column stays put</div><div class="sub" style="margin-bottom:6px">${esc(league?.note ?? "")}</div><div class="lgtabs" role="tablist">${tabs}</div>${picker}${gameBlock}${body}`;
 }
 
 function sharePreview(card: ShareCard): string {

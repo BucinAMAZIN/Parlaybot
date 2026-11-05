@@ -405,6 +405,7 @@ function gradesFrom(rows: Row[]): GradeMark[] {
       side: normSide(pick, prop, row.alt === true),
       capper: capper || undefined,
       detail: famMissing && label !== "First Blood" ? pick : undefined,
+      play: pick || prop || "Play",
     });
   }
   return marks;
