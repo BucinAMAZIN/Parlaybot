@@ -8,6 +8,7 @@ import { fileBounds, historyScope, sliceHistory } from "../src/lib/history.ts";
 import { matchingPlays } from "../src/ui/statsScreen.ts";
 import { knownView, viewFromHash } from "../src/ui/state.ts";
 import { dedupePlays, playKey } from "../src/data/dedupePlays.ts";
+import { isTicketRow, ticketParts } from "../src/data/ticketLegs.ts";
 import { normProp, normSide, normSport } from "../src/data/gradeLabels.ts";
 import { classifySport, sportLabel } from "../src/lib/sport.ts";
 import { adaptClv } from "../src/data/adaptClv.ts";
@@ -439,5 +440,37 @@ assert.equal(bounds.first <= "2026-10-18" && bounds.last >= "2026-11-04", true);
 const nbaUnits = braunRows.reduce((sum, row) => sum + row.units, 0);
 const splitUnits = [...regular, ...alts].reduce((sum, row) => sum + row.units, 0);
 assert.equal(nbaUnits, splitUnits);
+
+const safeParent = { date: "2026-11-04", cat: "Safe +100 (Alt Parlay)", pick: "Safe +100 3-leg", leg: false, tid: "2026-11-04|NBA|10:19 AM ET|3-leg", res: "W" };
+const safeLeg = { date: "2026-11-04", cat: "Safe +100 (Alt Parlay)", pick: "Jalen Brunson 20+ pts", leg: true, tid: safeParent.tid, prop: "NBA pts", odds: "-325", res: "W", stat: "33 PTS", gm: "NYK game" };
+const otherSafe = { date: "2026-11-04", cat: "Safe +100 (Alt Parlay)", pick: "Jack Quinn 2+ SOG", leg: true, tid: "2026-11-04|Today|10:19 AM ET|3-leg", res: "L", stat: "1 SOG" };
+const todayCard = { date: "2026-11-05", cat: "Safe +100 (Alt Parlay)", pick: "Today only", leg: true, tid: safeParent.tid, res: "W", stat: "99 PTS" };
+const safeParts = ticketParts(safeParent, [safeParent, safeLeg, otherSafe, todayCard]);
+assert.equal(safeParts?.length, 1);
+assert.equal(safeParts?.[0].name, "Jalen Brunson 20+ pts");
+assert.equal(safeParts?.[0].score, "33 PTS");
+assert.match(safeParts?.[0].market ?? "", /-325/);
+assert.equal(isTicketRow({ pick: "Trae Young 9+ Assists", leg: false }), false);
+const nested = ticketParts({ date: "2026-10-13", cat: "Parlay +100", pick: "2-leg", leg: false, legs: [{ pick: "Alex DeBrincat u1.5 Points", result: "L", stat: "2G 1A" }] }, []);
+assert.equal(nested?.length, 1);
+assert.equal(nested?.[0].result, "L");
+const bloodParent = { date: "2026-11-04", cat: "First Blood", pick: "First Blood 8-leg", leg: false };
+const bloodLeg = { date: "2026-11-04", cat: "First Blood", pick: "Shai Gilgeous-Alexander first point scorer", leg: true, res: "L", stat: "First point: Kenrich Williams", prop: "First Point Scorer", odds: "+475" };
+const otherNight = { date: "2026-11-03", cat: "First Blood", pick: "Someone else", leg: true, res: "W" };
+assert.equal(ticketParts(bloodParent, [bloodParent, bloodLeg, otherNight])?.length, 1);
+const heistTicket = { date: "2026-11-04", cat: "Heist tickets", pick: "The Heist 12-leg", leg: false };
+const heistSingle = { date: "2026-11-04", cat: "The Heist", pick: "Trae Young 9+ Assists", leg: false, res: "L" };
+assert.deepEqual(ticketParts(heistTicket, [heistTicket, heistSingle]), []);
+assert.equal(ticketParts({ date: "2026-10-18", cat: "Cappers", pick: "NFL 2-leg parlay: A + B", leg: false }, [])?.length, 0);
+const counted = adaptDesk(
+  {
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    results_v2: { rows: [safeParent, safeLeg, otherSafe, { ...safeParent, pick: "Safe +100 3-leg", res: "L", tid: otherSafe.tid, uu: -1, leg: false }] },
+  },
+  ncaab,
+);
+assert.equal(counted.grades.length, 2);
+assert.equal(counted.results.find((ticket) => ticket.title.includes("Safe"))?.legs.filter((leg) => leg.ticket).length, 2);
+assert.equal(counted.results.find((ticket) => ticket.title.includes("Safe"))?.legs.find((leg) => leg.result === "W")?.parts?.length, 1);
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

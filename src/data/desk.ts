@@ -20,6 +20,7 @@ import type { CardNote } from "../lib/cardFilter.ts";
 import { formatSigned } from "../lib/format.ts";
 import { classifySport, sportLabel } from "../lib/sport.ts";
 import { dedupePlays } from "./dedupePlays.ts";
+import { isTicketRow, ticketParts } from "./ticketLegs.ts";
 import { capperOf, normProp, normSide, normSport } from "./gradeLabels.ts";
 import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
@@ -292,6 +293,7 @@ function night(rows: Row[], iso: string, clv: Map<string, number>): { results: S
       const res = str(row.res) as SettledLeg["result"];
       const name = str(row.pick) || str(row.prop) || "Play";
       const clvPct = clv.get(`${iso}|${normPick(name)}`);
+      const ticket = isTicketRow(row);
       return {
         name,
         stat: [str(row.prop), str(row.odds)].filter(Boolean).join(" · "),
@@ -300,6 +302,9 @@ function night(rows: Row[], iso: string, clv: Map<string, number>): { results: S
         note: str(row.stat),
         beatClose: null,
         clvPct,
+        date: str(row.date),
+        ticket,
+        parts: ticket ? ticketParts(row, rows) ?? [] : undefined,
       };
     });
     const w = legs.filter((leg) => leg.result === "W").length;
@@ -406,6 +411,8 @@ function gradesFrom(rows: Row[]): GradeMark[] {
       capper: capper || undefined,
       detail: famMissing && label !== "First Blood" ? pick : undefined,
       play: pick || prop || "Play",
+      ticket: isTicketRow(row),
+      parts: isTicketRow(row) ? ticketParts(row, rows) ?? [] : undefined,
     });
   }
   return marks;

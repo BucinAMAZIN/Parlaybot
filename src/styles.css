@@ -101,6 +101,12 @@ button.pr{width:100%;display:block;background:transparent;border:0;border-bottom
 .nightmeta{font-weight:700}
 .nightnote{padding:0 12px 12px;margin:0}
 .hit{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid #232a34}
+.ticketbtn,.datehead{width:100%;min-height:44px;display:flex;align-items:center;gap:8px;background:transparent;border:0;color:inherit;font:inherit;text-align:left;padding:8px 0}
+.ticketbtn .res{margin-left:auto}
+.leg.ticketleg,.hit.ticketleg{flex-direction:column;align-items:stretch}
+.datehead{border-top:1px solid #232a34}
+.part{display:flex;justify-content:space-between;gap:8px;padding:8px 0 8px 28px;border-top:1px solid #232a34}
+.miss{padding:0 0 8px 28px}
 .prt{display:flex;gap:8px;align-items:baseline}
 .prt b:first-child{flex:1}
 .splits{display:flex;gap:10px;font-size:.78rem;color:#a9b4c2;margin-top:2px;flex-wrap:wrap}

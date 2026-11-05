@@ -340,7 +340,24 @@ function onClick(event: Event) {
     const prop = action.dataset.prop || "";
     if (!sport || !prop) return;
     state.resultsPick = { sport, prop, alt: action.dataset.alt === "1" };
+    state.openResultDates = new Set();
     paint(true);
+    return;
+  }
+  if (act === "result-date") {
+    const key = action.dataset.key || "";
+    if (!key) return;
+    if (state.openResultDates.has(key)) state.openResultDates.delete(key);
+    else state.openResultDates.add(key);
+    paint(false);
+    return;
+  }
+  if (act === "ticket-legs") {
+    const key = action.dataset.key || "";
+    if (!key) return;
+    if (state.openTickets.has(key)) state.openTickets.delete(key);
+    else state.openTickets.add(key);
+    paint(false);
     return;
   }
   if (act === "results-back") {

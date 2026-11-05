@@ -76,6 +76,15 @@ export type Ticket = {
   stamp?: string;
 };
 
+/** One recorded leg of a historical ticket. Empty strings mean that field was not in the file. */
+export type TicketPart = {
+  name: string;
+  market: string;
+  result: string;
+  score: string;
+  game: string;
+};
+
 export type SettledLeg = {
   name: string;
   stat: string;
@@ -86,6 +95,12 @@ export type SettledLeg = {
   beatClose: boolean | null;
   /** Closing-line percent when a CLV play matches this graded pick. */
   clvPct?: number;
+  /** Graded date, so a ticket can be matched to that night's legs only. */
+  date?: string;
+  /** True when this row is a parlay or ticket, not a single play. */
+  ticket?: boolean;
+  /** Recorded constituent legs. Empty when this is a ticket and the file has none. */
+  parts?: TicketPart[];
 };
 
 export type SettledTicket = {
@@ -163,6 +178,10 @@ export type GradeMark = {
   detail?: string;
   /** The desk pick text, for the Results list. It does not change the record. */
   play?: string;
+  /** True when this graded row is a parlay or ticket. It is not an extra result. */
+  ticket?: boolean;
+  /** Recorded constituent legs. Empty when this is a ticket and the file has none. */
+  parts?: TicketPart[];
 };
 
 export type CapperGroup = "heist" | "an";

@@ -54,6 +54,10 @@ export type AppState = {
   nightOpen: boolean;
   /** Open prop list. Null on the Results overview. Not saved. */
   resultsPick: { sport: string; prop: string; alt: boolean } | null;
+  /** Prop-history dates the phone has opened. Starts empty and is not saved. */
+  openResultDates: Set<string>;
+  /** Ticket rows opened for their recorded legs. Starts empty and is not saved. */
+  openTickets: Set<string>;
 };
 
 /** A known tab name, with the retired Stats tab sent to Results. Empty and unknown hashes are null. */
@@ -106,6 +110,8 @@ export function defaultState(): AppState {
     statsDraft: "",
     nightOpen: false,
     resultsPick: null,
+    openResultDates: new Set(),
+    openTickets: new Set(),
   };
 }
 
