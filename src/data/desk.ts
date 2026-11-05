@@ -207,6 +207,7 @@ function playFrom(row: Row, id: string, statuses: Map<string, PlayerStatus>, hin
     source: "desk",
     hrSid: /^\d+$/.test(hrSid) ? hrSid : undefined,
     hrLink: hrOff ? undefined : str(row.hr_link) || undefined,
+    hrUnverified: /unverified link/i.test(str(row.hr_why)) ? str(row.hr_why) : undefined,
     dkSid: /^0QA[0-9A-Za-z#_-]+$/.test(dkSid) ? dkSid : undefined,
     dkLink: dkOff ? undefined : str(row.dk_link) || undefined,
   };

@@ -57,6 +57,8 @@ export type Play = {
   /** DraftKings Predictions selection id (dk_sid) and the phone-tested event link. */
   dkSid?: string;
   dkLink?: string;
+  /** Feed hr_why when the stored Hard Rock selection could not be verified. Not a book-absence flag. */
+  hrUnverified?: string;
   gradeNote?: { text: string; tone: "W" | "L" | "V" };
 };
 

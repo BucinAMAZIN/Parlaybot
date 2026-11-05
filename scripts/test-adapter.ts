@@ -146,6 +146,24 @@ assert.equal(showtime[0]?.hrSid, wrongSid);
 assert.equal(showtime[1]?.name.includes("Etcheverry"), true);
 assert.equal(showtime[1]?.hrSid, undefined);
 assert.equal(hardRockLegLink({ id: showtime[0].id, name: showtime[0].name, hrSid: showtime[0].hrSid, hrLink: showtime[0].hrLink }).status, "mismatch");
+const unverified = adaptDesk(
+  {
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    cappers: [{
+      name: "@showtimepicks2",
+      today: [
+        { sport: "NCAAB", pick: "McNeese Cowboys ML (vs UNT; CBB free play)", odds: "-142", hr_why: "Unverified link: Hard Rock selection could not be verified for this NCAAB game" },
+        { sport: "Tennis", pick: "Tomas Martin Etcheverry ML (rare tennis play)", odds: "-135", hr_why: "no Hard Rock event found for this player/team", hr_absent: false },
+      ],
+    }],
+    results_v2: { rows: [] },
+  },
+  { note: "", columns: [], groups: [] },
+).tickets.find((item) => item.productKey === "cappers")?.plays ?? [];
+assert.match(unverified[0]?.hrUnverified ?? "", /Unverified link/);
+assert.equal(unverified[0]?.hrSid, undefined);
+assert.equal(unverified[1]?.hrUnverified, undefined);
+assert.equal(unverified[1]?.name.includes("Etcheverry"), true);
 
 const dkSid = "0QA385792709#2349946626_13L42648Q1-1115091407Q20";
 const dkLink = `https://sportsbook.draftkings.com/event/34937000?outcomes=${encodeURIComponent(dkSid)}`;

@@ -105,7 +105,7 @@ function openScope(scope: string, id: string, forced?: "hr" | "dk") {
   const ready = plays.filter((play) => canOpen(play, book));
   const left = plays.filter((play) => !canOpen(play, book));
   if (!ready.length) {
-    const mismatched = book === "hr" ? plays.filter((play) => linkMismatch(play, "hr")) : [];
+    const mismatched = book === "hr" ? plays.filter((play) => linkMismatch(play, "hr") || play.hrUnverified) : [];
     showToast(mismatched.length
       ? "Hard Rock link unavailable. The stored selection opens a different game or prop, so it is not launched."
       : "Nothing to load. A play that is off this book, already started, or already graded stays on the card and is not added to a slip.");
