@@ -50,13 +50,29 @@ export type AppState = {
   statsSport: string;
   statsAnchor: string;
   statsDraft: string;
+  /** Last night disclosure. Starts closed and is not saved. */
+  nightOpen: boolean;
+  /** Open prop list. Null on the Results overview. Not saved. */
+  resultsPick: { sport: string; prop: string; alt: boolean } | null;
 };
+
+/** A known tab name, with the retired Stats tab sent to Results. Empty and unknown hashes are null. */
+export function knownView(hash: string): ViewId | null {
+  const name = hash.replace(/^#/, "");
+  if (name === "stats") return "results";
+  if (name === "today" || name === "live" || name === "results" || name === "cappers" || name === "standings") return name;
+  return null;
+}
+
+/** #stats from the old tab lands on the combined Results tab. An empty hash opens Today. */
+export function viewFromHash(hash: string): ViewId {
+  return knownView(hash) ?? "today";
+}
 
 const PREF_KEY = "parlaybot-v1";
 
 export function defaultState(): AppState {
-  const hash = location.hash.replace("#", "") as ViewId;
-  const view: ViewId = ["today", "live", "results", "stats", "cappers", "standings"].includes(hash) ? hash : "today";
+  const view = viewFromHash(location.hash);
   return {
     view,
     book: "hr",
@@ -88,6 +104,8 @@ export function defaultState(): AppState {
     statsSport: "",
     statsAnchor: "",
     statsDraft: "",
+    nightOpen: false,
+    resultsPick: null,
   };
 }
 

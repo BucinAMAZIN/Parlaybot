@@ -1,7 +1,7 @@
 import type { Board } from "../data/board.ts";
 import { sectionMatch, sportRank, sportTitle } from "../data/gradeLabels.ts";
 import type { GradeMark } from "../data/types.ts";
-import { prettyDay, windowGrades } from "../lib/history.ts";
+import { fileBounds, prettyDay, windowGrades } from "../lib/history.ts";
 import { esc, formatSigned } from "../lib/format.ts";
 import { ringSvg } from "./bits.ts";
 import type { AppState } from "./state.ts";
@@ -59,20 +59,20 @@ function monthsBetween(from: string, to: string): string[] {
   return out;
 }
 
-function calendar(state: AppState, grades: GradeMark[], from: string, to: string): string {
+function calendar(state: AppState, grades: GradeMark[], from: string, to: string, gridFrom: string, gridTo: string): string {
   const label = from && to ? `${prettyDay(from)} – ${prettyDay(to)}` : "Pick dates";
   const modes = (["day", "week", "range"] as const)
     .map((mode) => `<button type="button" class="${state.statsMode === mode ? "on" : ""}" data-act="cal-mode" data-key="${mode}">${mode === "day" ? "Day" : mode === "week" ? "Week" : "Range"}</button>`)
     .join("");
-  const head = `<div class="calhead"><button type="button" class="caltoggle" data-act="cal-toggle">📅 <b>${esc(label)}</b> <span class="car">${state.statsCalOpen ? "▴" : "▾"}</span></button><div class="ranges calmode">${modes}</div></div>`;
-  if (!state.statsCalOpen || !to) return `<div class="card cal">${head}</div>`;
+  const head = `<div class="calhead"><button type="button" class="caltoggle" data-act="cal-toggle" aria-expanded="${state.statsCalOpen}">📅 <b>${esc(label)}</b> <span class="car">${state.statsCalOpen ? "▴" : "▾"}</span></button><div class="ranges calmode">${modes}</div></div>`;
+  if (!state.statsCalOpen || !gridTo) return `<div class="card cal">${head}</div>`;
   const tint = dayMap(grades);
   const picked = [state.statsAnchor, state.statsDraft].filter(Boolean).sort();
   const hiFrom = picked[0] || from;
   const hiTo = picked[1] || picked[0] || to;
   const applyLabel = hiFrom && hiTo ? `${prettyDay(hiFrom)} – ${prettyDay(hiTo)}` : label;
-  const grids = monthsBetween(from, to).map((month) => monthHtml(`${month}-01`, tint, hiFrom, hiTo, state.statsMode)).join("");
-  return `<div class="card cal">${head}${grids}<div class="lgd"><span><i class="w"></i>Win day</span><span><i class="l"></i>Loss day</span><span><i class="n"></i>No bets</span></div><p class="sub">Tap a day. In Week, that selects the whole week. In Range, tap the first day and the last.</p><div class="row2"><button type="button" class="btn share" data-act="cal-clear">Clear</button><button type="button" class="btn hr" data-act="cal-apply">Apply ${esc(applyLabel)}</button></div></div>`;
+  const grids = monthsBetween(gridFrom || from, gridTo || to).map((month) => monthHtml(`${month}-01`, tint, hiFrom, hiTo, state.statsMode)).join("");
+  return `<div class="card cal">${head}${grids}<div class="lgd"><span><i class="w"></i>Win day</span><span><i class="l"></i>Loss day</span><span><i class="n"></i>No bets</span></div><p class="sub">Only days in this file are on the calendar. Tap a day. In Week, that selects the whole week. In Range, tap the first day and the last.</p><div class="row2"><button type="button" class="btn share" data-act="cal-clear">Clear</button><button type="button" class="btn hr" data-act="cal-apply">Apply ${esc(applyLabel)}</button></div></div>`;
 }
 
 function spark(values: number[]): string {
@@ -111,21 +111,21 @@ function sportCards(grades: GradeMark[], open: string): string {
       let running = 0;
       const line = [...byDay.keys()].sort().map((date) => (running += byDay.get(date) ?? 0));
       const expanded = open === sport;
-      const props = expanded ? propBlock(rows) : "";
-      return `<section class="card sp${expanded ? " ex" : ""}"><button type="button" class="sprow" data-act="stats-sport" data-key="${esc(sport)}">${ringSvg(pct, "")}<span class="spn"><b>${esc(sportTitle(sport))}</b><span class="sub">${wins}-${losses} · <b class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</b></span></span>${spark(line)}<span class="car">${expanded ? "▴" : "▾"}</span></button>${props}</section>`;
+      const props = expanded ? propBlock(rows, sport) : "";
+      return `<section class="card sp${expanded ? " ex" : ""}"><button type="button" class="sprow" data-act="stats-sport" data-key="${esc(sport)}" aria-expanded="${expanded}">${ringSvg(pct, "")}<span class="spn"><b>${esc(sportTitle(sport))}</b><span class="sub">${wins}-${losses} · <b class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</b></span></span>${spark(line)}<span class="car">${expanded ? "▴" : "▾"}</span></button>${props}</section>`;
     })
     .join("");
 }
 
-function propRow(name: string, list: GradeMark[], splits: string, note: string, alt: boolean): string {
+function propRow(sport: string, prop: string, name: string, list: GradeMark[], splits: string, note: string, alt: boolean): string {
   if (!list.length) return "";
   const wins = list.filter((row) => row.win).length;
   const units = list.reduce((sum, row) => sum + row.units, 0);
   const pct = Math.round((wins / list.length) * 100);
-  return `<div class="pr${alt ? " altrow" : ""}"><div class="prt"><b>${esc(name)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span></div>${splits ? `<div class="splits">${splits}</div>` : ""}${note}</div>`;
+  return `<button type="button" class="pr${alt ? " altrow" : ""}" data-act="results-prop" data-sport="${esc(sport)}" data-prop="${esc(prop)}" data-alt="${alt ? "1" : "0"}" aria-label="${esc(name)}, ${wins}-${list.length - wins}"><span class="prt"><b>${esc(name)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span><span class="car">›</span></span>${splits ? `<div class="splits">${splits}</div>` : ""}${note}</button>`;
 }
 
-function propBlock(rows: GradeMark[]): string {
+function propBlock(rows: GradeMark[], sport: string): string {
   const groups = new Map<string, GradeMark[]>();
   for (const row of rows) {
     const list = groups.get(row.prop) ?? [];
@@ -151,24 +151,31 @@ function propBlock(rows: GradeMark[]): string {
         const names = [...new Set(side.flatMap((row) => (row.capper ?? "").split(",").map((name) => name.trim()).filter(Boolean)))];
         return names.length ? `<div class="via">via ${names.map((name) => esc(name)).join(", ")}</div>` : "";
       };
-      return `${propRow(prop, regular, splits, viaNote(regular), false)}${propRow(`${prop} Alt`, alts, "", viaNote(alts), true)}`;
+      return `${propRow(sport, prop, prop, regular, splits, viaNote(regular), false)}${propRow(sport, prop, `${prop} Alt`, alts, "", viaNote(alts), true)}`;
     })
     .join("");
   return `<div class="props">${body}</div>`;
 }
 
+export function matchingPlays(grades: GradeMark[], sport: string, prop: string, alt: boolean): GradeMark[] {
+  return grades.filter((grade) => grade.sport === sport && grade.prop === prop && (alt ? grade.side === "alt" : grade.side !== "alt"));
+}
+
 export function statsCalendar(state: AppState, board: Board, from: string | null, to: string | null): string {
   const grades = board.grades.filter((grade) => sectionMatch(grade.cat, state.statsSection));
-  return calendar(state, grades, from ?? "", to ?? "");
+  const span = fileBounds(board.grades, board.series, state.statsSection);
+  return calendar(state, grades, from ?? "", to ?? "", span.first || from || "", span.last || to || "");
 }
 
 export function statsSections(state: AppState): string {
   return (["all", "heist", "safe", "edge", "cappers", "legday"] as const)
-    .map((key) => `<button type="button" class="${state.statsSection === key ? "on" : ""}" data-act="stats-section" data-key="${key}">${key === "all" ? "All" : key === "legday" ? "LEG DAY" : key[0].toUpperCase() + key.slice(1)}</button>`)
+    .map((key) => `<button type="button" class="${state.statsSection === key ? "on" : ""}" data-act="stats-section" data-key="${key}">${key === "all" ? "All sections" : key === "legday" ? "LEG DAY" : key[0].toUpperCase() + key.slice(1)}</button>`)
     .join("");
 }
 
 export function statsSports(state: AppState, board: Board, from: string | null, to: string | null): string {
   const grades = windowGrades(board.grades, from, to).filter((grade) => sectionMatch(grade.cat, state.statsSection));
-  return `<h2 class="grouph">By sport</h2>${sportCards(grades, state.statsSport) || `<p class="empty">No graded tickets in this range.</p>`}`;
+  const span = fileBounds(board.grades, board.series, state.statsSection);
+  const empty = span.first ? `No graded plays in these dates. All dates still has this file, ${prettyDay(span.first)} through ${prettyDay(span.last)}.` : "No graded plays in this file.";
+  return `<h2 class="grouph">By sport</h2><p class="sub">Tap a sport for its props. Tap a prop for the graded plays. Regular and Alt stay separate.</p>${sportCards(grades, state.statsSport) || `<p class="empty">${esc(empty)}</p>`}`;
 }

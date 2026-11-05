@@ -1,3 +1,4 @@
+import { sectionMatch } from "../data/gradeLabels.ts";
 import type { GradeMark, SeriesPoint } from "../data/types.ts";
 
 export type RangeKey = "14d" | "30d" | "60d" | "90d" | "all";
@@ -64,6 +65,28 @@ export function windowRings(grades: GradeMark[]): { pct: number; label: string }
     rings.push({ pct: Math.round((bucket.w / (bucket.w + bucket.l)) * 100), label });
   }
   return rings;
+}
+
+export function fileBounds(grades: GradeMark[], series: SeriesPoint[], section: string): { first: string; last: string } {
+  const dates: string[] = [];
+  for (const grade of grades) if (sectionMatch(grade.cat, section)) dates.push(grade.date);
+  if (!section || section === "all") for (const point of series) if (point.iso) dates.push(point.iso);
+  dates.sort();
+  return { first: dates[0] ?? "", last: dates[dates.length - 1] ?? "" };
+}
+
+const RANGE_LABEL: Record<RangeKey, string> = { "14d": "14D", "30d": "30D", "60d": "60D", "90d": "90D", all: "All dates" };
+
+/** Says what the selected dates are, and that All is the whole file rather than hidden history. */
+export function historyScope(input: { fileFirst: string; fileLast: string; from: string | null; to: string | null; range: RangeKey; custom: boolean; clippedLabel: string | null }): string {
+  if (!input.fileFirst || !input.fileLast) return "No dated history in this file.";
+  const first = prettyDay(input.fileFirst);
+  const last = prettyDay(input.fileLast);
+  if (!input.custom && input.range === "all") return `All dates in this file, ${first} through ${last}. Days before ${first} are not in the feed.`;
+  if (!input.from || !input.to) return `All dates shows the whole file, ${first} through ${last}.`;
+  const chip = input.custom ? "This custom range" : RANGE_LABEL[input.range];
+  const clipped = input.clippedLabel ? ` History in this file starts ${input.clippedLabel}.` : "";
+  return `${chip} is ${prettyDay(input.from)} through ${prettyDay(input.to)} inside this file.${clipped} All dates shows the whole file, ${first} through ${last}.`;
 }
 
 export function unitChange(all: SeriesPoint[], shown: SeriesPoint[]): number | null {
