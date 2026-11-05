@@ -13,6 +13,8 @@ import {
 import { gradeTeamBet, sortLiveGames, teamBet } from "../src/data/liveCard.ts";
 import { courtHardware, threePointPath } from "../src/ui/court.ts";
 import { buildNumber, newerBuild } from "../src/lib/buildWatch.ts";
+import { absorbLiveLeg, cleanLiveTitle, findLiveLeg, liveLegKey } from "../src/data/espn.ts";
+import type { LiveGame, LiveLeg, WhyBlock } from "../src/data/types.ts";
 
 const away = courtPoint(16, 24, false);
 assert.ok(away);
@@ -176,5 +178,23 @@ assert.equal(newerBuild("26", "27"), true);
 assert.equal(newerBuild("27", "27"), false);
 assert.equal(newerBuild("28", "27"), false);
 assert.equal(newerBuild("", "27"), false);
+
+const mcneese = { away: { abbr: "MCN", names: ["mcn", "mcneese", "mcneese cowboys"] }, home: { abbr: "UNT", names: ["unt", "north texas"] } };
+const mlKey = liveLegKey("McNeese Cowboys ML", "NCAAB", mcneese);
+assert.equal(mlKey, liveLegKey("McNeese Cowboys ML (vs UNT; CBB free play)", "NCAAB", mcneese));
+assert.equal(mlKey, "ml:away");
+assert.equal(cleanLiveTitle("McNeese Cowboys ML (vs UNT; CBB free play)"), "McNeese Cowboys ML");
+const emptyWhy: WhyBlock = { ours: false, line: "", why: [], whyNot: [] };
+const capperWhy: WhyBlock = { ours: false, line: "Posted as a free play", why: ["Posted as a free play"], whyNot: [] };
+const blankLeg: LiveLeg = { name: "McNeese Cowboys ML", current: 48, line: 53, unit: "", pace: "behind", source: "ESPN score", why: emptyWhy, label: "Trailing 48–53", key: mlKey };
+const notedLeg: LiveLeg = { ...blankLeg, name: "McNeese Cowboys ML (vs UNT; CBB free play)", why: capperWhy };
+const merged = absorbLiveLeg(blankLeg, notedLeg);
+assert.equal(merged.name, "McNeese Cowboys ML");
+assert.equal(merged.why.why[0], "Posted as a free play");
+const game = { league: "NCAAB", away: "MCN", home: "UNT", awayName: "McNeese", homeName: "North Texas", legs: [merged] } as LiveGame;
+assert.equal(findLiveLeg("McNeese Cowboys ML", game)?.label, "Trailing 48–53");
+assert.equal(findLiveLeg("McNeese Cowboys ML (vs UNT; CBB free play)", game)?.key, mlKey);
+assert.notEqual(liveLegKey("Justice Hill Over 2.5 Receptions", "NFL"), liveLegKey("Justice Hill Over 1.5 Receptions", "NFL"));
+assert.equal(liveLegKey("Mikhail Sergachev o0.5 Points", "NHL"), liveLegKey("Mikhail Sergachev Over 0.5 Points (via @capper)", "NHL"));
 
 console.log("gamecast tests ok");

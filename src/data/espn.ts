@@ -1,5 +1,5 @@
 import type { Board } from "./board.ts";
-import type { LegPace, LiveFeed, LiveGame, LiveLeg, LiveTicket, Mood, Play, Ticket } from "./types.ts";
+import type { LegPace, LiveFeed, LiveGame, LiveLeg, LiveTicket, Mood, Play, Ticket, WhyBlock } from "./types.ts";
 import { propLine } from "../lib/propLine.ts";
 import { gcHum, isFreeThrow, parseCast } from "./gamecast.ts";
 import { gradeTeamBet, sortLiveGames, teamBet } from "./liveCard.ts";
@@ -223,6 +223,80 @@ function paceOf(current: number, line: number, under: boolean, plus: boolean, ev
   return "cold";
 }
 
+export type LiveKeySide = { abbr: string; names: string[] };
+
+/** Drop a trailing matchup note such as "(vs UNT; CBB free play)". */
+export function cleanLiveTitle(name: string): string {
+  let text = name.trim();
+  for (;;) {
+    const next = text.replace(/\s*\([^)]*\)\s*$/, "").trim();
+    if (next === text) return text;
+    text = next;
+  }
+}
+
+function normBit(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9.+ ]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function mentions(teamName: string, side: LiveKeySide): boolean {
+  const text = normBit(teamName);
+  if (!text) return false;
+  const names = [side.abbr, ...side.names].map((name) => name.toLowerCase()).filter(Boolean);
+  return names.some((name) => name === text || text.split(" ").includes(name) || name.split(" ").every((part) => part.length > 2 && text.includes(part)));
+}
+
+function betSideName(team: string, teams: { away: LiveKeySide; home: LiveKeySide }): "away" | "home" | null {
+  const away = mentions(team, teams.away);
+  const home = mentions(team, teams.home);
+  if (away === home) return null;
+  return away ? "away" : "home";
+}
+
+/** Same bet from two products shares a key. Different lines stay different keys. */
+export function liveLegKey(playName: string, league: LiveGame["league"], teams?: { away: LiveKeySide; home: LiveKeySide }): string {
+  const titled = cleanLiveTitle(playName);
+  const prop = propOf(titled, league);
+  if (prop) {
+    const dir = prop.under ? "under" : prop.plus ? "plus" : "over";
+    return `prop:${normBit(prop.player)}:${prop.key}:${dir}:${prop.line}`;
+  }
+  const bet = teamBet(titled);
+  if (bet) {
+    if (bet.kind === "total") return `total:${bet.under ? "u" : "o"}:${bet.line}`;
+    const side = teams ? betSideName(bet.team, teams) : null;
+    const who = side ?? normBit(bet.team);
+    if (bet.kind === "ml") return `ml:${who}`;
+    return `spread:${who}:${bet.spread}`;
+  }
+  return `name:${normBit(cleanLiveTitle(playName))}`;
+}
+
+function realWhy(why: WhyBlock): boolean {
+  return [...why.why, ...why.whyNot].some((line) => {
+    const text = line.trim();
+    return !!text && !/no why text in the desk file/i.test(text);
+  });
+}
+
+function preferTitle(current: string, incoming: string): string {
+  const left = cleanLiveTitle(current);
+  const right = cleanLiveTitle(incoming);
+  if (current.trim() === left && incoming.trim() !== right) return left;
+  if (incoming.trim() === right && current.trim() !== left) return right;
+  return left.length <= right.length ? left : right;
+}
+
+/** Keep one card per key, the short title, and a why note when either copy has one. */
+export function absorbLiveLeg(prev: LiveLeg, next: LiveLeg): LiveLeg {
+  return {
+    ...prev,
+    name: preferTitle(prev.name, next.name),
+    why: realWhy(prev.why) ? prev.why : realWhy(next.why) ? next.why : prev.why,
+    key: prev.key ?? next.key,
+  };
+}
+
 function betSide(team: string, event: EventRow): "away" | "home" | null {
   const away = hit(team, event.away);
   const home = hit(team, event.home);
@@ -373,13 +447,17 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
   const cast = event.summary ? parseCast(event.summary, event.league) ?? undefined : undefined;
   const awayScore = cast?.away.score ? Number(cast.away.score) : event.away.score;
   const homeScore = cast?.home.score ? Number(cast.home.score) : event.home.score;
-  const seen = new Set<string>();
-  const legs = plays.flatMap((play) => {
+  const teams = { away: { abbr: event.away.abbr, names: event.away.names }, home: { abbr: event.home.abbr, names: event.home.names } };
+  const buckets = new Map<string, LiveLeg>();
+  for (const play of plays) {
     const leg = legFor(play, event, Number.isFinite(awayScore) ? awayScore : event.away.score, Number.isFinite(homeScore) ? homeScore : event.home.score);
-    if (!leg || seen.has(leg.name)) return [];
-    seen.add(leg.name);
-    return [leg];
-  });
+    if (!leg) continue;
+    const key = liveLegKey(play.name, event.league, teams);
+    const next = { ...leg, key, name: cleanLiveTitle(play.name) };
+    const prev = buckets.get(key);
+    buckets.set(key, prev ? absorbLiveLeg(prev, next) : next);
+  }
+  const legs = [...buckets.values()];
   const clock = cast?.clock || (pre ? event.detail || "Not started" : event.state === "post" ? "Final" : event.detail || event.clock || "Live");
   return {
     id: event.id,
@@ -417,10 +495,20 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
   };
 }
 
+function keyTeams(game: LiveGame): { away: LiveKeySide; home: LiveKeySide } {
+  const names = (abbr: string, name: string) => [abbr, name, ...name.split(/\s+/)];
+  return { away: { abbr: game.away, names: names(game.away, game.awayName) }, home: { abbr: game.home, names: names(game.home, game.homeName) } };
+}
+
+export function findLiveLeg(playName: string, game: LiveGame): LiveLeg | undefined {
+  const key = liveLegKey(playName, game.league, keyTeams(game));
+  return game.legs.find((leg) => leg.key === key) ?? game.legs.find((leg) => cleanLiveTitle(leg.name) === cleanLiveTitle(playName));
+}
+
 function ticketBar(ticket: Ticket, games: LiveGame[]): LiveTicket | null {
   const paces = ticket.plays.flatMap((play) => {
     for (const game of games) {
-      const leg = game.legs.find((item) => item.name === play.name);
+      const leg = findLiveLeg(play.name, game);
       if (leg) return [leg.pace];
     }
     return [];

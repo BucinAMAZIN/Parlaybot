@@ -174,6 +174,8 @@ export type LiveLeg = {
   why: WhyBlock;
   /** Replaces the current/line figure for a moneyline or spread. */
   label?: string;
+  /** Canonical identity so the same bet from two products is one live leg. */
+  key?: string;
 };
 
 export type LiveTicket = {
