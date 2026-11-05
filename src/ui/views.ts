@@ -194,7 +194,7 @@ function renderLiveLeg(leg: LiveLeg): string {
   const face = pace.mood ? mascot(pace.mood, 36) : `<span class="mascot" style="width:36px;height:36px"></span>`;
   const current = Number.isInteger(leg.current) ? String(leg.current) : String(leg.current);
   const line = Number.isInteger(leg.line) ? String(leg.line) : String(leg.line);
-  return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${current}/${line} ${esc(leg.unit)}</span></div><div class="lv-bar"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace" style="color:${pace.color}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why)}</div></div>`;
+  return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${current}/${line} ${esc(leg.unit)}</span></div><div class="lv-bar"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace p-${leg.pace}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why)}</div></div>`;
 }
 
 function renderGame(game: LiveGame, state: AppState, withLegs: boolean): string {
@@ -350,11 +350,11 @@ function live(state: AppState, board: Board): string {
       const hits = ticket.legs.filter((leg) => leg === "hit").length;
       const face = pace.mood ? mascot(pace.mood, 44) : "";
       const segs = ticket.legs.map((leg) => `<i style="background:${PACE[leg].color}"></i>`).join("");
-      return `<div class="tk">${face}<div class="lv-main"><div class="lv-row"><b>${esc(ticket.name)}</b><span>${hits}/${ticket.legs.length} legs</span></div><div class="tk-bar">${segs}</div><div class="lv-row"><span class="pace" style="color:${pace.color}">${esc(pace.label)}</span><span class="sub">${esc(ticket.note)}</span></div></div></div>`;
+      return `<div class="tk">${face}<div class="lv-main"><div class="lv-row"><b>${esc(ticket.name)}</b><span>${hits}/${ticket.legs.length} legs</span></div><div class="tk-bar">${segs}</div><div class="lv-row"><span class="pace p-${ticket.pace}">${esc(pace.label)}</span><span class="sub">${esc(ticket.note)}</span></div></div></div>`;
     })
     .join("");
   const games = board.liveGames.map((game) => renderGame(game, state, true)).join("");
-  return `<h1 style="font-size:1.75rem">Live</h1><div class="sub">Your legs in games now · settles from play-by-play · ${esc(board.liveUpdated)}</div><div class="mood">${mascot("sweat", 64)}<div><b>Sweating</b><div class="sub">4 legs still alive · 1 dead</div></div></div><div class="sweatbox"><div><b class="W">3</b>hit</div><div><b style="color:#ffcc46">4</b>alive</div><div><b style="color:#dc323c">1</b>dead</div></div><section class="game"><div class="sub"><b>Tickets</b></div>${bars}</section>${games}<div class="sub" style="margin:4px 0">${esc(board.liveNote)}</div><button type="button" class="linkrow" data-act="standings" data-from="live">Standings · NBA · NHL · NFL ›</button>`;
+  return `<h1 style="font-size:1.75rem">Live</h1><div class="sub">Your legs in games now · settles from play-by-play · ${esc(board.liveUpdated)}</div><div class="mood">${mascot("sweat", 64)}<div><b>Sweating</b><div class="sub">4 legs still alive · 1 dead</div></div></div><div class="sweatbox"><div><b class="W">3</b>hit</div><div><b class="a">4</b>alive</div><div><b class="L">1</b>dead</div></div><section class="game"><div class="sub"><b>Tickets</b></div>${bars}</section>${games}<div class="sub" style="margin:4px 0">${esc(board.liveNote)}</div><button type="button" class="linkrow" data-act="standings" data-from="live">Standings · NBA · NHL · NFL ›</button>`;
 }
 
 function results(state: AppState, board: Board): string {

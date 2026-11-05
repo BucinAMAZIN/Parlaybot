@@ -160,6 +160,11 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .lv-bar{width:100%;height:8px;border-radius:9px;background:#232c38;margin:6px 0 3px;overflow:hidden}
 .lv-bar i{display:block;height:100%;border-radius:9px}
 .pace{font-size:.75rem;font-weight:700}
+.pace.p-hit{color:#76f53a}
+.pace.p-on{color:#ff8c28}
+.pace.p-behind{color:#ffcc46}
+.pace.p-cold{color:#78beff}
+.pace.p-dead{color:#dc323c}
 details.why{margin:6px 0 2px;border:1px solid #263040;border-radius:10px;background:#111821}
 details.why summary{list-style:none;cursor:pointer;padding:6px 10px;font-size:.8125rem;color:#c9d3df;display:flex;gap:6px;align-items:flex-start}
 details.why summary::-webkit-details-marker{display:none}
@@ -246,4 +251,63 @@ html.day .ftbl tr.you td{background:#e7f6ee}
 html.day .selbar,#toast{background:#fff;color:#17202b;border-color:#d5dce6}
 html.day .chip,html.day .sweatbox div,html.day .split>div{background:#f7f9fb;color:#17202b}
 html.day .tm b{color:#17202b}
-html.day .na{color:#526072}
+html.day .na{color:#3a4656}
+html.day .brand .logo{
+  filter:
+    drop-shadow(1.5px 0 0 #121820)
+    drop-shadow(-1.5px 0 0 #121820)
+    drop-shadow(0 1.5px 0 #121820)
+    drop-shadow(0 -1.5px 0 #121820)
+    drop-shadow(1.1px 1.1px 0 #121820)
+    drop-shadow(-1.1px 1.1px 0 #121820)
+    drop-shadow(1.1px -1.1px 0 #121820)
+    drop-shadow(-1.1px -1.1px 0 #121820);
+}
+html.day .W,
+html.day .big.W,
+html.day .clv.W,
+html.day .ftbl .pos,
+html.day .g,
+html.day .pace.p-hit,
+html.day details.why summary b,
+html.day details.why .yes{color:#146c2e}
+html.day .L,
+html.day .clv.L,
+html.day .ftbl .neg,
+html.day .r,
+html.day .clock,
+html.day .pace.p-dead{color:#c4232a}
+html.day .a,
+html.day .pace.p-behind{color:#7a4e00}
+html.day .pace.p-on{color:#9a3412}
+html.day .pace.p-cold{color:#1d4f91}
+html.day .sub,
+html.day .ctx,
+html.day .feeline,
+html.day .legend,
+html.day .ring,
+html.day .sc-big small,
+html.day .sc-foot,
+html.day .off summary,
+html.day .back,
+html.day .empty,
+html.day .grouph,
+html.day .topnav button,
+html.day .book button{color:#3a4656}
+html.day .topnav button.on{background:#17202b;color:#fff}
+html.day .book button.on.hr{background:#f5c400;color:#111}
+html.day .book button.on.dk{background:#117a22;color:#fff}
+html.day .chip.ok{color:#0f5c28;border-color:#8fbfa2}
+html.day .chip.warn,
+html.day .chip.mr{color:#7a4e00}
+html.day .chip.bad{color:#c4232a}
+html.day .chip.q{color:#3a4656}
+html.day .chart path[stroke="#76f53a"]{stroke:#146c2e}
+html.day .chart path[fill="#76f53a"]{fill:#146c2e}
+html.day .chart polyline{stroke:#1d4f91}
+html.day .ring circle[stroke="#76f53a"]{stroke:#146c2e}
+html.day .ring circle[stroke="#ffcc00"]{stroke:#7a4e00}
+html.day .ring circle[stroke="#ff9b85"]{stroke:#c4232a}
+html.day .ring circle[stroke="#7aa7ff"]{stroke:#1d4f91}
+html.day .pills button.on,
+html.day .lgtabs button.on{color:#146c2e;border-color:#146c2e;background:#e7f6ee}
