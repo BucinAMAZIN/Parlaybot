@@ -5,6 +5,7 @@ import type { EdgePick } from "../data/adaptEdgePicks.ts";
 import { LEAGUES } from "../data/standings.ts";
 import type { LiveGame, LiveLeg, Play, SeriesPoint, Ticket } from "../data/types.ts";
 import { formatSigned, esc } from "../lib/format.ts";
+import { sliceHistory, unitChange, windowGrades, windowRings, windowWinRate, type RangeKey } from "../lib/history.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled, type ShareCard } from "../lib/shareCard.ts";
 import {
   PACE,
@@ -157,22 +158,18 @@ function recapCard(board: Board): string {
   return `<div class="recap"><div class="priv">🔒 Only you can see this</div><div class="sub">${esc(board.recap.when)}</div><div class="big ${tone}">${esc(board.recap.units)}</div><div class="sub" style="margin-bottom:8px">${esc(board.recap.summary)}</div>${rows}<div style="margin-top:12px"><button type="button" class="btn share" data-act="nav" data-view="results">See results</button></div></div>`;
 }
 
-function sliceSeries(points: SeriesPoint[], range: AppState["profitRange"], sample: boolean): { points: SeriesPoint[]; headline: string; note: string } {
-  if (!points.length) return { points, headline: "No chart in this file", note: "" };
-  if (sample && range !== "7d") {
-    const headline = "+9.4u · 62% wins";
-    if (range === "season") return { points, headline, note: "Season view is this 14-day sample. A longer history is not in this build." };
-    return { points, headline, note: "30-day toggle shows the 14-day sample that shipped with the card." };
+function chartWindow(board: Board, range: RangeKey, sample: boolean): { points: SeriesPoint[]; headline: string; note: string; rings: { pct: number; label: string }[] } {
+  if (!board.series.length) return { points: [], headline: "No chart in this file", note: "", rings: board.rings };
+  if (sample) {
+    return { points: board.series, headline: "+9.4u · 62% wins", note: "Sample series. It is not the desk history.", rings: board.rings };
   }
-  const slice = range === "7d" ? points.slice(-7) : range === "season" ? points : points.slice(-14);
-  const first = points[Math.max(0, points.length - slice.length - 1)] ?? slice[0];
-  const last = slice[slice.length - 1];
-  const delta = last.profit - (range === "season" ? points[0].profit : first.profit);
-  const rate = last.winRate == null ? "no graded tickets that day" : `${last.winRate}% that day`;
-  const note = sample
-    ? "Change across the last 7 points of the sample series."
-    : "Running units from the desk record chart. The percent is that day's graded tickets, not a made-up window rate.";
-  return { points: slice, headline: `${formatSigned(delta, 2)}u · ${rate}`, note };
+  const windowed = sliceHistory(board.series, range);
+  const grades = windowGrades(board.grades, windowed.from, windowed.to);
+  const delta = unitChange(board.series, windowed.points);
+  const rate = windowWinRate(grades);
+  const headline = delta == null ? "No chart in this file" : `${formatSigned(delta, 2)}u · ${rate == null ? "no graded tickets in this range" : `${rate}% wins`}`;
+  const note = windowed.starts ? `History starts ${windowed.starts}.` : "Running units from the desk chart.";
+  return { points: windowed.points, headline, note, rings: windowRings(grades) };
 }
 
 export function renderPage(state: AppState, board: Board): string {
@@ -185,8 +182,8 @@ export function renderPage(state: AppState, board: Board): string {
 }
 
 function today(state: AppState, board: Board): string {
-  const windowed = sliceSeries(board.series, "30d", board.feedMode !== "live");
-  const rings = board.rings
+  const windowed = chartWindow(board, "14d", board.feedMode !== "live");
+  const rings = windowed.rings
     .slice(0, 4)
     .map((ring) => ringSvg(ring.pct, ring.label))
     .join("");
@@ -519,8 +516,8 @@ function cappers(state: AppState, board: Board): string {
 }
 
 function stats(state: AppState, board: Board): string {
-  const windowed = sliceSeries(board.series, state.profitRange, board.feedMode !== "live");
-  const rings = board.rings.map((ring) => ringSvg(ring.pct, ring.label)).join("");
+  const windowed = chartWindow(board, state.profitRange, board.feedMode !== "live");
+  const rings = windowed.rings.map((ring) => ringSvg(ring.pct, ring.label)).join("");
   const record = tallyEdge(board.edgePicks);
   const graded = record.wins + record.losses;
   const hit = graded ? Math.round((record.wins / graded) * 100) : 0;
@@ -536,8 +533,8 @@ function stats(state: AppState, board: Board): string {
       return `<tr><td>${esc(sport)}</td><td class="sub">${row.wins}-${row.losses}</td><td>${gradedHit(row)}</td></tr>`;
     })
     .join("");
-  const rangeButtons = (["7d", "30d", "season"] as const)
-    .map((key) => `<button type="button" class="${state.profitRange === key ? "on" : ""}" data-act="range" data-key="${key}">${key === "7d" ? "7d" : key === "30d" ? "30d" : "Season"}</button>`)
+  const rangeButtons = (["14d", "30d", "60d", "90d", "all"] as const)
+    .map((key) => `<button type="button" class="${state.profitRange === key ? "on" : ""}" data-act="range" data-key="${key}">${key === "all" ? "All" : key.replace("d", "D")}</button>`)
     .join("");
   if (board.feedMode === "live" && board.privateStats) {
     const statsRows = (rows: { name: string; sub: string; right: string }[]) =>
@@ -547,8 +544,8 @@ function stats(state: AppState, board: Board): string {
       ? `<div class="card"><h2>Green-circle backtest</h2><div class="sub">Copied from the desk file. Not recomputed here.</div><table class="tbl">${statsRows(priv.green)}</table></div>`
       : "";
     return `<div class="hdr"><h1 style="font-size:1.75rem">Stats</h1><button type="button" class="stdchip" data-act="standings" data-from="stats">📊 Standings</button></div><div class="priv">🔒 Only you can see this</div>
-<div class="card"><div class="hdr"><h2>Profit</h2><div class="toggle">${rangeButtons}</div></div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
-<div class="card"><h2><span class="tag of">OFFICIAL</span> Win rate by product</h2><div class="sub">${esc(priv.ringNote)}</div><div class="rings">${rings}</div></div>
+<div class="card"><h2>Profit</h2><div class="ranges" role="tablist" aria-label="Chart range">${rangeButtons}</div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
+<div class="card"><h2><span class="tag of">OFFICIAL</span> Win rate by product</h2><div class="sub">${esc(windowed.note)} Same dates as the chart.</div><div class="rings">${rings}</div></div>
 ${clvCard(board)}
 <div class="card"><h2><span class="tag un">UNOFFICIAL</span> For fun · tracked only</h2><div class="sub">From the desk summary. Never in the official record.</div><table class="tbl">${statsRows(priv.unofficial)}</table></div>
 <div class="card"><h2>Hit % by prop</h2><div class="sub">Desk record.props. No unit column — the file does not publish one here.</div><table class="tbl">${statsRows(priv.props)}</table></div>
@@ -556,7 +553,7 @@ ${green}
 <div class="card"><h2>Edge record</h2><div class="priv">🔒 Only you can see this</div><div class="sub">Graded in the desk file. Not recomputed from prices.</div><div class="big" style="font-size:1.75rem">${esc(priv.edgeUnits)}</div><div class="sub">${esc(priv.edgeLine)}</div><table class="tbl">${statsRows(priv.edgeSports)}</table></div>`;
   }
   return `<div class="hdr"><h1 style="font-size:1.75rem">Stats</h1><button type="button" class="stdchip" data-act="standings" data-from="stats">📊 Standings</button></div><div class="priv">🔒 Only you can see this</div>
-<div class="card"><div class="hdr"><h2>Profit</h2><div class="toggle">${rangeButtons}</div></div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
+<div class="card"><h2>Profit</h2><div class="ranges" role="tablist" aria-label="Chart range">${rangeButtons}</div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
 <div class="card"><h2><span class="tag of">OFFICIAL</span> Win rate by product</h2><div class="sub">Sample card · not the edge-picks fixture</div><div class="rings">${rings}</div></div>
 <div class="card"><h2><span class="tag un">UNOFFICIAL</span> For fun · tracked only</h2><div class="sub">Never in the official record</div><table class="tbl"><tr><td>First Blood (tickets)</td><td class="sub">1-4</td><td>20%</td></tr><tr><td>First Blood (legs hit)</td><td class="sub">6-21</td><td>22%</td></tr><tr><td>TD City</td><td class="sub">1-2</td><td>33%</td></tr><tr><td>Cappers (raw lines)</td><td class="sub">see Cappers</td><td></td></tr></table></div>
 <div class="card"><h2>Miss log · hit % by prop</h2><div class="sub">SAMPLE</div><table class="tbl"><tr><td>NHL SOG</td><td class="sub">17-7</td><td>71%</td></tr><tr><td>NBA Points</td><td class="sub">22-14</td><td>61%</td></tr><tr><td>NBA Rebounds</td><td class="sub">12-10</td><td>55%</td></tr><tr><td>NFL Anytime TD</td><td class="sub">5-6</td><td>45%</td></tr></table></div>

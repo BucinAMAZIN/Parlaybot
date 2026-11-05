@@ -4,6 +4,7 @@ import { adaptEdgePicks, flatUnitResult, gradeResult, inStarBand } from "../src/
 import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentEdgeFeed.ts";
 import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
+import { sliceHistory } from "../src/lib/history.ts";
 import { classifySport, sportLabel } from "../src/lib/sport.ts";
 import { adaptClv } from "../src/data/adaptClv.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
@@ -180,6 +181,18 @@ assert.equal(noteVisible(safeNote, "parlay", "NCAAF"), true);
 assert.equal(noteVisible(heistNote, "parlay", "NCAAF"), false);
 assert.equal(noteVisible(heistNote, null, "NCAAF"), false);
 assert.equal(noteVisible(heistNote, null, "All"), true);
+const history = [
+  { day: "10/12", iso: "2026-10-12", profit: 1, winRate: 50 },
+  { day: "10/22", iso: "2026-10-22", profit: 2, winRate: 50 },
+  { day: "11/04", iso: "2026-11-04", profit: -111, winRate: 40 },
+];
+const twoWeeks = sliceHistory(history, "14d");
+assert.deepEqual(twoWeeks.points.map((point) => point.iso), ["2026-10-22", "2026-11-04"]);
+assert.equal(twoWeeks.starts, null);
+const month = sliceHistory(history, "30d");
+assert.equal(month.points.length, 3);
+assert.equal(month.starts, "Oct 12");
+assert.equal(sliceHistory(history, "all").starts, null);
 const phi = tables.leagues.NBA.groups.find((group) => group.name === "Atlantic")?.rows.find((row) => row.abbr === "PHI");
 assert.equal(phi?.cells[0], "7-1");
 assert.ok(tables.leagues.NHL.groups.every((group) => group.columns[0] === "W-L-OTL" && group.columns.includes("PTS")));

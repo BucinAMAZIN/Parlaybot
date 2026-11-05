@@ -61,6 +61,12 @@ body.book-dk .chk input{accent-color:#2ea85a}
 .ring svg{width:100%;max-width:76px;height:auto}
 .ring div{font-size:.8125rem}
 .hdr{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.ranges{display:flex;width:100%;background:#1d2430;border-radius:10px;padding:3px;gap:2px;margin:8px 0 6px}
+.ranges button{flex:1;min-height:32px;border:0;border-radius:8px;background:transparent;color:#cfd6df;font-weight:700;font-size:.78rem;padding:0 4px}
+.ranges button.on{background:#eef2f6;color:#0d1117}
+html.day .ranges{background:#e4e9f0}
+html.day .ranges button{color:#3a4656}
+html.day .ranges button.on{background:#17202b;color:#fff}
 .toggle{display:flex;background:#1d2430;border-radius:12px;padding:4px;gap:4px}
 .toggle button{min-height:40px;min-width:44px;display:flex;align-items:center;justify-content:center;border-radius:9px;font-weight:700;color:#cfd6df;background:transparent;border:0;padding:0 10px}
 .toggle button.on{background:#eef2f6;color:#0d1117}

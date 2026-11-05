@@ -29,7 +29,7 @@ export type AppState = {
   gamePanel: Record<string, Panel>;
   openGames: Set<string>;
   feedFilter: Record<string, { team: string; period: string }>;
-  profitRange: "7d" | "30d" | "season";
+  profitRange: "14d" | "30d" | "60d" | "90d" | "all";
   openDates: Set<string>;
   /** NCAAB group name. Empty uses the first group, which is the AP Top 25. */
   conference: string;
@@ -55,7 +55,7 @@ export function defaultState(): AppState {
     gamePanel: {},
     openGames: new Set(),
     feedFilter: {},
-    profitRange: "30d",
+    profitRange: "14d",
     openDates: new Set(),
     conference: "",
   };
@@ -70,6 +70,9 @@ export function loadPrefs(state: AppState) {
     if (saved.text === "md" || saved.text === "lg" || saved.text === "xl") state.text = saved.text;
     if (saved.theme === "night" || saved.theme === "day") state.theme = saved.theme;
     if (saved.alerts) state.alerts = { ...state.alerts, ...saved.alerts };
+    if (saved.profitRange === "14d" || saved.profitRange === "30d" || saved.profitRange === "60d" || saved.profitRange === "90d" || saved.profitRange === "all") {
+      state.profitRange = saved.profitRange;
+    }
   } catch {
     /* ignore a bad local save */
   }
@@ -78,6 +81,6 @@ export function loadPrefs(state: AppState) {
 export function savePrefs(state: AppState) {
   localStorage.setItem(
     PREF_KEY,
-    JSON.stringify({ book: state.book, text: state.text, theme: state.theme, alerts: state.alerts }),
+    JSON.stringify({ book: state.book, text: state.text, theme: state.theme, alerts: state.alerts, profitRange: state.profitRange }),
   );
 }

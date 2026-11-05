@@ -144,11 +144,12 @@ export function chartSvg(points: SeriesPoint[]): string {
       return [`${x.toFixed(0)},${y.toFixed(0)}`];
     })
     .join(" ");
+  const step = n <= 6 ? 1 : Math.ceil(n / 5);
   const labels = points
     .map((point, i) => {
-      if (!point.day) return "";
+      if (!point.day || (i !== 0 && i !== n - 1 && i % step !== 0)) return "";
       const x = 10 + (i * (w - 20)) / (n - 1);
-      return `<text x="${x.toFixed(0)}" y="${h - 4}" font-size="11" fill="#9aa4b2" text-anchor="middle">${esc(point.day)}</text>`;
+      return `<text x="${x.toFixed(0)}" y="${h - 4}" font-size="11" fill="currentColor" text-anchor="middle">${esc(point.day)}</text>`;
     })
     .join("");
   return `<svg viewBox="0 0 ${w} ${h}" class="chart" role="img" aria-label="Profit and win rate"><path d="${area}" fill="#76f53a" opacity=".15"/><path d="${line}" fill="none" stroke="#76f53a" stroke-width="3"/><polyline points="${wr}" fill="none" stroke="#7aa7ff" stroke-width="2" stroke-dasharray="5 4"/>${labels}</svg><div class="legend"><span><i style="background:#76f53a"></i>Profit (units)</span><span><i style="background:#7aa7ff"></i>Win rate</span></div>`;

@@ -209,7 +209,8 @@ function onClick(event: Event) {
   }
   if (act === "range") {
     const key = action.dataset.key;
-    state.profitRange = key === "7d" || key === "season" ? key : "30d";
+    if (key === "14d" || key === "30d" || key === "60d" || key === "90d" || key === "all") state.profitRange = key;
+    savePrefs(state);
     paint(false);
     return;
   }

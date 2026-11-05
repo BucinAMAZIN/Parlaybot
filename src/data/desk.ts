@@ -3,6 +3,7 @@ import { adaptDeskStandings, type DeskStandings } from "./adaptStandings.ts";
 import type { Board, PrivateStats, StatRow } from "./board.ts";
 import type {
   Capper,
+  GradeMark,
   Play,
   PlayerStatus,
   PlayerStatusLabel,
@@ -349,13 +350,34 @@ function seriesFrom(chart: unknown, rows: Row[], year: number): SeriesPoint[] {
     else bucket.l += 1;
     byDay.set(iso, bucket);
   }
-  return order.slice(-14).map((day) => {
-    const [month, date] = day.split("/");
-    const iso = `${year}-${month.padStart(2, "0")}-${date.padStart(2, "0")}`;
+  let cursor = year;
+  let nextMonth = 99;
+  const isos = new Array<string>(order.length);
+  for (let index = order.length - 1; index >= 0; index -= 1) {
+    const [monthText, dateText] = order[index].split("/");
+    const month = Number(monthText);
+    if (month > nextMonth) cursor -= 1;
+    nextMonth = month;
+    isos[index] = `${cursor}-${monthText.padStart(2, "0")}-${dateText.padStart(2, "0")}`;
+  }
+  return order.map((day, index) => {
+    const iso = isos[index];
     const bucket = byDay.get(iso);
     const rate = bucket ? pctOf(bucket.w, bucket.l) : null;
-    return { day, profit: last.get(day) ?? 0, winRate: rate };
+    return { day, iso, profit: last.get(day) ?? 0, winRate: rate };
   });
+}
+
+function gradesFrom(rows: Row[]): GradeMark[] {
+  const marks: GradeMark[] = [];
+  for (const row of rows) {
+    if (row.leg === true) continue;
+    const res = str(row.res);
+    const date = str(row.date);
+    if (!date || (res !== "W" && res !== "L")) continue;
+    marks.push({ date, cat: str(row.cat), win: res === "W" });
+  }
+  return marks;
 }
 
 function ringsFrom(rows: Row[]): Board["rings"] {
@@ -585,6 +607,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     results: settled.results,
     recap: settled.recap,
     series: seriesFrom(isRow(data.record) ? data.record.chart : null, resultRows, year),
+    grades: gradesFrom(resultRows),
     rings: ringsFrom(resultRows),
     nascar: { when: "", rows: [] },
     edgePicks: [],

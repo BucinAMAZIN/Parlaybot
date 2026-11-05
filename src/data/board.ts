@@ -19,7 +19,7 @@ import {
 import { standings as fallbackStandings } from "./standings.ts";
 import type { ClvCard } from "./adaptClv.ts";
 import type { CardNote } from "../lib/cardFilter.ts";
-import type { Capper, LiveGame, LiveTicket, Mood, Play, Recap, SeriesPoint, SettledTicket, StandingsFile, Ticket } from "./types.ts";
+import type { Capper, GradeMark, LiveGame, LiveTicket, Mood, Play, Recap, SeriesPoint, SettledTicket, StandingsFile, Ticket } from "./types.ts";
 
 export type StatRow = { name: string; sub: string; right: string };
 
@@ -49,6 +49,7 @@ export type Board = {
   results: SettledTicket[];
   recap: Recap;
   series: SeriesPoint[];
+  grades: GradeMark[];
   rings: { pct: number; label: string }[];
   nascar: { when: string; rows: [string, string, string][] };
   edgePicks: EdgePick[];
@@ -98,6 +99,7 @@ export function loadBoard(): Board {
     results,
     recap,
     series,
+    grades: [],
     rings,
     nascar,
     edgePicks: adapted.picks,
