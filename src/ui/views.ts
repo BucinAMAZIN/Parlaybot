@@ -158,6 +158,12 @@ function recapCard(board: Board): string {
   return `<div class="recap"><div class="priv">🔒 Only you can see this</div><div class="sub">${esc(board.recap.when)}</div><div class="big ${tone}">${esc(board.recap.units)}</div><div class="sub" style="margin-bottom:8px">${esc(board.recap.summary)}</div>${rows}<div style="margin-top:12px"><button type="button" class="btn share" data-act="nav" data-view="results">See results</button></div></div>`;
 }
 
+function rangeControl(state: AppState): string {
+  return (["14d", "30d", "60d", "90d", "all"] as const)
+    .map((key) => `<button type="button" class="${state.profitRange === key ? "on" : ""}" data-act="range" data-key="${key}">${key === "all" ? "All" : key.replace("d", "D")}</button>`)
+    .join("");
+}
+
 function chartWindow(board: Board, range: RangeKey, sample: boolean): { points: SeriesPoint[]; headline: string; note: string; rings: { pct: number; label: string }[]; ringsNote: string } {
   if (!board.series.length) return { points: [], headline: "No chart in this file", note: "", rings: board.rings, ringsNote: "" };
   if (sample) {
@@ -167,7 +173,7 @@ function chartWindow(board: Board, range: RangeKey, sample: boolean): { points: 
   const grades = windowGrades(board.grades, windowed.from, windowed.to);
   const delta = unitChange(board.series, windowed.points);
   const rate = windowWinRate(grades);
-  const headline = delta == null ? "No chart in this file" : `${formatSigned(delta, 2)}u · ${rate == null ? "no graded tickets in this range" : `${rate}% wins`}`;
+  const headline = delta == null ? "No chart in this file" : `${formatSigned(delta, 2)}u · ${rate == null ? "no graded tickets in this range" : `${rate}% win rate`}`;
   const note = windowed.starts ? `History starts ${windowed.starts}.` : "Running units from the desk chart.";
   const ringsNote = windowed.starts ? `History starts ${windowed.starts}. Win rates use the graded tickets on these dates.` : "Win rates use the graded tickets on these dates.";
   return { points: windowed.points, headline, note, rings: windowRings(grades), ringsNote };
@@ -183,7 +189,7 @@ export function renderPage(state: AppState, board: Board): string {
 }
 
 function today(state: AppState, board: Board): string {
-  const windowed = chartWindow(board, "14d", board.feedMode !== "live");
+  const windowed = chartWindow(board, state.profitRange, board.feedMode !== "live");
   const rings = windowed.rings
     .slice(0, 4)
     .map((ring) => ringSvg(ring.pct, ring.label))
@@ -227,7 +233,7 @@ function today(state: AppState, board: Board): string {
       ? "Showing plays live on Hard Rock. Legs are picked on Hard Rock."
       : "Showing plays live on DraftKings · DK price incl. fee (Florida DK Predictions). Legs are picked on Hard Rock.";
   const dkLine = board.dkPrices ? `<p class="stamp">${esc(board.dkPrices)}</p>` : "";
-  const left = `${bookToggle(state.book)}${dkLine}${recapCard(board)}<div class="card"><h2>Last 14 days</h2><div class="sub">${esc(windowed.headline)}</div><div class="priv">🔒 Only you can see this</div>${chartSvg(windowed.points)}<div class="rings">${rings}</div></div>`;
+  const left = `${bookToggle(state.book)}${dkLine}${recapCard(board)}<div class="card"><h2>Profit</h2><div class="ranges" role="tablist" aria-label="Chart range">${rangeControl(state)}</div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div><div class="priv">🔒 Only you can see this</div>${chartSvg(windowed.points)}<div class="rings">${rings}</div></div>`;
   const lock = board.lockCheck && games ? `<p class="stamp">${esc(board.lockCheck)}</p>` : "";
   const gameHead = games ? `<div class="sub" style="margin:2px 0 4px"><b>Games tonight</b> · tap a game for Feed · Box · VS</div>${lock}${games}` : "";
   const right = `${gameHead}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${blocks || `<p class="empty">No plays in this filter.</p>`}`;
@@ -534,9 +540,7 @@ function stats(state: AppState, board: Board): string {
       return `<tr><td>${esc(sport)}</td><td class="sub">${row.wins}-${row.losses}</td><td>${gradedHit(row)}</td></tr>`;
     })
     .join("");
-  const rangeButtons = (["14d", "30d", "60d", "90d", "all"] as const)
-    .map((key) => `<button type="button" class="${state.profitRange === key ? "on" : ""}" data-act="range" data-key="${key}">${key === "all" ? "All" : key.replace("d", "D")}</button>`)
-    .join("");
+  const rangeButtons = rangeControl(state);
   if (board.feedMode === "live" && board.privateStats) {
     const statsRows = (rows: { name: string; sub: string; right: string }[]) =>
       rows.map((row) => `<tr><td>${esc(row.name)}</td><td class="sub">${esc(row.sub)}</td><td>${esc(row.right)}</td></tr>`).join("");

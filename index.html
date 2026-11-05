@@ -4,7 +4,29 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#0d1117" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta name="parlaybot-build" content="7" />
     <title>ParlayBOT</title>
+    <script>
+      (function () {
+        var build = "7";
+        try {
+          if (navigator.serviceWorker) {
+            navigator.serviceWorker.getRegistrations().then(function (regs) {
+              regs.forEach(function (reg) { reg.unregister(); });
+            });
+          }
+          if (localStorage.getItem("parlaybot-build") !== build) {
+            localStorage.setItem("parlaybot-build", build);
+            var url = new URL(location.href);
+            if (url.searchParams.get("b") !== build) {
+              url.searchParams.set("b", build);
+              location.replace(url.toString());
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
     <link rel="icon" href="%BASE_URL%brand/parlaybot-icon-192.png" />
     <link rel="apple-touch-icon" href="%BASE_URL%brand/parlaybot-icon-192.png" />
   </head>
