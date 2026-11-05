@@ -44,6 +44,10 @@ export function clockEt(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const text = value.trim();
   if (!text) return null;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    const ms = Date.parse(text);
+    if (!Number.isNaN(ms)) return formatInstant(ms);
+  }
   const meridiem = text.match(/(\d{1,2}):(\d{2})\s*(AM|PM)\b/i);
   if (meridiem) {
     let hour = Number(meridiem[1]) % 12;
