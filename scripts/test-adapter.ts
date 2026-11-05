@@ -196,7 +196,16 @@ assert.equal(month.starts, "Oct 12");
 assert.equal(sliceHistory(history, "all").starts, null);
 assert.equal(normProp("SOG", "NHL shots on goal"), "SOG");
 assert.equal(normProp("", "anytime td"), "Anytime TD");
+assert.equal(normProp("Other", "NBA alt line · o4.5 → 4+ · @austinsprops", "Christian Braun 4+ Rebs", "0 REB"), "Rebounds");
+assert.equal(normProp("Other", "@austinsprops · Other", "Nolan Traore 4+ Asts", "6 AST"), "Assists");
+assert.equal(normProp("Other", "@panpotd · Other", "Mario Hezonja 11+ PR", "20 P+R"), "Pts+Reb");
+assert.equal(normProp("Other", "@panpotd · Other", "Kasparas Jakucionis o10.5 PA", "12 P+A"), "Pts+Ast");
+assert.equal(normProp("Other", "@austinsprops · Other", "Josh Hart o12.5 RA", "11 R+A"), "Reb+Ast");
+assert.equal(normProp("Other", "First Blood", "First Blood 7-leg", ""), "First Blood");
+assert.equal(normProp("Other", "mystery market", "some pick", ""), "Misc");
 assert.equal(normSide("Franz Wagner Over 0.5", "points", true), "alt");
+assert.equal(normSide("Christian Braun 4+ Rebs", "@austinsprops · Other", false), "alt");
+assert.equal(normSide("Josh Giddey o7.5 Asts", "@austinsprops · Other", false), "over");
 assert.equal(normSport("NCAAM"), "NCAAB");
 const blood = adaptDesk(
   {
