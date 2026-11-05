@@ -68,6 +68,8 @@ export type Board = {
   uiBuild: string | null;
   teamBuilt: string | null;
   clv: ClvCard | null;
+  fbNote: string;
+  fbLegs: { date: string; player: string; team: string; odds: string; hit: string; note: string }[];
 };
 
 const ALIAS: Record<string, string> = { NYK: "NY" };
@@ -117,6 +119,8 @@ export function loadBoard(): Board {
     uiBuild: null,
     teamBuilt: null,
     clv: null,
+    fbNote: "",
+    fbLegs: [],
   };
 }
 

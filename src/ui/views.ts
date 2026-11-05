@@ -22,7 +22,9 @@ import {
   ringSvg,
   rinkSvg,
 } from "./bits.ts";
+import { sectionMatch } from "../data/gradeLabels.ts";
 import { noteVisible, sportCounts } from "../lib/cardFilter.ts";
+import { statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
 import { SPORT_ORDER, sportLabel } from "../lib/sport.ts";
 import type { AppState, SportFilter, ViewId } from "./state.ts";
 
@@ -90,7 +92,7 @@ function bookToggle(book: AppState["book"]): string {
 }
 
 function renderTicket(ticket: Ticket, state: AppState): string {
-  const book = state.book;
+  const book = ticket.productKey === "first" ? "hr" : state.book;
   const on = ticket.plays.filter((play) => listedOn(play, book));
   const off = ticket.plays.filter((play) => !listedOn(play, book));
   const who = bookCode(book);
@@ -101,7 +103,7 @@ function renderTicket(ticket: Ticket, state: AppState): string {
   const foot = off.length
     ? `<span class="na">${on.length} of ${on.length + off.length} legs on ${who}</span>`
     : openLegs.length
-      ? `<button type="button" class="btn ${book}" data-act="open" data-scope="ticket" data-id="${esc(ticket.id)}">Whole ticket in ${bookName(book)}</button>`
+      ? `<button type="button" class="btn ${book}" data-act="open" data-scope="ticket" data-id="${esc(ticket.id)}" data-book="${book}">Whole ticket in ${bookName(book)}</button>`
       : `<span class="na">No open legs</span>`;
   const share = ticket.share
     ? `<button type="button" class="btn share" data-act="share" data-id="${esc(ticket.id)}" data-settled="0">Share as image</button>`
@@ -160,23 +162,41 @@ function recapCard(board: Board): string {
 
 function rangeControl(state: AppState): string {
   return (["14d", "30d", "60d", "90d", "all"] as const)
-    .map((key) => `<button type="button" class="${state.profitRange === key ? "on" : ""}" data-act="range" data-key="${key}">${key === "all" ? "All" : key.replace("d", "D")}</button>`)
+    .map((key) => `<button type="button" class="${!state.statsFrom && state.profitRange === key ? "on" : ""}" data-act="range" data-key="${key}">${key === "all" ? "All" : key.replace("d", "D")}</button>`)
     .join("");
 }
 
-function chartWindow(board: Board, range: RangeKey, sample: boolean): { points: SeriesPoint[]; headline: string; note: string; rings: { pct: number; label: string }[]; ringsNote: string } {
-  if (!board.series.length) return { points: [], headline: "No chart in this file", note: "", rings: board.rings, ringsNote: "" };
-  if (sample) {
-    return { points: board.series, headline: "+9.4u · 62% wins", note: "Sample series. It is not the desk history.", rings: board.rings, ringsNote: "Sample card." };
+function sectionSeries(board: Board, section: string): SeriesPoint[] {
+  const byDay = new Map<string, number>();
+  for (const grade of board.grades) {
+    if (!sectionMatch(grade.cat, section)) continue;
+    byDay.set(grade.date, (byDay.get(grade.date) ?? 0) + grade.units);
   }
-  const windowed = sliceHistory(board.series, range);
-  const grades = windowGrades(board.grades, windowed.from, windowed.to);
-  const delta = unitChange(board.series, windowed.points);
+  let running = 0;
+  return [...byDay.keys()].sort().map((iso) => {
+    running += byDay.get(iso) ?? 0;
+    const [, month, date] = iso.split("-");
+    return { day: `${Number(month)}/${Number(date)}`, iso, profit: running, winRate: null };
+  });
+}
+
+function chartWindow(board: Board, range: RangeKey, sample: boolean, customFrom = "", customTo = "", section = "all"): { points: SeriesPoint[]; headline: string; note: string; rings: { pct: number; label: string }[]; ringsNote: string; from: string | null; to: string | null } {
+  const series = section === "all" ? board.series : sectionSeries(board, section);
+  if (!series.length) return { points: [], headline: "No chart in this file", note: "", rings: [], ringsNote: "", from: null, to: null };
+  if (sample) {
+    return { points: board.series, headline: "+9.4u · 62% wins", note: "Sample series. It is not the desk history.", rings: board.rings, ringsNote: "Sample card.", from: null, to: null };
+  }
+  const preset = sliceHistory(series, range);
+  const windowed = customFrom && customTo
+    ? { points: series.filter((point) => point.iso && point.iso >= customFrom && point.iso <= customTo), from: customFrom, to: customTo, starts: null as string | null }
+    : preset;
+  const grades = windowGrades(board.grades.filter((grade) => sectionMatch(grade.cat, section)), windowed.from, windowed.to);
+  const delta = unitChange(series, windowed.points);
   const rate = windowWinRate(grades);
   const headline = delta == null ? "No chart in this file" : `${formatSigned(delta, 2)}u · ${rate == null ? "no graded tickets in this range" : `${rate}% win rate`}`;
   const note = windowed.starts ? `History starts ${windowed.starts}.` : "Running units from the desk chart.";
   const ringsNote = windowed.starts ? `History starts ${windowed.starts}. Win rates use the graded tickets on these dates.` : "Win rates use the graded tickets on these dates.";
-  return { points: windowed.points, headline, note, rings: windowRings(grades), ringsNote };
+  return { points: windowed.points, headline, note, rings: windowRings(grades), ringsNote, from: windowed.from, to: windowed.to };
 }
 
 export function renderPage(state: AppState, board: Board): string {
@@ -189,7 +209,7 @@ export function renderPage(state: AppState, board: Board): string {
 }
 
 function today(state: AppState, board: Board): string {
-  const windowed = chartWindow(board, state.profitRange, board.feedMode !== "live");
+  const windowed = chartWindow(board, state.profitRange, board.feedMode !== "live", state.statsFrom, state.statsTo);
   const rings = windowed.rings
     .slice(0, 4)
     .map((ring) => ringSvg(ring.pct, ring.label))
@@ -486,7 +506,9 @@ function results(state: AppState, board: Board): string {
     .join("");
   const head = board.feedMode === "live" ? `${board.recap.when} · ${board.recap.summary}` : "Tue, Nov 3 · 7 won · 4 lost · letter = Nightly Review grade";
   const fixture = board.feedMode === "live" ? "" : `<h2 class="grouph">Edge feed grades</h2><div class="sub">From the fixture. Flat 1u is on Stats, not here, and never on a share image.</div>${feed}`;
-  return `<h1 style="font-size:1.75rem">Last night</h1><div class="sub" style="margin-bottom:8px">${esc(head)}</div><div class="priv">🔒 Only you can see this</div>${cards}${fixture}`;
+  const fbRows = [...board.fbLegs].reverse().map((leg) => `<tr><td>${esc(leg.date)} ${esc(leg.player)} <span class="sub">${esc(leg.team)} ${esc(leg.odds)}</span>${leg.note ? `<div class="sub">${esc(leg.note)}</div>` : ""}</td><td class="${leg.hit === "W" ? "W" : leg.hit === "L" ? "L" : ""}">${esc(leg.hit || "—")}</td></tr>`).join("");
+  const fb = board.fbLegs.length ? `<section class="ticket"><header><div><h3>First Blood legs</h3><div class="sub">${esc(board.fbNote || "Per-leg tracking. Not counted in the official win-loss.")}</div></div></header><table class="tbl">${fbRows}</table></section>` : "";
+  return `<h1 style="font-size:1.75rem">Last night</h1><div class="sub" style="margin-bottom:8px">${esc(head)}</div><div class="priv">🔒 Only you can see this</div>${cards}${fb}${fixture}`;
 }
 
 function renderFeedPlays(picks: EdgePick[], state: AppState): string {
@@ -523,7 +545,7 @@ function cappers(state: AppState, board: Board): string {
 }
 
 function stats(state: AppState, board: Board): string {
-  const windowed = chartWindow(board, state.profitRange, board.feedMode !== "live");
+  const windowed = chartWindow(board, state.profitRange, board.feedMode !== "live", state.statsFrom, state.statsTo, state.statsSection);
   const rings = windowed.rings.map((ring) => ringSvg(ring.pct, ring.label)).join("");
   const record = tallyEdge(board.edgePicks);
   const graded = record.wins + record.losses;
@@ -542,20 +564,15 @@ function stats(state: AppState, board: Board): string {
     .join("");
   const rangeButtons = rangeControl(state);
   if (board.feedMode === "live" && board.privateStats) {
-    const statsRows = (rows: { name: string; sub: string; right: string }[]) =>
-      rows.map((row) => `<tr><td>${esc(row.name)}</td><td class="sub">${esc(row.sub)}</td><td>${esc(row.right)}</td></tr>`).join("");
-    const priv = board.privateStats;
-    const green = priv.green.length
-      ? `<div class="card"><h2>Green-circle backtest</h2><div class="sub">Copied from the desk file. Not recomputed here.</div><table class="tbl">${statsRows(priv.green)}</table></div>`
-      : "";
+    const four = windowed.rings.slice(0, 4).map((ring) => ringSvg(ring.pct, ring.label)).join("");
     return `<div class="hdr"><h1 style="font-size:1.75rem">Stats</h1><button type="button" class="stdchip" data-act="standings" data-from="stats">📊 Standings</button></div><div class="priv">🔒 Only you can see this</div>
-<div class="card"><h2>Profit</h2><div class="ranges" role="tablist" aria-label="Chart range">${rangeButtons}</div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
-<div class="card"><h2><span class="tag of">OFFICIAL</span> Win rate by product</h2><div class="sub">${esc(windowed.ringsNote)}</div><div class="rings">${rings}</div></div>
-${clvCard(board)}
-<div class="card"><h2><span class="tag un">UNOFFICIAL</span> For fun · tracked only</h2><div class="sub">From the desk summary. Never in the official record.</div><table class="tbl">${statsRows(priv.unofficial)}</table></div>
-<div class="card"><h2>Hit % by prop</h2><div class="sub">Desk record.props. No unit column — the file does not publish one here.</div><table class="tbl">${statsRows(priv.props)}</table></div>
-${green}
-<div class="card"><h2>Edge record</h2><div class="priv">🔒 Only you can see this</div><div class="sub">Graded in the desk file. Not recomputed from prices.</div><div class="big" style="font-size:1.75rem">${esc(priv.edgeUnits)}</div><div class="sub">${esc(priv.edgeLine)}</div><table class="tbl">${statsRows(priv.edgeSports)}</table></div>`;
+${statsCalendar(state, board, windowed.from, windowed.to)}
+<div class="ranges" role="tablist" aria-label="Chart range">${rangeButtons}</div>
+<nav class="scroller sport wrap" aria-label="Section">${statsSections(state)}</nav>
+<div class="card"><h2>Profit</h2><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
+<div class="card"><div class="rings">${four}</div></div>
+${statsSports(state, board, windowed.from, windowed.to)}
+${clvCard(board, windowed.from, windowed.to, state.statsSection)}`;
   }
   return `<div class="hdr"><h1 style="font-size:1.75rem">Stats</h1><button type="button" class="stdchip" data-act="standings" data-from="stats">📊 Standings</button></div><div class="priv">🔒 Only you can see this</div>
 <div class="card"><h2>Profit</h2><div class="ranges" role="tablist" aria-label="Chart range">${rangeButtons}</div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
@@ -575,26 +592,49 @@ function signedPct(n: number): string {
   return `${text}%`;
 }
 
-function clvCard(board: Board): string {
+function clvCard(board: Board, from: string | null = null, to: string | null = null, section = "all"): string {
   const clv = board.clv;
   if (!clv) return "";
-  const sections = clv.sections
+  const playsInRange = clv.plays.filter((play) => {
+    if (from && play.date < from) return false;
+    if (to && play.date > to) return false;
+    return sectionMatch(play.section, section);
+  });
+  const scoped = from || section !== "all";
+  const count = scoped ? playsInRange.length : clv.count;
+  const beat = scoped ? playsInRange.filter((play) => play.clvPct > 0).length : clv.beat;
+  const avg = scoped ? (playsInRange.length ? playsInRange.reduce((sum, play) => sum + play.clvPct, 0) / playsInRange.length : null) : clv.avg;
+  const beatPct = scoped ? (playsInRange.length && beat != null ? Math.round((beat / playsInRange.length) * 1000) / 10 : null) : clv.beatPct;
+  const grouped = new Map<string, { count: number; beat: number; sum: number }>();
+  for (const play of scoped ? playsInRange : []) {
+    const bucket = grouped.get(play.section) ?? { count: 0, beat: 0, sum: 0 };
+    bucket.count += 1;
+    if (play.clvPct > 0) bucket.beat += 1;
+    bucket.sum += play.clvPct;
+    grouped.set(play.section, bucket);
+  }
+  const sectionRows = scoped
+    ? [...grouped.entries()].map(([name, bucket]) => ({ name, count: bucket.count, beat: bucket.beat, beatPct: bucket.count ? Math.round((bucket.beat / bucket.count) * 1000) / 10 : 0, avg: bucket.count ? bucket.sum / bucket.count : 0 }))
+    : clv.sections;
+  const recent = (scoped ? [...playsInRange].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12) : clv.recent);
+  const sections = sectionRows
     .map(
-      (section) =>
-        `<tr><td>${esc(section.name)}</td><td class="sub">${section.beat} of ${section.count}</td><td>${section.beatPct}%</td><td class="${section.avg > 0 ? "W" : section.avg < 0 ? "L" : ""}">${esc(signedPct(section.avg))}</td></tr>`,
+      (row) =>
+        `<tr><td>${esc(row.name)}</td><td class="sub">${row.beat} of ${row.count}</td><td>${row.beatPct}%</td><td class="${row.avg > 0 ? "W" : row.avg < 0 ? "L" : ""}">${esc(signedPct(row.avg))}</td></tr>`,
     )
     .join("");
-  const plays = clv.recent
+  const plays = recent
     .map((play) => {
       const line = play.postedLine || play.closeLine ? ` · line ${esc(play.postedLine ?? "—")} → ${esc(play.closeLine ?? "—")}` : "";
       return `<tr><td>${esc(play.pick)}<div class="sub">${esc(play.section)} · ${esc(play.postedOdds || "—")} → ${esc(play.closeOdds || "—")}${line}</div></td><td class="${play.clvPct > 0 ? "W" : play.clvPct < 0 ? "L" : ""}">${esc(signedPct(play.clvPct))}</td></tr>`;
     })
     .join("");
-  const beat = clv.beatPct == null ? "" : `<div><div class="big" style="font-size:1.75rem">${clv.beatPct}%</div><div class="sub">beat the close${clv.beat != null ? ` · ${clv.beat} of ${clv.count}` : ""}</div></div>`;
-  const avg = clv.avg == null ? "" : `<div><div class="big ${clv.avg > 0 ? "W" : clv.avg < 0 ? "L" : ""}" style="font-size:1.75rem">${esc(signedPct(clv.avg))}</div><div class="sub">average CLV</div></div>`;
+  const beatHtml = beatPct == null ? "" : `<div><div class="big" style="font-size:1.75rem">${beatPct}%</div><div class="sub">beat the close${beat != null ? ` · ${beat} of ${count}` : ""}</div></div>`;
+  const avgHtml = avg == null ? "" : `<div><div class="big ${avg > 0 ? "W" : avg < 0 ? "L" : ""}" style="font-size:1.75rem">${esc(signedPct(avg))}</div><div class="sub">average CLV</div></div>`;
   const built = clv.built ? `<p class="stamp">Built ${esc(clv.built)}</p>` : "";
   const stale = clv.stale ? `<p class="stamp">CLV data may be stale</p>` : "";
-  return `<div class="card"><h2>Closing line value</h2><div class="priv">🔒 Only you can see this</div><div class="sub">How often the posted line beat the closing line. From the desk file.</div>${built}${stale}<div class="split">${beat}${avg}</div><table class="tbl"><tr><th>Section</th><th>Beat</th><th></th><th>Avg</th></tr>${sections}</table><h3 style="margin:12px 0 4px">Recent closes</h3><table class="tbl">${plays}</table></div>`;
+  const empty = scoped && !playsInRange.length ? `<p class="empty">No posted closes in this range.</p>` : "";
+  return `<div class="card"><h2>Closing line value</h2><div class="priv">🔒 Only you can see this</div><div class="sub">How often the posted line beat the closing line. From the desk file.</div>${built}${stale}<div class="split">${beatHtml}${avgHtml}</div>${empty}<table class="tbl"><tr><th>Section</th><th>Beat</th><th></th><th>Avg</th></tr>${sections}</table><h3 style="margin:12px 0 4px">Recent closes</h3><table class="tbl">${plays}</table></div>`;
 }
 
 function gradedHit(record: { wins: number; losses: number }): string {

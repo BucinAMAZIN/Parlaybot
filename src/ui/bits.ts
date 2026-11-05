@@ -94,7 +94,7 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   if (off || (!blocked && !canOpen(play, book))) button = `<span class="na">Not on ${bookCode(book)}</span>`;
   else if (play.blocked === "started") button = `<span class="na">Blocked: game started</span>`;
   else if (play.blocked === "graded") button = `<span class="na">Graded · game over</span>`;
-  else button = `<button type="button" class="btn ${book}" data-act="open" data-scope="leg" data-id="${esc(play.id)}">Open in ${bookName(book)}</button>`;
+  else button = `<button type="button" class="btn ${book}" data-act="open" data-scope="leg" data-id="${esc(play.id)}" data-book="${book}">Open in ${bookName(book)}</button>`;
   const box = check
     ? `<label class="chk"><input type="checkbox" data-id="${esc(play.id)}" ${checked} aria-label="Select ${esc(play.name)}"></label>`
     : "";

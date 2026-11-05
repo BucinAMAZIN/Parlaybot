@@ -19,6 +19,7 @@ import type {
 import type { CardNote } from "../lib/cardFilter.ts";
 import { formatSigned } from "../lib/format.ts";
 import { classifySport, sportLabel } from "../lib/sport.ts";
+import { normProp, normSide, normSport } from "./gradeLabels.ts";
 import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
 export const DESK_URL = "https://bucinamazin.github.io/desk-dashboard/parlay/data.json";
@@ -375,7 +376,18 @@ function gradesFrom(rows: Row[]): GradeMark[] {
     const res = str(row.res);
     const date = str(row.date);
     if (!date || (res !== "W" && res !== "L")) continue;
-    marks.push({ date, cat: str(row.cat), win: res === "W" });
+    const pick = str(row.pick);
+    const prop = str(row.prop);
+    const fam = str(row.fam);
+    marks.push({
+      date,
+      cat: str(row.cat),
+      win: res === "W",
+      units: num(row.uu) ?? 0,
+      sport: normSport(str(row.sport)),
+      prop: normProp(fam, prop),
+      side: normSide(pick, prop, row.alt === true),
+    });
   }
   return marks;
 }
@@ -578,8 +590,8 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   const quiet = cappers.filter((capper) => !capper.plays.length).map((capper) => capper.name);
   if (quiet.length) notices.push({ text: `No capper play today: ${quiet.join(", ")}.`, section: "cappers", sport: null });
 
-  const first = isRow(data.first_blood) ? data.first_blood : {};
-  if (!rowsOf(first.legs).length && str(first.rolled_off)) notices.push({ text: str(first.rolled_off), section: "first", sport: null });
+  const firstTicket = firstBloodTicket(isRow(data.first_blood) ? data.first_blood : null, iso, statuses);
+  if (firstTicket) tickets.push(firstTicket);
   const td = isRow(data.td_city) ? data.td_city : {};
   if (!rowsOf(td.legs).length && str(td.rolled_off || td.msg)) notices.push({ text: str(td.rolled_off || td.msg), section: "lotto", sport: null });
 
@@ -625,5 +637,63 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     uiBuild: uiBuildLabel(data.ui_build),
     teamBuilt: builtLabel(data.teamvs),
     clv,
+    fbNote: str(isRow(data.fb_legs) ? data.fb_legs.note : ""),
+    fbLegs: fbLegRows(data.fb_legs),
   };
+}
+
+function firstBloodTicket(raw: Row | null, slate: string, statuses: Map<string, PlayerStatus>): Ticket | null {
+  if (!raw || str(raw.date) !== slate) return null;
+  const legs = rowsOf(raw.legs);
+  if (!legs.length) return null;
+  const plays = legs.map((leg, index) => firstBloodPlay(leg, index, statuses, str(raw.sport)));
+  const locked = raw.final === true || raw.full_locked === true || !!str(raw.locked_at);
+  const stamp = [locked ? "Locked · final" : "", str(raw.label)].filter(Boolean).join(" · ");
+  return {
+    id: "first",
+    productKey: "first",
+    title: str(raw.title) || str(raw.name) || "First Blood",
+    meta: [str(raw.odds) ? `Est. ${str(raw.odds)}` : "", str(raw.odds_note)].filter(Boolean).join(" · "),
+    badge: "fun",
+    plays,
+    share: true,
+    ticketOdds: str(raw.odds) || undefined,
+    rules: str(raw.why) ? str(raw.why).split(/\s+\|\s+/).slice(0, 8) : ["Unofficial. Not in the official win-loss record."],
+    group: "fun",
+    stamp: stamp || undefined,
+  };
+}
+
+function firstBloodPlay(leg: Row, index: number, statuses: Map<string, PlayerStatus>, sportName: string): Play {
+  const player = str(leg.player) || str(leg.pick);
+  const score = num(leg.score);
+  const model = score == null ? "" : `model ${score.toFixed(1)}%`;
+  const lines = str(leg.why).split(/\n+|\s+\|\s+/).map((line) => line.trim()).filter(Boolean);
+  const absent = leg.dk_absent === true || !str(leg.dk_sid);
+  return {
+    id: `first-${index}`,
+    name: player,
+    detail: [str(leg.team), str(leg.market) || str(leg.pick), model, str(leg.game), absent ? "Not on DK" : ""].filter(Boolean).join(" · "),
+    sport: classifySport(sportName || str(leg.sport)),
+    hr: oddsOf(leg.odds, leg.hr_live),
+    dk: absent ? null : oddsOf(leg.dk_live),
+    status: statuses.get(norm(player)),
+    gameText: str(leg.game),
+    why: { ours: false, line: lines[0]?.slice(0, 110) || str(leg.pick), why: lines.length ? lines : [str(leg.pick)], whyNot: str(leg.why_not) ? [str(leg.why_not)] : [] },
+    source: "desk",
+    hrSid: /^\d+$/.test(str(leg.hr_sid)) ? str(leg.hr_sid) : undefined,
+    hrLink: str(leg.hr_link) || undefined,
+  };
+}
+
+function fbLegRows(raw: unknown): { date: string; player: string; team: string; odds: string; hit: string; note: string }[] {
+  if (!isRow(raw)) return [];
+  return rowsOf(raw.rows).map((row) => ({
+    date: str(row.date),
+    player: str(row.player),
+    team: str(row.team),
+    odds: str(row.odds),
+    hit: str(row.hit) || str(row.settled),
+    note: str(row.note),
+  }));
 }

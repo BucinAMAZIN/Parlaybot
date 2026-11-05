@@ -147,7 +147,15 @@ export type LiveFeed = {
 
 export type SeriesPoint = { day: string; profit: number; winRate: number | null; iso?: string };
 
-export type GradeMark = { date: string; cat: string; win: boolean };
+export type GradeMark = {
+  date: string;
+  cat: string;
+  win: boolean;
+  units: number;
+  sport: string;
+  prop: string;
+  side: "over" | "under" | "alt" | "other";
+};
 
 export type CapperGroup = "heist" | "an";
 

@@ -67,6 +67,44 @@ body.book-dk .chk input{accent-color:#2ea85a}
 html.day .ranges{background:#e4e9f0}
 html.day .ranges button{color:#3a4656}
 html.day .ranges button.on{background:#17202b;color:#fff}
+.calhead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.caltoggle{background:transparent;border:0;color:inherit;font:inherit;padding:0}
+.calmode{width:auto;margin:0 0 0 auto}
+.caldows,.calweek{display:flex}
+.caldows i,.calday{flex:1;text-align:center}
+.caldows i{font-style:normal;color:#8b97a8;font-size:.75rem}
+.calday{min-height:36px;margin:2px;border:0;border-radius:8px;background:transparent;color:inherit;font-weight:700}
+.calday.w{background:rgba(118,245,58,.28)}
+.calday.l{background:rgba(255,77,94,.3)}
+.calday.n{background:#1c2438;color:#8b97a8}
+.calday.e{background:transparent}
+.calday.on{box-shadow:inset 0 0 0 2px #76f53a}
+.sprow .ring{width:54px;flex:none}
+.sprow .ring svg{width:50px;height:50px}
+.sprow .ring div{display:none}
+.calweek.wsel{outline:2px solid #76f53a;border-radius:10px}
+.lgd{display:flex;gap:12px;font-size:.75rem;color:#a9b4c2;margin-top:6px}
+.lgd i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px}
+.lgd i.w{background:#3f8f22}.lgd i.l{background:#b3303c}.lgd i.n{background:#1c2438}
+.row2{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
+.sprow{width:100%;display:flex;align-items:center;gap:8px;background:transparent;border:0;color:inherit;font:inherit;text-align:left;padding:0}
+.spn{flex:1;min-width:0;display:flex;flex-direction:column}
+.sp.ex{border-color:#76f53a}
+.props{margin-top:8px;border-top:1px solid #2a313c}
+.pr{padding:8px 0;border-bottom:1px solid #2a313c}
+.prt{display:flex;gap:8px;align-items:baseline}
+.prt b:first-child{flex:1}
+.splits{display:flex;gap:10px;font-size:.78rem;color:#a9b4c2;margin-top:2px;flex-wrap:wrap}
+.alt{color:#c9a227}
+.spk.pos{color:#76f53a}.spk.neg{color:#ff5c5c}
+html.day .calday.w{background:#bfe8c8}
+html.day .calday.l{background:#f5c3c6}
+html.day .calday.n{background:#e4e9f0;color:#3a4656}
+html.day .props,html.day .pr{border-color:#d5dce6}
+html.day .spk.pos{color:#146c2e}
+html.day .spk.neg{color:#c4232a}
+html.lg .calmode{width:100%;margin-left:0}
+html.lg .ranges button{font-size:.85rem}
 .toggle{display:flex;background:#1d2430;border-radius:12px;padding:4px;gap:4px}
 .toggle button{min-height:40px;min-width:44px;display:flex;align-items:center;justify-content:center;border-radius:9px;font-weight:700;color:#cfd6df;background:transparent;border:0;padding:0 10px}
 .toggle button.on{background:#eef2f6;color:#0d1117}
@@ -113,6 +151,7 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .scroller button.dim{opacity:.45}
 .scroller button i{font-style:normal;font-size:.75rem;opacity:.7}
 .scroller.sport button{min-height:34px;font-size:.8125rem;padding:0 12px}
+.scroller.wrap{flex-wrap:wrap;overflow:visible}
 .book{display:flex;background:#161b22;border:1px solid #2c3542;border-radius:14px;padding:4px;gap:4px;margin:0 0 12px}
 .book button{flex:1;min-height:48px;display:flex;align-items:center;justify-content:center;border-radius:11px;font-weight:800;color:#a9b4c2;background:transparent;border:0}
 .book button.on.hr{background:#f5c400;color:#111}
