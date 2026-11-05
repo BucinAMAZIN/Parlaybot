@@ -7,6 +7,7 @@ export type Panel = "feed" | "box" | "vs";
 export type SportFilter = "All" | "NHL" | "NBA" | "NFL" | "NCAAF" | "NCAAB" | "MLB" | "WNBA" | "NASCAR" | "Tennis" | "Other";
 
 export type Alerts = { locks: boolean; finals: boolean; redzone: boolean; price: boolean };
+export type PushDelivery = "unknown" | "on" | "off" | "unsupported" | "standalone" | "denied" | "unavailable";
 
 export type Sheet =
   | null
@@ -23,6 +24,9 @@ export type AppState = {
   text: TextSize;
   theme: "night" | "day";
   alerts: Alerts;
+  pushWant: { picks: boolean; locks: boolean };
+  pushAck: boolean;
+  pushDelivery: PushDelivery;
   sheet: Sheet;
   league: LeagueId;
   standingsFrom: ViewId;
@@ -62,6 +66,9 @@ export function defaultState(): AppState {
     text: "md",
     theme: "night",
     alerts: { locks: true, finals: true, redzone: false, price: false },
+    pushWant: { picks: false, locks: false },
+    pushAck: false,
+    pushDelivery: "unknown",
     sheet: null,
     league: "NBA",
     standingsFrom: "live",
@@ -93,6 +100,8 @@ export function loadPrefs(state: AppState) {
     if (saved.text === "md" || saved.text === "lg" || saved.text === "xl") state.text = saved.text;
     if (saved.theme === "night" || saved.theme === "day") state.theme = saved.theme;
     if (saved.alerts) state.alerts = { ...state.alerts, ...saved.alerts };
+    if (saved.pushWant && typeof saved.pushWant.picks === "boolean" && typeof saved.pushWant.locks === "boolean") state.pushWant = saved.pushWant;
+    if (saved.pushAck === true) state.pushAck = true;
     if (saved.profitRange === "14d" || saved.profitRange === "30d" || saved.profitRange === "60d" || saved.profitRange === "90d" || saved.profitRange === "all") {
       state.profitRange = saved.profitRange;
     }
@@ -108,6 +117,6 @@ export function loadPrefs(state: AppState) {
 export function savePrefs(state: AppState) {
   localStorage.setItem(
     PREF_KEY,
-    JSON.stringify({ book: state.book, text: state.text, theme: state.theme, alerts: state.alerts, profitRange: state.profitRange, statsFrom: state.statsFrom, statsTo: state.statsTo }),
+    JSON.stringify({ book: state.book, text: state.text, theme: state.theme, alerts: state.alerts, pushWant: state.pushWant, pushAck: state.pushAck, profitRange: state.profitRange, statsFrom: state.statsFrom, statsTo: state.statsTo }),
   );
 }

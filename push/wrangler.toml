@@ -1,0 +1,15 @@
+name = "parlaybot-push"
+main = "worker.ts"
+compatibility_date = "2026-01-01"
+
+[triggers]
+crons = ["*/10 * * * *"]
+
+# Create the namespace in the operator account, then replace this id.
+# Do not commit subscription contents or the VAPID private key.
+[[kv_namespaces]]
+binding = "SUBS"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+DESK_URL = "https://bucinamazin.github.io/desk-dashboard/parlay/data.json"

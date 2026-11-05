@@ -30,6 +30,8 @@ jobs:
       - run: npm run build
         env:
           VITE_BASE: /Parlaybot/
+          VITE_PUSH_PUBLIC_KEY: ${{ vars.VITE_PUSH_PUBLIC_KEY }}
+          VITE_PUSH_URL: ${{ vars.VITE_PUSH_URL }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
