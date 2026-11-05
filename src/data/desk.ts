@@ -19,7 +19,7 @@ import type {
 import type { CardNote } from "../lib/cardFilter.ts";
 import { formatSigned } from "../lib/format.ts";
 import { classifySport, sportLabel } from "../lib/sport.ts";
-import { normProp, normSide, normSport } from "./gradeLabels.ts";
+import { capperOf, normProp, normSide, normSport } from "./gradeLabels.ts";
 import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
 export const DESK_URL = "https://bucinamazin.github.io/desk-dashboard/parlay/data.json";
@@ -379,14 +379,20 @@ function gradesFrom(rows: Row[]): GradeMark[] {
     const pick = str(row.pick);
     const prop = str(row.prop);
     const fam = str(row.fam);
+    const stat = str(row.stat);
+    const label = normProp(fam, prop, pick, stat);
+    const famMissing = !fam.trim() || fam.trim().toLowerCase() === "other";
+    const capper = capperOf(prop) || capperOf(pick);
     marks.push({
       date,
       cat: str(row.cat),
       win: res === "W",
       units: num(row.uu) ?? 0,
       sport: normSport(str(row.sport)),
-      prop: normProp(fam, prop),
+      prop: label,
       side: normSide(pick, prop, row.alt === true),
+      capper: capper || undefined,
+      detail: famMissing && label !== "First Blood" ? pick : undefined,
     });
   }
   return marks;

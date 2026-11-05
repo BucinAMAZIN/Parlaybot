@@ -157,6 +157,10 @@ export type GradeMark = {
   sport: string;
   prop: string;
   side: "over" | "under" | "alt" | "other";
+  /** Set when the desk row named a capper, so the prop row can credit them. */
+  capper?: string;
+  /** Set when this play was relabeled onto a real prop type, or landed in Misc. */
+  detail?: string;
 };
 
 export type CapperGroup = "heist" | "an";

@@ -125,7 +125,7 @@ function propBlock(rows: GradeMark[]): string {
     groups.set(row.prop, list);
   }
   const body = [...groups.entries()]
-    .sort((a, b) => b[1].length - a[1].length)
+    .sort((a, b) => (a[0] === "Misc" ? 1 : b[0] === "Misc" ? -1 : b[1].length - a[1].length))
     .map(([prop, list]) => {
       const wins = list.filter((row) => row.win).length;
       const units = list.reduce((sum, row) => sum + row.units, 0);
@@ -136,11 +136,17 @@ function propBlock(rows: GradeMark[]): string {
           if (!subset.length) return "";
           const w = subset.filter((row) => row.win).length;
           const label = side === "over" ? "Over" : side === "under" ? "Under" : "Alt line";
-          return `<span class="${side === "alt" ? "alt" : ""}">${label} ${w}-${subset.length - w}</span>`;
+          const via = [...new Set(subset.filter((row) => row.detail && row.capper).map((row) => row.capper as string))];
+          const note = side === "alt" && via.length ? ` <span class="via">via ${via.map((name) => esc(name)).join(", ")}</span>` : "";
+          return `<span class="${side === "alt" ? "alt" : ""}">${label} ${w}-${subset.length - w}${note}</span>`;
         })
         .filter(Boolean)
         .join("");
-      return `<div class="pr"><div class="prt"><b>${esc(prop)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span></div><div class="splits">${splits}</div></div>`;
+      const moved = list.filter((row) => row.detail);
+      const notes = moved
+        .map((row) => `<div class="via">${row.capper ? `via ${esc(row.capper)} · ` : ""}${esc(row.detail || "")} · ${row.win ? "W" : "L"}</div>`)
+        .join("");
+      return `<div class="pr"><div class="prt"><b>${esc(prop)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span></div><div class="splits">${splits}</div>${notes}</div>`;
     })
     .join("");
   return `<div class="props">${body}</div>`;
