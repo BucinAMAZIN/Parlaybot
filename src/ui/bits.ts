@@ -58,7 +58,9 @@ export function listedOn(play: Play, book: BookId): boolean {
 export function renderWhy(block: WhyBlock): string {
   const tag = block.ours ? "Our read" : "Why";
   const ours = block.ours ? `<span class="ours">ours, not the capper's</span>` : "";
-  return `<details class="why"><summary><b>${tag}:</b><span>${esc(block.line)}</span><span class="car">▾</span></summary><div class="wb"><h5 class="yes">${tag}${ours}</h5><ul>${block.why.map((item) => `<li>${esc(item)}</li>`).join("")}</ul><h5 class="no">Why not</h5><ul>${block.whyNot.map((item) => `<li>${esc(item)}</li>`).join("")}</ul></div></details>`;
+  const whyItems = block.why.length ? `<ul>${block.why.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : "";
+  const notItems = block.whyNot.length ? `<h5 class="no">Why not</h5><ul>${block.whyNot.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : "";
+  return `<details class="why"><summary class="whychip">Why <span class="car shut" aria-hidden="true">▸</span><span class="car open" aria-hidden="true">▾</span></summary><div class="wb"><h5 class="yes">${tag}${ours}</h5>${whyItems}${notItems}</div></details>`;
 }
 
 export function renderPlay(play: Play, book: BookId, selected: Set<string>, off = false): string {
