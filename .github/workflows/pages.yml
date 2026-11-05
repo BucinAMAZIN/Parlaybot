@@ -17,6 +17,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  allow-branch:
+    runs-on: ubuntu-latest
+    permissions:
+      administration: write
+    steps:
+      - name: Let this branch deploy to github-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X POST "repos/${{ github.repository }}/environments/github-pages/deployment-branch-policies" \
+            -f name="${{ github.ref_name }}" -f type=branch \
+            || echo "Branch policy was not added (it may already exist). Deploy will try anyway."
   build:
     runs-on: ubuntu-latest
     steps:
@@ -34,7 +46,7 @@ jobs:
         with:
           path: dist
   deploy:
-    needs: build
+    needs: [build, allow-branch]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
