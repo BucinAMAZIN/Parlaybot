@@ -50,6 +50,7 @@ type EventRow = {
   home: EventTeam;
   state: string;
   detail: string;
+  date: string;
   period: number;
   clock: string;
   summary?: Json;
@@ -84,6 +85,7 @@ function eventOf(raw: unknown, league: LiveGame["league"], group: string, path: 
     home,
     state: str(type.state) || "pre",
     detail: str(type.shortDetail) || str(status.type && isObj(status.type) ? status.type.shortDetail : ""),
+    date: str(comp.date) || str(raw.date),
     period: num(status.period) ?? 0,
     clock: str(status.displayClock),
   };
@@ -350,6 +352,7 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
     awayScore: event.away.score,
     homeScore: event.home.score,
     clock: pre ? event.detail || "Not started" : event.state === "post" ? "Final" : event.detail || event.clock || "Live",
+    start: event.date || undefined,
     pre,
     final: event.state === "post",
     awaySide: { abbr: event.away.abbr, record: "—", standing: "—" },

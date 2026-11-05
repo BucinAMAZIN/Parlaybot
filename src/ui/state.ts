@@ -28,6 +28,10 @@ export type AppState = {
   standingsFrom: ViewId;
   gamePanel: Record<string, Panel>;
   openGames: Set<string>;
+  /** Today's Games list. Starts closed on every load and is not saved. */
+  gamesOpen: boolean;
+  /** Sport chip inside Today's Games. Separate from the plays filter. Not saved. */
+  gamesSport: "All" | "NHL" | "NBA" | "NFL" | "NCAAF" | "NCAAB" | "MLB" | "NASCAR";
   feedFilter: Record<string, { team: string; period: string }>;
   profitRange: "14d" | "30d" | "60d" | "90d" | "all";
   openDates: Set<string>;
@@ -63,6 +67,8 @@ export function defaultState(): AppState {
     standingsFrom: "live",
     gamePanel: {},
     openGames: new Set(),
+    gamesOpen: false,
+    gamesSport: "All",
     feedFilter: {},
     profitRange: "14d",
     openDates: new Set(),

@@ -216,10 +216,9 @@ function today(state: AppState, board: Board): string {
     .join("");
   const tickets = visibleTickets(board, state);
   const visiblePlays = tickets.flatMap((ticket) => ticket.plays);
-  const games = board.liveGames
-    .filter((game) => (board.feedMode === "live" || game.id === "atl-nyk" || game.id === "okc-den") && visiblePlays.some((play) => playOnGame(play, game)))
-    .map((game) => renderGame(game, state, false))
-    .join("");
+  const gameList = board.liveGames.filter(
+    (game) => (board.feedMode === "live" || game.id === "atl-nyk" || game.id === "okc-den") && visiblePlays.some((play) => playOnGame(play, game)),
+  );
   const nascarAnchor = [...tickets].reverse().find((ticket) => ticket.plays.some((play) => play.sport === "NASCAR"))?.id;
   const sections = ["heist", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
   const blocks = sections
@@ -254,10 +253,47 @@ function today(state: AppState, board: Board): string {
       : "Showing plays live on DraftKings · DK price incl. fee (Florida DK Predictions). Legs are picked on Hard Rock.";
   const dkLine = board.dkPrices ? `<p class="stamp">${esc(board.dkPrices)}</p>` : "";
   const left = `${bookToggle(state.book)}${dkLine}${recapCard(board)}<div class="card"><h2>Profit</h2><div class="ranges" role="tablist" aria-label="Chart range">${rangeControl(state)}</div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div><div class="priv">🔒 Only you can see this</div>${chartSvg(windowed.points)}<div class="rings">${rings}</div></div>`;
-  const lock = board.lockCheck && games ? `<p class="stamp">${esc(board.lockCheck)}</p>` : "";
-  const gameHead = games ? `<div class="sub" style="margin:2px 0 4px"><b>Games tonight</b> · tap a game for Feed · Box · VS</div>${lock}${games}` : "";
+  const lock = board.lockCheck && gameList.length ? `<span class="stamp">${esc(board.lockCheck)}</span>` : "";
+  const gameHead = gameList.length
+    ? `<div class="gameslot"><button type="button" class="gameshead" data-act="games-toggle" aria-expanded="${state.gamesOpen ? "true" : "false"}"><b>Today's Games</b><span class="sub">· ${gameList.length}</span>${lock}<span class="car">${state.gamesOpen ? "▴" : "▾"}</span></button>${state.gamesOpen ? gamesPanel(gameList, state) : ""}</div>`
+    : "";
   const right = `${gameHead}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${blocks || `<p class="empty">No plays in this filter.</p>`}`;
   return `<div class="sub date-line">${esc(board.dateLabel)}</div><div class="home"><div>${left}</div><div>${right}</div></div>`;
+}
+
+const GAME_SPORTS = ["NHL", "NBA", "NFL", "NCAAF", "NCAAB", "MLB", "NASCAR"] as const;
+
+function byStart(a: LiveGame, b: LiveGame): number {
+  return (a.start || "9999").localeCompare(b.start || "9999") || a.id.localeCompare(b.id);
+}
+
+function gamesPanel(games: LiveGame[], state: AppState): string {
+  const counts = new Map<string, LiveGame[]>();
+  for (const game of games) {
+    const list = counts.get(game.league) ?? [];
+    list.push(game);
+    counts.set(game.league, list);
+  }
+  const sports = GAME_SPORTS.filter((sport) => (counts.get(sport) ?? []).length);
+  const picked = state.gamesSport !== "All" && sports.includes(state.gamesSport) ? state.gamesSport : "All";
+  const chips = [`<button type="button" class="${picked === "All" ? "on" : ""}" data-act="games-sport" data-key="All">All</button>`]
+    .concat(
+      sports.map((sport) => {
+        const count = counts.get(sport)?.length ?? 0;
+        return `<button type="button" class="${picked === sport ? "on" : ""}" data-act="games-sport" data-key="${sport}">${esc(sportLabel(sport))} ${count}</button>`;
+      }),
+    )
+    .join("");
+  const order = picked === "All" ? [...sports, ...[...counts.keys()].filter((sport) => !sports.includes(sport as (typeof GAME_SPORTS)[number]))] : [picked];
+  const body = order
+    .map((sport) => {
+      const rows = (counts.get(sport) ?? []).slice().sort(byStart);
+      if (!rows.length) return "";
+      const head = picked === "All" ? `<p class="gamegroup">${esc(sportLabel(sport))}</p>` : "";
+      return `${head}${rows.map((game) => renderGame(game, state, false)).join("")}`;
+    })
+    .join("");
+  return `<nav class="scroller sport gamesports" aria-label="Today's games by sport">${chips}</nav>${body}`;
 }
 
 function renderLiveLeg(leg: LiveLeg): string {

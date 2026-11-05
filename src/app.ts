@@ -230,6 +230,18 @@ function onClick(event: Event) {
     paint(false);
     return;
   }
+  if (act === "games-toggle") {
+    state.gamesOpen = !state.gamesOpen;
+    paint(false);
+    return;
+  }
+  if (act === "games-sport") {
+    const key = action.dataset.key;
+    if (key === "All" || key === "NHL" || key === "NBA" || key === "NFL" || key === "NCAAF" || key === "NCAAB" || key === "MLB" || key === "NASCAR") state.gamesSport = key;
+    state.gamesOpen = true;
+    paint(false);
+    return;
+  }
   if (act === "cal-toggle") {
     state.statsCalOpen = !state.statsCalOpen;
     paint(false);
