@@ -241,13 +241,14 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .pace.p-behind{color:#ffcc46}
 .pace.p-cold{color:#78beff}
 .pace.p-dead{color:#dc323c}
-details.why{margin:6px 0 2px;border:1px solid #263040;border-radius:10px;background:#111821}
-details.why summary{list-style:none;cursor:pointer;padding:6px 10px;font-size:.8125rem;color:#c9d3df;display:flex;gap:6px;align-items:flex-start}
+details.why{margin:4px 0 2px;border:0;background:transparent;width:fit-content;max-width:100%}
+details.why[open]{width:100%}
+details.why summary.whychip{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border-radius:999px;border:1px solid #2c3542;background:#161b22;color:#cfd6df;font-weight:700;font-size:.8125rem}
 details.why summary::-webkit-details-marker{display:none}
-details.why summary b{color:#76f53a;flex:none}
-details.why summary .car{margin-left:auto;color:#7d8896;flex:none}
-details.why[open] summary .car{transform:rotate(180deg)}
-details.why .wb{padding:0 10px 8px;font-size:.8125rem}
+details.why .car.open{display:none}
+details.why[open] .car.shut{display:none}
+details.why[open] .car.open{display:inline}
+details.why .wb{margin-top:6px;padding:8px 10px;border:1px solid #263040;border-radius:10px;background:#111821;font-size:.8125rem}
 details.why h5{margin:6px 0 2px;font-size:.75rem;letter-spacing:.04em;text-transform:uppercase}
 details.why ul{margin:0;padding-left:18px}
 details.why li{margin:2px 0;color:#d6dde6}
@@ -320,8 +321,9 @@ html.day .book,html.day .scroller button,html.day .gear,html.day .toggle,html.da
 html.day .scroller button.on,html.day .toggle button.on{background:#17202b;color:#fff}
 html.day .book button.on.hr{background:#f5c400;color:#111}
 html.day .book button.on.dk{background:#53d337;color:#111}
-html.day details.why{background:#f7f9fb;border-color:#d5dce6}
-html.day details.why summary,html.day details.why li{color:#243140}
+html.day details.why summary.whychip{background:#fff;border-color:#d5dce6;color:#243140}
+html.day details.why .wb{background:#f7f9fb;border-color:#d5dce6}
+html.day details.why li{color:#243140}
 html.day .ftbl td,html.day .ftbl th{background:#fff;color:#17202b}
 html.day .ftbl th{background:#eef2f6}
 html.day .ftbl tr.you td{background:#e7f6ee}
