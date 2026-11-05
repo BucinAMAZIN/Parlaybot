@@ -5,7 +5,8 @@ import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentE
 import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled } from "../src/lib/shareCard.ts";
-import { results, sampleTickets } from "../src/data/sampleBoard.ts";
+import { results, rings, sampleTickets } from "../src/data/sampleBoard.ts";
+import { winRateBand } from "../src/ui/bits.ts";
 
 const raw = JSON.parse(readFileSync(new URL("../fixtures/edge-picks-sample.json", import.meta.url), "utf8"));
 const adapted = adaptEdgePicks(raw);
@@ -150,5 +151,13 @@ assert.match(alt.alt.before, /9\.5/);
 assert.match(alt.alt.after, /7\.5/);
 assert.equal(sampleTickets.find((item) => item.productKey === "cappers"), undefined);
 assert.equal(heist.plays.some((play) => play.status?.label === "Out"), false);
+
+assert.equal(winRateBand(55), "good");
+assert.equal(winRateBand(54.9), "mid");
+assert.equal(winRateBand(50), "mid");
+assert.equal(winRateBand(49.9), "low");
+assert.equal(winRateBand(40), "low");
+assert.equal(winRateBand(39.9), "bad");
+assert.deepEqual(rings.map((ring) => winRateBand(ring.pct)), ["good", "bad", "low", "mid", "mid", "good", "mid", "good"]);
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

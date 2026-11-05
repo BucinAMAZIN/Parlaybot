@@ -524,15 +524,15 @@ const DAYS = ["10/22", "", "", "10/25", "", "", "10/28", "", "", "10/31", "", ""
 
 export const series: SeriesPoint[] = PROFIT.map((profit, i) => ({ day: DAYS[i], profit, winRate: WR[i] }));
 
-export const rings: { pct: number; label: string; color: string }[] = [
-  { pct: 60, label: "THE HEIST", color: "#76f53a" },
-  { pct: 26, label: "Safe +100", color: "#ffcc00" },
-  { pct: 45, label: "NHL Edge", color: "#ff9b85" },
-  { pct: 54, label: "Cappers", color: "#7aa7ff" },
-  { pct: 50, label: "POTD", color: "#ffcc00" },
-  { pct: 58, label: "LEG DAY", color: "#76f53a" },
-  { pct: 52, label: "Parlay +100", color: "#ff9b85" },
-  { pct: 57, label: "NCAAM", color: "#7aa7ff" },
+export const rings: { pct: number; label: string }[] = [
+  { pct: 60, label: "THE HEIST" },
+  { pct: 26, label: "Safe +100" },
+  { pct: 45, label: "NHL Edge" },
+  { pct: 54, label: "Cappers" },
+  { pct: 50, label: "POTD" },
+  { pct: 58, label: "LEG DAY" },
+  { pct: 52, label: "Parlay +100" },
+  { pct: 57, label: "NCAAM" },
 ];
 
 export const results: SettledTicket[] = [

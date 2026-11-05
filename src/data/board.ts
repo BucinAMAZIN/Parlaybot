@@ -29,7 +29,7 @@ export type Board = {
   results: SettledTicket[];
   recap: Recap;
   series: SeriesPoint[];
-  rings: { pct: number; label: string; color: string }[];
+  rings: { pct: number; label: string }[];
   nascar: { when: string; rows: [string, string, string][] };
   edgePicks: EdgePick[];
   edgeSkipped: number;

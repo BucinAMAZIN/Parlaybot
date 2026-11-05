@@ -101,10 +101,19 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   return `<div class="play">${box}<div class="pbody"><div class="prow"><b>${esc(play.name)}</b><span class="odds">${esc(odds)}</span></div><div class="sub">${esc(play.detail)}</div>${fee}${ctx}${rank}${alt}${marks}${chipRow}${grade}${renderWhy(play.why)}<div class="btns">${button}</div></div></div>`;
 }
 
-export function ringSvg(pct: number, label: string, color: string): string {
+/** >=55 green, 50–54.9 yellow, 40–49.9 orange, under 40 red. */
+export function winRateBand(pct: number): "good" | "mid" | "low" | "bad" {
+  if (pct >= 55) return "good";
+  if (pct >= 50) return "mid";
+  if (pct >= 40) return "low";
+  return "bad";
+}
+
+export function ringSvg(pct: number, label: string): string {
   const c = 2 * Math.PI * 34;
   const dash = ((c * pct) / 100).toFixed(1);
-  return `<div class="ring"><svg viewBox="0 0 84 84" width="84" height="84" aria-label="${esc(label)} ${pct} percent"><circle cx="42" cy="42" r="34" stroke="#2a313c" stroke-width="9" fill="none"/><circle cx="42" cy="42" r="34" stroke="${color}" stroke-width="9" fill="none" stroke-dasharray="${dash} ${c.toFixed(1)}" transform="rotate(-90 42 42)" stroke-linecap="round"/><text x="42" y="48" text-anchor="middle" font-size="18" font-weight="700" fill="currentColor">${pct}%</text></svg><div>${esc(label)}</div></div>`;
+  const band = winRateBand(pct);
+  return `<div class="ring"><svg viewBox="0 0 84 84" width="84" height="84" aria-label="${esc(label)} ${pct} percent"><circle class="ring-track" cx="42" cy="42" r="34" stroke-width="9" fill="none"/><circle class="ring-arc wr-${band}" cx="42" cy="42" r="34" stroke-width="9" fill="none" stroke-dasharray="${dash} ${c.toFixed(1)}" transform="rotate(-90 42 42)" stroke-linecap="butt"/><text x="42" y="48" text-anchor="middle" font-size="18" font-weight="700" fill="currentColor">${pct}%</text></svg><div>${esc(label)}</div></div>`;
 }
 
 export function chartSvg(points: SeriesPoint[]): string {

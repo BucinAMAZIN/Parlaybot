@@ -41,6 +41,11 @@ body.book-dk .chk input{accent-color:#2ea85a}
 .legend{display:flex;gap:16px;color:#a9b4c2;font-size:.875rem;margin-top:4px;flex-wrap:wrap}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px}
 .ring{text-align:center;color:#a9b4c2;font-size:.875rem}
+.ring-track{stroke:#2a313c}
+.ring-arc.wr-good{stroke:#76f53a}
+.ring-arc.wr-mid{stroke:#ffe14a}
+.ring-arc.wr-low{stroke:#ff8c28}
+.ring-arc.wr-bad{stroke:#ff5c5c}
 .selbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:#1d2430;border-top:1px solid #333c49;padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;align-items:center;justify-content:center}
 .selbar[hidden]{display:none}
 .selbar .btn{flex:1;white-space:normal;text-align:center;line-height:1.15}
@@ -307,9 +312,10 @@ html.day .chip.q{color:#3a4656}
 html.day .chart path[stroke="#76f53a"]{stroke:#146c2e}
 html.day .chart path[fill="#76f53a"]{fill:#146c2e}
 html.day .chart polyline{stroke:#1d4f91}
-html.day .ring circle[stroke="#76f53a"]{stroke:#146c2e}
-html.day .ring circle[stroke="#ffcc00"]{stroke:#7a4e00}
-html.day .ring circle[stroke="#ff9b85"]{stroke:#c4232a}
-html.day .ring circle[stroke="#7aa7ff"]{stroke:#1d4f91}
+html.day .ring-track{stroke:#e4e9f0}
+html.day .ring-arc.wr-good{stroke:#1f8a22}
+html.day .ring-arc.wr-mid{stroke:#c48400}
+html.day .ring-arc.wr-low{stroke:#e07000}
+html.day .ring-arc.wr-bad{stroke:#e23b3b}
 html.day .pills button.on,
 html.day .lgtabs button.on{color:#146c2e;border-color:#146c2e;background:#e7f6ee}

@@ -158,7 +158,7 @@ function today(state: AppState, board: Board): string {
   const windowed = sliceSeries(board.series, "30d");
   const rings = board.rings
     .slice(0, 4)
-    .map((ring) => ringSvg(ring.pct, ring.label, ring.color))
+    .map((ring) => ringSvg(ring.pct, ring.label))
     .join("");
   const games = board.liveGames
     .filter((game) => game.id === "atl-nyk" || game.id === "okc-den")
@@ -411,7 +411,7 @@ function cappers(state: AppState, board: Board): string {
 
 function stats(state: AppState, board: Board): string {
   const windowed = sliceSeries(board.series, state.profitRange);
-  const rings = board.rings.map((ring) => ringSvg(ring.pct, ring.label, ring.color)).join("");
+  const rings = board.rings.map((ring) => ringSvg(ring.pct, ring.label)).join("");
   const record = tallyEdge(board.edgePicks);
   const graded = record.wins + record.losses;
   const hit = graded ? Math.round((record.wins / graded) * 100) : 0;
