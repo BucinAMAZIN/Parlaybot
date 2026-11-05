@@ -39,6 +39,8 @@ export type AppState = {
   feedFilter: Record<string, { team: string; period: string }>;
   /** Games whose play-by-play is expanded past the latest 10. Not saved. */
   feedFull: Set<string>;
+  /** In-progress games the phone closed on Live. Not saved, so a fresh visit opens the first one. */
+  liveDismissed: Set<string>;
   profitRange: "14d" | "30d" | "60d" | "90d" | "all";
   openDates: Set<string>;
   /** NCAAB group name. Empty uses the first group, which is the AP Top 25. */
@@ -100,6 +102,7 @@ export function defaultState(): AppState {
     gamesSport: "All",
     feedFilter: {},
     feedFull: new Set(),
+    liveDismissed: new Set(),
     profitRange: "14d",
     openDates: new Set(),
     conference: "",

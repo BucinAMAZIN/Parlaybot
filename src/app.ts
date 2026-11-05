@@ -66,7 +66,16 @@ function applyChrome() {
   if (theme) theme.setAttribute("content", state.theme === "day" ? "#f3f5f8" : "#0d1117");
 }
 
+function revealLive() {
+  if (state.view !== "live") return;
+  const game = board.liveGames.find((item) => !item.pre && !item.final);
+  if (!game || state.liveDismissed.has(game.id) || state.openGames.has(game.id)) return;
+  state.openGames.add(game.id);
+  state.gamePanel[game.id] = "feed";
+}
+
 function paint(toTop: boolean) {
+  revealLive();
   const y = window.scrollY;
   applyChrome();
   const app = document.getElementById("app");
@@ -506,8 +515,13 @@ export function start() {
       const details = event.target as HTMLDetailsElement;
       const id = details.dataset?.game;
       if (!id) return;
-      if (details.open) state.openGames.add(id);
-      else state.openGames.delete(id);
+      if (details.open) {
+        state.openGames.add(id);
+        state.liveDismissed.delete(id);
+      } else {
+        state.openGames.delete(id);
+        state.liveDismissed.add(id);
+      }
     },
     true,
   );

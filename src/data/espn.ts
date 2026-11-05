@@ -2,6 +2,7 @@ import type { Board } from "./board.ts";
 import type { LegPace, LiveFeed, LiveGame, LiveLeg, LiveTicket, Mood, Play, Ticket } from "./types.ts";
 import { propLine } from "../lib/propLine.ts";
 import { gcHum, isFreeThrow, parseCast } from "./gamecast.ts";
+import { gradeTeamBet, sortLiveGames, teamBet } from "./liveCard.ts";
 
 /**
  * Same public scoreboard the desk page uses. Summaries fill box score,
@@ -222,21 +223,45 @@ function paceOf(current: number, line: number, under: boolean, plus: boolean, ev
   return "cold";
 }
 
-function legFor(play: Play, event: EventRow): LiveLeg | null {
+function betSide(team: string, event: EventRow): "away" | "home" | null {
+  const away = hit(team, event.away);
+  const home = hit(team, event.home);
+  if (away === home) return null;
+  return away ? "away" : "home";
+}
+
+function legFor(play: Play, event: EventRow, awayScore: number, homeScore: number): LiveLeg | null {
   const prop = propOf(play.name, event.league);
-  if (!prop) return null;
-  const current = event.summary ? readStat(event.summary, prop.player, prop.key) : null;
-  const started = event.state !== "pre";
-  const value = current ?? 0;
-  const known = current != null;
+  if (prop) {
+    const current = event.summary ? readStat(event.summary, prop.player, prop.key) : null;
+    const started = event.state !== "pre";
+    const value = current ?? 0;
+    const known = current != null;
+    return {
+      name: play.name,
+      current: known ? value : 0,
+      line: prop.line,
+      unit: prop.unit,
+      pace: !started ? "pre" : known ? paceOf(value, prop.line, prop.under, prop.plus, event) : "pre",
+      source: !started ? "Not started · ESPN" : known ? "ESPN box score" : "Not in the ESPN box score yet",
+      why: play.why,
+    };
+  }
+  const bet = teamBet(play.name);
+  if (!bet) return null;
+  const side = bet.kind === "total" ? null : betSide(bet.team, event);
+  if (bet.kind !== "total" && !side) return null;
+  const state = event.state === "post" ? "post" : event.state === "pre" ? "pre" : "in";
+  const grade = gradeTeamBet(bet, awayScore, homeScore, side, state);
   return {
     name: play.name,
-    current: known ? value : 0,
-    line: prop.line,
-    unit: prop.unit,
-    pace: !started ? "pre" : known ? paceOf(value, prop.line, prop.under, prop.plus, event) : "pre",
-    source: !started ? "Not started · ESPN" : known ? "ESPN box score" : "Not in the ESPN box score yet",
+    current: grade.current,
+    line: grade.line,
+    unit: grade.unit,
+    pace: grade.pace,
+    source: grade.source,
     why: play.why,
+    label: grade.label || undefined,
   };
 }
 
@@ -341,10 +366,6 @@ function deskRanks(teamVs: unknown, away: string, home: string): { name: string;
 }
 
 function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: string | null): LiveGame {
-  const legs = plays.flatMap((play) => {
-    const leg = legFor(play, event);
-    return leg ? [leg] : [];
-  });
   const names = plays.map((play) => propOf(play.name, event.league)?.player ?? "").filter(Boolean);
   const fromEspn = espnTeamStats(event.summary);
   const fromDesk = fromEspn.length ? [] : deskRanks(teamVs, event.away.abbr, event.home.abbr);
@@ -352,6 +373,13 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
   const cast = event.summary ? parseCast(event.summary, event.league) ?? undefined : undefined;
   const awayScore = cast?.away.score ? Number(cast.away.score) : event.away.score;
   const homeScore = cast?.home.score ? Number(cast.home.score) : event.home.score;
+  const seen = new Set<string>();
+  const legs = plays.flatMap((play) => {
+    const leg = legFor(play, event, Number.isFinite(awayScore) ? awayScore : event.away.score, Number.isFinite(homeScore) ? homeScore : event.home.score);
+    if (!leg || seen.has(leg.name)) return [];
+    seen.add(leg.name);
+    return [leg];
+  });
   const clock = cast?.clock || (pre ? event.detail || "Not started" : event.state === "post" ? "Final" : event.detail || event.clock || "Live");
   return {
     id: event.id,
@@ -390,7 +418,13 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
 }
 
 function ticketBar(ticket: Ticket, games: LiveGame[]): LiveTicket | null {
-  const paces = ticket.plays.flatMap((play) => games.flatMap((game) => game.legs.filter((leg) => leg.name === play.name).map((leg) => leg.pace)));
+  const paces = ticket.plays.flatMap((play) => {
+    for (const game of games) {
+      const leg = game.legs.find((item) => item.name === play.name);
+      if (leg) return [leg.pace];
+    }
+    return [];
+  });
   if (!paces.length) return null;
   const dead = paces.includes("dead");
   const alive = paces.some((pace) => pace === "on" || pace === "behind" || pace === "cold");
@@ -449,7 +483,7 @@ export async function attachLive(board: Board): Promise<void> {
       }
     }),
   );
-  const games = wanted.map((event) => gameOf(event, plays.filter((play) => matches(play, event)), board.teamVs, board.teamBuilt));
+  const games = sortLiveGames(wanted.map((event) => gameOf(event, plays.filter((play) => matches(play, event)), board.teamVs, board.teamBuilt)));
   const mood = moodOf(games);
   board.liveGames = games;
   board.liveTickets = board.tickets.flatMap((ticket) => {

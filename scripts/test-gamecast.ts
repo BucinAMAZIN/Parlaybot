@@ -10,6 +10,7 @@ import {
   readableColor,
   winLine,
 } from "../src/data/gamecast.ts";
+import { gradeTeamBet, sortLiveGames, teamBet } from "../src/data/liveCard.ts";
 
 const away = courtPoint(16, 24, false);
 assert.ok(away);
@@ -100,5 +101,49 @@ const quiet = parseCast({
   plays: [],
 }, "NFL");
 assert.equal(quiet?.football, null);
+
+const games = [
+  { id: "late", pre: true, final: false, start: "2026-11-05T22:00:00Z", league: "NBA" },
+  { id: "done", pre: false, final: true, start: "2026-11-05T17:00:00Z", league: "NCAAB" },
+  { id: "live", pre: false, final: false, start: "2026-11-05T22:00:00Z", league: "NCAAB" },
+  { id: "early", pre: true, final: false, start: "2026-11-05T20:00:00Z", league: "NHL" },
+];
+assert.deepEqual(sortLiveGames(games).map((game) => game.id), ["live", "early", "late", "done"]);
+
+assert.deepEqual(teamBet("McNeese Cowboys ML"), { kind: "ml", team: "McNeese Cowboys" });
+assert.deepEqual(teamBet("Celtics -3.5"), { kind: "spread", team: "Celtics", spread: -3.5 });
+assert.deepEqual(teamBet("Over 145.5"), { kind: "total", line: 145.5, under: false });
+assert.equal(teamBet("Justice Hill Over 2.5 Receptions"), null);
+
+const trailing = gradeTeamBet({ kind: "ml", team: "McNeese Cowboys" }, 38, 43, "away", "in");
+assert.equal(trailing.label, "Trailing 38–43");
+assert.equal(trailing.pace, "behind");
+const leading = gradeTeamBet({ kind: "ml", team: "North Texas" }, 38, 43, "home", "in");
+assert.equal(leading.label, "Leading 43–38");
+assert.equal(leading.pace, "on");
+const won = gradeTeamBet({ kind: "ml", team: "North Texas" }, 38, 43, "home", "post");
+assert.equal(won.pace, "hit");
+const lost = gradeTeamBet({ kind: "ml", team: "McNeese Cowboys" }, 38, 43, "away", "post");
+assert.equal(lost.pace, "dead");
+const tied = gradeTeamBet({ kind: "ml", team: "McNeese Cowboys" }, 40, 40, "away", "in");
+assert.equal(tied.label, "Tied 40–40");
+
+const covering = gradeTeamBet({ kind: "spread", team: "McNeese", spread: 6.5 }, 38, 43, "away", "in");
+assert.equal(covering.pace, "on");
+assert.match(covering.label, /\+6\.5 · covering/);
+const short = gradeTeamBet({ kind: "spread", team: "McNeese", spread: 4 }, 38, 43, "away", "post");
+assert.equal(short.pace, "dead");
+const push = gradeTeamBet({ kind: "spread", team: "McNeese", spread: 5 }, 38, 43, "away", "post");
+assert.equal(push.pace, "on");
+assert.match(push.label, /push/);
+
+const total = gradeTeamBet({ kind: "total", line: 145.5, under: false }, 38, 43, null, "in");
+assert.equal(total.current, 81);
+assert.equal(total.line, 145.5);
+assert.equal(total.pace, "on");
+const cashed = gradeTeamBet({ kind: "total", line: 145.5, under: false }, 80, 70, null, "post");
+assert.equal(cashed.pace, "hit");
+const under = gradeTeamBet({ kind: "total", line: 145.5, under: true }, 80, 70, null, "post");
+assert.equal(under.pace, "dead");
 
 console.log("gamecast tests ok");

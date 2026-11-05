@@ -733,7 +733,7 @@ assert.match(altHeist.excluded?.[0]?.reason ?? "", /ML \(not a prop\)/);
 const blank = (): AppState => ({
   view: "today", book: "hr", sport: "All", product: null, selected: new Set(), text: "md", theme: "night",
   alerts: { locks: false, finals: false, redzone: false, price: false }, pushWant: { picks: false, locks: false }, pushAck: false, pushDelivery: "off",
-  sheet: null, league: "NBA", standingsFrom: "today", gamePanel: {}, openGames: new Set(), gamesOpen: false, gamesSport: "All", feedFilter: {}, feedFull: new Set(),
+  sheet: null, league: "NBA", standingsFrom: "today", gamePanel: {}, openGames: new Set(), gamesOpen: false, gamesSport: "All", feedFilter: {}, feedFull: new Set(), liveDismissed: new Set(),
   profitRange: "14d", openDates: new Set(), conference: "", statsFrom: "", statsTo: "", statsCalOpen: false, statsMode: "range", statsSection: "all",
   statsSport: "", statsAnchor: "", statsDraft: "", nightOpen: false, resultsPick: null, openResultDates: new Set(), openTickets: new Set(),
 });

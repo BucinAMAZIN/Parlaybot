@@ -332,7 +332,8 @@ function renderLiveLeg(leg: LiveLeg): string {
   const face = pace.mood ? mascot(pace.mood, 36) : `<span class="mascot" style="width:36px;height:36px"></span>`;
   const current = Number.isInteger(leg.current) ? String(leg.current) : String(leg.current);
   const line = Number.isInteger(leg.line) ? String(leg.line) : String(leg.line);
-  return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${current}/${line} ${esc(leg.unit)}</span></div><div class="lv-bar"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace p-${leg.pace}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why)}</div></div>`;
+  const figure = leg.label || `${current}/${line}${leg.unit ? ` ${leg.unit}` : ""}`;
+  return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${esc(figure)}</span></div><div class="lv-bar"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace p-${leg.pace}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why)}</div></div>`;
 }
 
 function renderGame(game: LiveGame, state: AppState, withLegs: boolean): string {
@@ -342,7 +343,7 @@ function renderGame(game: LiveGame, state: AppState, withLegs: boolean): string 
   const panel = state.gamePanel[game.id] ?? "feed";
   const open = state.openGames.has(game.id) ? "open" : "";
   const legs = withLegs ? game.legs.map(renderLiveLeg).join("") : "";
-  return `<section class="game"><details class="gx" data-game="${esc(game.id)}" ${open}><summary><div class="ghead"><div><div class="score">${esc(score)}</div>${ctx}</div>${clock}</div><div class="tap">▾ Box · VS</div></summary>${renderGameBody(game, panel, state)}</details>${legs}</section>`;
+  return `<section class="game"><details class="gx" data-game="${esc(game.id)}" ${open}><summary><div class="ghead"><div><div class="score">${esc(score)}</div>${ctx}</div>${clock}</div><div class="tap">▾ Feed · Box · VS</div></summary>${renderGameBody(game, panel, state)}</details>${legs}</section>`;
 }
 
 function renderGameBody(game: LiveGame, panel: "feed" | "box" | "vs", state: AppState): string {

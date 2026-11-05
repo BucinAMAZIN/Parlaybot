@@ -172,6 +172,8 @@ export type LiveLeg = {
   pace: LegPace;
   source: string;
   why: WhyBlock;
+  /** Replaces the current/line figure for a moneyline or spread. */
+  label?: string;
 };
 
 export type LiveTicket = {
