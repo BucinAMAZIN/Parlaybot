@@ -147,9 +147,11 @@ function propBlock(rows: GradeMark[]): string {
         })
         .filter(Boolean)
         .join("");
-      const via = [...new Set(alts.map((row) => row.capper).filter((name): name is string => !!name))];
-      const note = via.length ? `<div class="via">${via.map((name) => `via ${esc(name)}`).join(" · ")}</div>` : "";
-      return `${propRow(prop, regular, splits, "", false)}${propRow(`${prop} Alt`, alts, "", note, true)}`;
+      const viaNote = (side: GradeMark[]) => {
+        const names = [...new Set(side.flatMap((row) => (row.capper ?? "").split(",").map((name) => name.trim()).filter(Boolean)))];
+        return names.length ? `<div class="via">via ${names.map((name) => esc(name)).join(", ")}</div>` : "";
+      };
+      return `${propRow(prop, regular, splits, viaNote(regular), false)}${propRow(`${prop} Alt`, alts, "", viaNote(alts), true)}`;
     })
     .join("");
   return `<div class="props">${body}</div>`;

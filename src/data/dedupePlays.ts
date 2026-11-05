@@ -1,6 +1,8 @@
 /**
- * A pick posted twice, or by two cappers, counts once.
- * Same date, player, stat, and line only. A different date or line stays.
+ * Only capper rows collapse. The same capper's pick posted twice counts once,
+ * and the same pick posted by two cappers counts once.
+ * Heist, Alt lines, POTD, Safe, Edge, First Blood, and a capper row of the same leg stay separate.
+ * A different date or line stays separate.
  */
 
 type Row = Record<string, unknown>;
@@ -57,9 +59,13 @@ function statToken(stat: string, pick: string): string {
   return "";
 }
 
-/** Empty when this row is not a specific player/team pick we can match safely. */
+function capperRow(row: Row): boolean {
+  return /^cappers?$/i.test(text(row.cat));
+}
+
+/** Empty unless this is a capper row we can match to another capper row. */
 export function playKey(row: Row): string {
-  if (row.leg === true) return "";
+  if (row.leg === true || !capperRow(row)) return "";
   const res = text(row.res);
   if (res !== "W" && res !== "L" && res !== "V" && res !== "P") return "";
   const date = text(row.date);
@@ -73,11 +79,6 @@ export function playKey(row: Row): string {
 
 function handles(value: string): string[] {
   return [...value.matchAll(/@([a-z0-9_]+)/gi)].map((match) => `@${match[1]}`);
-}
-
-function isAltPost(row: Row): boolean {
-  if (row.alt === true) return true;
-  return /alt line|·\s*other|→/i.test(text(row.prop));
 }
 
 export type DedupedPlays = { rows: Row[]; droppedUnits: Map<string, number> };
@@ -100,7 +101,6 @@ export function dedupePlays(rows: Row[]): DedupedPlays {
       continue;
     }
     const kept = out[index];
-    const alt = isAltPost(kept) || isAltPost(row);
     const keepNew = Math.abs(units(row.uu)) > Math.abs(units(kept.uu));
     const winner = keepNew ? row : kept;
     const loser = keepNew ? kept : row;
@@ -109,7 +109,7 @@ export function dedupePlays(rows: Row[]): DedupedPlays {
     const names = [...new Set([...handles(text(kept.prop)), ...handles(text(row.prop))])];
     let prop = text(winner.prop);
     for (const name of names) if (!prop.includes(name)) prop = `${prop} ${name}`.trim();
-    out[index] = { ...winner, alt: alt ? true : winner.alt, prop };
+    out[index] = { ...winner, prop };
   }
   return { rows: out, droppedUnits };
 }
