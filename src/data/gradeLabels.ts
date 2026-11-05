@@ -27,8 +27,8 @@ export function sportRank(sport: string): number {
 }
 
 export function capperOf(text: string): string {
-  const match = text.match(/@([a-z0-9_]+)/i);
-  return match ? `@${match[1]}` : "";
+  const names = [...new Set([...text.matchAll(/@([a-z0-9_]+)/gi)].map((match) => `@${match[1]}`))];
+  return names.join(", ");
 }
 
 /** Read a stat the leg actually names. Empty when the text does not name one. */
