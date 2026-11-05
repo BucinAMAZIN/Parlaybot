@@ -128,6 +128,8 @@ export type LiveGame = {
   awayScore: number;
   homeScore: number;
   clock: string;
+  /** ESPN scheduled start, ISO. Used only to order Today's Games. */
+  start?: string;
   pre: boolean;
   final: boolean;
   awaySide: TeamSide;
