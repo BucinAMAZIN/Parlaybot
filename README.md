@@ -20,18 +20,15 @@ Screens are laid out for 360px and 390px, including the large-text settings (A /
 
 | Piece | Path | What it is |
 | --- | --- | --- |
-| Edge-picks adapter | `src/data/adaptEdgePicks.ts` | Turns the fixture array into typed plays. It only renames and classifies fields already on the row. |
-| Feed presenter | `src/data/presentEdgeFeed.ts` | Builds the Edge feed ticket, grades, and the flat-1u record from adapted rows. |
 | Desk adapter | `src/data/desk.ts` | Fetches `desk-dashboard/parlay/data.json` at runtime and maps plays, records, and standings. Read only. |
+| Saved copy | `src/data/deskCache.ts` | Last successful `data.json`, stored under `parlaybot-desk`. Shown with its timestamp when the next fetch fails. |
 | Live scores | `src/data/espn.ts` | ESPN scoreboard and summary, the same public URLs the desk page uses. |
-| Fixture | `fixtures/edge-picks-sample.json` | Offline fallback only, labeled SAMPLE DATA when the desk file does not load. |
-| Sample card | `src/data/sampleBoard.ts` | Fallback card. Not used once the desk file loads. |
-| Standings adapter | `src/data/adaptStandings.ts` | Desk standings for NBA, NHL, NFL, MLB, NCAAF, and NCAAB. NCAAB falls back to the labeled sample only when that league is missing from the file. |
+| Standings adapter | `src/data/adaptStandings.ts` | Desk standings for NBA, NHL, NFL, MLB, NCAAF, and NCAAB. A league with no groups says there is no data yet. |
 | Closing line value | `src/data/adaptClv.ts` | Private Stats card and a chip on a graded result when the pick matches `clv.plays`. |
 | Book links | `src/lib/links.ts` | Hard Rock betslip URL and DraftKings single-leg URL, matching the live desk. Multi-leg DK opens each leg on its own. No id means Not on HR or Not on DK. |
 | Share image | `src/lib/shareCard.ts` and `src/lib/shareImage.ts` | Ticket legs, odds, and result. No units, profit, or bankroll. |
 
-A play with no selection id for the active book says **Not on HR** or **Not on DK** and stays on the card. Hard Rock opens `https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/{id}`, one id or several joined with commas. DraftKings opens `https://sportsbook.draftkings.com/event/{event}?outcomes={id}` for one leg. Two or more DK legs open as separate singles, because the two-leg `dksb://sb/addbet` link did not open on the phone. The edge-picks fixture has Hard Rock prices and no DK Predictions ids, so those rows say Not on DK.
+A play with no selection id for the active book says **Not on HR** or **Not on DK** and stays on the card. Hard Rock opens `https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/{id}`, one id or several joined with commas. DraftKings opens `https://sportsbook.draftkings.com/event/{event}?outcomes={id}` for one leg. Two or more DK legs open as separate singles, because the two-leg `dksb://sb/addbet` link did not open on the phone. A play with no DraftKings id says Not on DK.
 
 **Alt line** is the single tag for a buy-down. The Heist ticket shows the before line, then the after line.
 

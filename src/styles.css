@@ -10,7 +10,7 @@ button{cursor:pointer}
 h1,h2,h3{margin:0;font-size:1.375rem;line-height:1.25}
 .sub{color:#a9b4c2;font-size:1.0625rem}
 .wrap{max-width:560px;margin:0 auto;padding:16px}
-.samplebar{display:block;text-align:center;background:#ffcc00;color:#000;font-weight:800;font-size:.75rem;padding:6px 10px;letter-spacing:.03em}
+.offlinebar{display:block;text-align:center;background:#ffcc00;color:#000;font-weight:800;font-size:.75rem;padding:6px 10px;letter-spacing:.03em}
 .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 14px;border-radius:12px;font-weight:700;font-size:1rem;text-decoration:none;border:0;color:#fff;white-space:nowrap;background:#2a313c}
 .btn.hr{background:#7b3fe4}
 .btn.dk{background:#1f6f3f}

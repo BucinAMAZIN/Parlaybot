@@ -607,6 +607,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     dateLabel: iso ? dateLabel(iso) : "Desk",
     feedMode: "live",
     banner: null,
+    cachedAt: null,
     slateDate: iso,
     notices,
     tickets,

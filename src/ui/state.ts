@@ -58,7 +58,7 @@ export function defaultState(): AppState {
     book: "hr",
     sport: "All",
     product: null,
-    selected: new Set(["heist-trae", "edge-makar"]),
+    selected: new Set(),
     text: "md",
     theme: "night",
     alerts: { locks: true, finals: true, redzone: false, price: false },

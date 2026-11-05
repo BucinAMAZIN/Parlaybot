@@ -2,7 +2,7 @@ import type { StandingGroup, StandingLeague, StandingRow, StandingsFile } from "
 
 /**
  * Desk standings snapshot. Row shape: t, ab, rec, pct, gb, pts, home, road, l10, strk, diff, div.
- * NCAAB uses the same league object when it is present. The sample league is only the fallback.
+ * NCAAB uses the same league object when it is present. An empty league is returned when the file has no groups.
  */
 
 export type DeskRow = {

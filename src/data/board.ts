@@ -1,22 +1,4 @@
-import edgeRaw from "../../fixtures/edge-picks-sample.json";
-import { adaptEdgePicks, type EdgePick } from "./adaptEdgePicks.ts";
-import { edgeFeedTicket } from "./presentEdgeFeed.ts";
-import {
-  capperTicket,
-  cappers,
-  CARD_DATE,
-  liveGames,
-  LIVE_NOTE,
-  LIVE_UPDATED,
-  liveTickets,
-  nascar,
-  recap,
-  results,
-  rings,
-  sampleTickets,
-  series,
-} from "./sampleBoard.ts";
-import { standings as fallbackStandings } from "./standings.ts";
+import type { EdgePick } from "./adaptEdgePicks.ts";
 import type { ClvCard } from "./adaptClv.ts";
 import type { CardNote } from "../lib/cardFilter.ts";
 import type { Capper, GradeMark, LiveGame, LiveTicket, Mood, Play, Recap, SeriesPoint, SettledTicket, StandingsFile, Ticket } from "./types.ts";
@@ -35,8 +17,10 @@ export type PrivateStats = {
 
 export type Board = {
   dateLabel: string;
-  feedMode: "live" | "fallback";
+  feedMode: "live" | "offline";
   banner: string | null;
+  /** When this board was saved from a successful data.json fetch. */
+  cachedAt: string | null;
   slateDate: string;
   notices: CardNote[];
   tickets: Ticket[];
@@ -74,40 +58,38 @@ export type Board = {
 
 const ALIAS: Record<string, string> = { NYK: "NY" };
 
-export function loadBoard(): Board {
-  const adapted = adaptEdgePicks(edgeRaw);
-  const feed = edgeFeedTicket(adapted.picks);
-  const tickets: Ticket[] = [];
-  for (const ticket of sampleTickets) {
-    tickets.push(ticket);
-    if (ticket.id === "edge") tickets.push(feed);
-  }
-  tickets.push(capperTicket(cappers));
-  const order = ["heist", "safe", "potd", "parlay", "legday", "edge", "edge-feed", "first", "props", "cappers"];
-  tickets.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+function emptyLeague(): Board["standings"]["leagues"][string] {
+  return { note: "No data yet", columns: [], groups: [] };
+}
+
+export function emptyBoard(): Board {
   return {
-    dateLabel: CARD_DATE,
-    feedMode: "fallback",
-    banner: "OFFLINE FALLBACK — SAMPLE DATA. The desk file did not load, so this card is the fixture.",
+    dateLabel: "",
+    feedMode: "offline",
+    banner: null,
+    cachedAt: null,
     slateDate: "",
     notices: [],
-    tickets,
-    cappers,
-    liveTickets,
-    liveGames,
-    liveNote: LIVE_NOTE,
-    liveUpdated: LIVE_UPDATED,
+    tickets: [],
+    cappers: [],
+    liveTickets: [],
+    liveGames: [],
+    liveNote: "",
+    liveUpdated: "",
     liveMood: null,
-    results,
-    recap,
-    series,
+    results: [],
+    recap: { when: "", units: "", summary: "", rows: [] },
+    series: [],
     grades: [],
-    rings,
-    nascar,
-    edgePicks: adapted.picks,
-    edgeSkipped: adapted.skipped.length,
-    stars: starTeams(tickets),
-    standings: fallbackStandings,
+    rings: [],
+    nascar: { when: "", rows: [] },
+    edgePicks: [],
+    edgeSkipped: 0,
+    stars: new Set(),
+    standings: {
+      source: "desk",
+      leagues: { NBA: emptyLeague(), NHL: emptyLeague(), NFL: emptyLeague(), MLB: emptyLeague(), NCAAF: emptyLeague(), NCAAB: emptyLeague() },
+    },
     privateStats: null,
     teamVs: null,
     updated: null,
