@@ -69,7 +69,7 @@ export function normProp(fam: string, prop: string, pick = "", stat = ""): strin
 export function normSide(pick: string, prop: string, alt: boolean): "over" | "under" | "alt" | "other" {
   const text = `${pick} ${prop}`;
   if (alt || /\(alt\)|\balt(?:ernative)? line\b|→/.test(text)) return "alt";
-  if (/·\s*other\b/i.test(prop) && /\d\+/.test(pick)) return "alt";
+  if (/·\s*other\b|alt line/i.test(prop)) return "alt";
   if (/\(under\)|\bunder\b|\bu\d/i.test(text)) return "under";
   if (/\(over\)|\bover\b|\bo\d/i.test(text)) return "over";
   return "other";

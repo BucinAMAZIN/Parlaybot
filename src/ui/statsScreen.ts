@@ -142,11 +142,7 @@ function propBlock(rows: GradeMark[]): string {
         })
         .filter(Boolean)
         .join("");
-      const moved = list.filter((row) => row.detail);
-      const notes = moved
-        .map((row) => `<div class="via">${row.capper ? `via ${esc(row.capper)} · ` : ""}${esc(row.detail || "")} · ${row.win ? "W" : "L"}</div>`)
-        .join("");
-      return `<div class="pr"><div class="prt"><b>${esc(prop)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span></div><div class="splits">${splits}</div>${notes}</div>`;
+      return `<div class="pr"><div class="prt"><b>${esc(prop)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span></div><div class="splits">${splits}</div></div>`;
     })
     .join("");
   return `<div class="props">${body}</div>`;
