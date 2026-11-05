@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host --port 4173",
-    "test": "node --experimental-strip-types scripts/test-adapter.ts && node --experimental-strip-types scripts/test-push.ts"
+    "test": "node --experimental-strip-types scripts/test-adapter.ts && node --experimental-strip-types scripts/test-push.ts && node --experimental-strip-types scripts/test-gamecast.ts"
   },
   "devDependencies": {
     "puppeteer-core": "^25.16.0",

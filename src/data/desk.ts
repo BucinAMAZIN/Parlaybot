@@ -21,7 +21,7 @@ import { formatSigned } from "../lib/format.ts";
 import { classifySport, sportLabel } from "../lib/sport.ts";
 import { dedupePlays } from "./dedupePlays.ts";
 import { isTicketRow, ticketParts } from "./ticketLegs.ts";
-import { capperOf, normProp, normSide, normSport } from "./gradeLabels.ts";
+import { capperOf, displayCat, normProp, normSide, normSport } from "./gradeLabels.ts";
 import { buildHeist } from "./heist.ts";
 import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
@@ -333,13 +333,13 @@ function night(rows: Row[], iso: string, clv: Map<string, number>): { results: S
     const result: SettledTicket["result"] = w + l === 0 ? "V" : w >= l ? "W" : "L";
     results.push({
       id: `night-${norm(cat).replace(/ /g, "-")}`,
-      title: cat,
+      title: displayCat(cat),
       meta: `${iso} · ${w}-${l}${legs.length - w - l ? ` · ${legs.length - w - l} void/push` : ""} · ${formatSigned(uu, 2)}u`,
       result,
       legs,
       mood: result === "W" ? "cash" : "hook",
     });
-    recapRows.push({ name: cat, text: `${w}-${l} · ${formatSigned(uu, 2)}u`, win: uu > 0 });
+    recapRows.push({ name: displayCat(cat), text: `${w}-${l} · ${formatSigned(uu, 2)}u`, win: uu > 0 });
   }
   return {
     results,

@@ -288,9 +288,36 @@ details.why .ours{font-size:.6875rem;background:#2a2140;color:#c9b6ff;border-rad
 .court{width:100%;display:block;border-radius:8px;background:#0e141b}
 .fgl{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:space-between;font-size:.75rem;color:#9aa5b1;margin:4px 0 6px}
 .pbp{display:flex;gap:8px;padding:7px 0;border-top:1px solid #1e2631;font-size:.8125rem}
-.pbp .lg{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:.625rem;font-weight:800;color:#fff}
-.pbp .pm{flex:1;min-width:0}
-.pbp .ps{flex:none;text-align:right;color:#c9d3df}
+.pbp .lg{flex:none;width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:.625rem;font-weight:800;color:#fff;object-fit:contain;background:transparent}
+.pbp .pm{flex:1;min-width:0;overflow-wrap:anywhere}
+.pbp .ps{flex:none;text-align:right;color:#c9d3df;font-variant-numeric:tabular-nums}
+.casthead{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:10px 8px;border-radius:14px;margin:0 0 8px;max-width:100%;min-width:0;overflow:hidden;background:linear-gradient(90deg, color-mix(in srgb, var(--wash-a) 42%, transparent), transparent 46%, transparent 54%, color-mix(in srgb, var(--wash-h) 42%, transparent))}
+.castside{display:flex;align-items:center;gap:6px;min-width:0}
+.castside b{overflow-wrap:anywhere}
+.castscore{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0;font-weight:800}
+.castscore .nums{display:flex;gap:10px;font-size:1.45rem}
+.castscore .clock{font-size:.75rem;font-weight:700;white-space:normal;text-align:center;max-width:8.5rem}
+.castlogo{width:32px;height:32px;max-width:32px;object-fit:contain;flex:none}
+.game,.feed{min-width:0;max-width:100%}
+.callout{text-align:center;font-weight:800;letter-spacing:.05em;margin:2px 0 8px}
+.courtwrap{width:100%;overflow:hidden}
+.court,.field,.rink,.diamond{width:100%;height:auto;display:block}
+.court-floor{fill:#16324f}
+.court-line{stroke:#d7e6f8;stroke-width:.55}
+.court-note{fill:#d7e6f8;font-size:3.1px}
+.shot-ring{stroke:#fff;stroke-width:.4}
+.grass{fill:#1c7a3c}
+.endzone{fill:#124f28}
+.yard{stroke:#ffffff66;stroke-width:.35}
+.los{stroke:#fff;stroke-width:.8}
+.first-line{stroke:#ffd84d;stroke-width:.8}
+.redzone{fill:#ff4d4d40}
+.ball{fill:#d3542a;stroke:#fff;stroke-width:.3}
+.rink-ice{fill:#d5e6f6;stroke:#9eb4c9}
+.base{fill:none;stroke:#c9d3df;stroke-width:1.2}
+.base.on{fill:#f4f7fb}
+.legendline{display:flex;flex-wrap:wrap;gap:6px 12px;margin:6px 0 8px;color:#a9b4c2;font-size:.85rem}
+.castpills{flex-wrap:wrap;overflow:visible}
 .bx{width:100%;border-collapse:collapse;font-size:.8125rem;margin-top:6px}
 .bx th{color:#7d8896;font-weight:600;text-align:right;padding:4px 3px;font-size:.6875rem}
 .bx td{text-align:right;padding:5px 3px;border-top:1px solid #1e2631}
@@ -399,6 +426,12 @@ html.day .topnav button.on{background:#17202b;color:#fff}
 html.day .book button.on.hr{background:#f5c400;color:#111}
 html.day .book button.on.dk{background:#117a22;color:#fff}
 html.day .warnline{color:#7a4e00}
+html.day .court-floor{fill:#e7f3ea}
+html.day .court-line{stroke:#1d4e34}
+html.day .court-note{fill:#1d4e34}
+html.day .shot-ring{stroke:#17202b}
+html.day .rink-ice{fill:#f3f7fb}
+html.day .legendline,html.day .pbp .ps{color:inherit}
 html.day .chip.ok{color:#0f5c28;border-color:#8fbfa2}
 html.day .chip.warn,
 html.day .chip.mr{color:#7a4e00}

@@ -75,6 +75,11 @@ export function normSide(pick: string, prop: string, alt: boolean): "over" | "un
   return "other";
 }
 
+/** User-facing section name. The desk file still says LEG DAY. */
+export function displayCat(cat: string): string {
+  return /^leg\s*day$/i.test(cat.trim()) ? "Props" : cat;
+}
+
 export function sectionMatch(cat: string, section: string): boolean {
   if (!section || section === "all") return true;
   const name = cat.toLowerCase();

@@ -37,6 +37,8 @@ export type AppState = {
   /** Sport chip inside Today's Games. Separate from the plays filter. Not saved. */
   gamesSport: "All" | "NHL" | "NBA" | "NFL" | "NCAAF" | "NCAAB" | "MLB" | "NASCAR";
   feedFilter: Record<string, { team: string; period: string }>;
+  /** Games whose play-by-play is expanded past the latest 10. Not saved. */
+  feedFull: Set<string>;
   profitRange: "14d" | "30d" | "60d" | "90d" | "all";
   openDates: Set<string>;
   /** NCAAB group name. Empty uses the first group, which is the AP Top 25. */
@@ -97,6 +99,7 @@ export function defaultState(): AppState {
     gamesOpen: false,
     gamesSport: "All",
     feedFilter: {},
+    feedFull: new Set(),
     profitRange: "14d",
     openDates: new Set(),
     conference: "",

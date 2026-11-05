@@ -1,3 +1,5 @@
+import type { GameCast } from "./gamecast.ts";
+
 export type Sport = "NHL" | "NBA" | "NFL" | "NCAAF" | "NCAAB" | "NASCAR" | "MLB" | "WNBA" | "Tennis" | "Other";
 
 export type BookId = "hr" | "dk";
@@ -206,6 +208,8 @@ export type LiveFeed = {
   real: boolean;
   /** Desk `teamvs.built`, only when this panel is showing that table. */
   built?: string;
+  /** Parsed ESPN gamecast. Empty when the summary has no header. */
+  cast?: GameCast;
 };
 
 export type SeriesPoint = { day: string; profit: number; winRate: number | null; iso?: string };

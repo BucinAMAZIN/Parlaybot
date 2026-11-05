@@ -396,6 +396,15 @@ function onClick(event: Event) {
     }
     return;
   }
+  if (act === "feed-full") {
+    const game = action.dataset.game;
+    if (!game) return;
+    if (state.feedFull.has(game)) state.feedFull.delete(game);
+    else state.feedFull.add(game);
+    state.openGames.add(game);
+    paint(false);
+    return;
+  }
   if (act === "feed") {
     const game = action.dataset.game;
     if (!game) return;

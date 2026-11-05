@@ -1,6 +1,7 @@
 import type { Board } from "./board.ts";
 import type { LegPace, LiveFeed, LiveGame, LiveLeg, LiveTicket, Mood, Play, Ticket } from "./types.ts";
 import { propLine } from "../lib/propLine.ts";
+import { gcHum, isFreeThrow, parseCast } from "./gamecast.ts";
 
 /**
  * Same public scoreboard the desk page uses. Summaries fill box score,
@@ -248,7 +249,11 @@ function pbp(summary: Json | undefined, away: string, home: string): LiveFeed["p
     const text = str(item.text) || str(item.description) || str(item.shortText);
     if (!text) return [];
     const team = str(isObj(item.team) ? item.team.abbreviation : item.team) || away;
-    return [{ team: team === home || team === away ? team : away, event: str(item.type) || "Play", when: str(item.clock) || str(item.period) || "", score: str(item.scoreValue) || `${str(item.awayScore)} ${str(item.homeScore)}`.trim(), desc: text, period: str(item.period) || "All" }];
+    const typeText = str(isObj(item.type) ? item.type.text : item.type);
+    const freeThrow = isFreeThrow(typeText, text);
+    const title = gcHum(typeText, text, item.shootingPlay === true, item.scoringPlay === true, freeThrow);
+    const score = [str(item.awayScore), str(item.homeScore)].filter((part) => part !== "").join("  ");
+    return [{ team: team === home || team === away ? team : away, event: title, when: str(isObj(item.clock) ? item.clock.displayValue : item.clock) || str(item.period) || "", score, desc: text, period: str(isObj(item.period) ? item.period.displayValue : item.period) || "All" }];
   });
 }
 
@@ -344,6 +349,10 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
   const fromEspn = espnTeamStats(event.summary);
   const fromDesk = fromEspn.length ? [] : deskRanks(teamVs, event.away.abbr, event.home.abbr);
   const pre = event.state === "pre";
+  const cast = event.summary ? parseCast(event.summary, event.league) ?? undefined : undefined;
+  const awayScore = cast?.away.score ? Number(cast.away.score) : event.away.score;
+  const homeScore = cast?.home.score ? Number(cast.home.score) : event.home.score;
+  const clock = cast?.clock || (pre ? event.detail || "Not started" : event.state === "post" ? "Final" : event.detail || event.clock || "Live");
   return {
     id: event.id,
     league: event.league,
@@ -351,21 +360,31 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
     home: event.home.abbr,
     awayName: event.away.name,
     homeName: event.home.name,
-    awayScore: event.away.score,
-    homeScore: event.home.score,
-    clock: pre ? event.detail || "Not started" : event.state === "post" ? "Final" : event.detail || event.clock || "Live",
+    awayScore: Number.isFinite(awayScore) ? awayScore : event.away.score,
+    homeScore: Number.isFinite(homeScore) ? homeScore : event.home.score,
+    clock,
     start: event.date || undefined,
-    pre,
-    final: event.state === "post",
+    pre: cast ? cast.pre : pre,
+    final: cast ? cast.final : event.state === "post",
     awaySide: { abbr: event.away.abbr, record: "—", standing: "—" },
     homeSide: { abbr: event.home.abbr, record: "—", standing: "—" },
     legs,
     liveFeed: {
-      pbp: pbp(event.summary, event.away.abbr, event.home.abbr),
+      pbp: cast
+        ? cast.plays.slice(0, 12).map((item) => ({
+            team: item.abbr,
+            event: item.title,
+            when: item.when,
+            score: `${item.awayScore}  ${item.homeScore}`.trim(),
+            desc: item.text,
+            period: item.periodKey,
+          }))
+        : pbp(event.summary, event.away.abbr, event.home.abbr),
       box: box(event.summary, names),
       teamStats: fromEspn.length ? fromEspn : fromDesk,
       real: true,
       built: fromEspn.length ? undefined : teamBuilt || undefined,
+      cast,
     },
   };
 }
