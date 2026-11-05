@@ -5,6 +5,7 @@ import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentE
 import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
 import { sliceHistory } from "../src/lib/history.ts";
+import { normProp, normSide, normSport } from "../src/data/gradeLabels.ts";
 import { classifySport, sportLabel } from "../src/lib/sport.ts";
 import { adaptClv } from "../src/data/adaptClv.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
@@ -193,6 +194,54 @@ const month = sliceHistory(history, "30d");
 assert.equal(month.points.length, 3);
 assert.equal(month.starts, "Oct 12");
 assert.equal(sliceHistory(history, "all").starts, null);
+assert.equal(normProp("SOG", "NHL shots on goal"), "SOG");
+assert.equal(normProp("", "anytime td"), "Anytime TD");
+assert.equal(normSide("Franz Wagner Over 0.5", "points", true), "alt");
+assert.equal(normSport("NCAAM"), "NCAAB");
+const blood = adaptDesk(
+  {
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    first_blood: {
+      date: "2026-11-04",
+      name: "First Blood",
+      rolled_off: "First Blood · Wed Nov 4 moved to Results",
+      legs: [{ player: "Old Player", odds: "+400", hr_sid: "1", why: "old" }],
+    },
+    results_v2: { rows: [] },
+  },
+  [],
+);
+assert.equal(blood.tickets.some((ticket) => ticket.productKey === "first"), false);
+assert.equal(blood.notices.some((note) => /moved to Results/.test(note.text)), false);
+const todayBlood = adaptDesk(
+  {
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    first_blood: {
+      date: "2026-11-05",
+      name: "First Blood",
+      sport: "NBA",
+      label: "Thin slate",
+      final: true,
+      locked_at: "Thu Nov 5, 10:10 AM ET",
+      odds: "~+4,588",
+      odds_note: "Estimated from single-leg Hard Rock prices",
+      legs: [{ player: "Example Player", team: "ORL", market: "First Player To Score", odds: "+525", score: 12.68, hr_sid: "615", hr_link: "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/615", dk_absent: true, why: "Volume: shot share\nMatchup: tip", why_not: "Plus money." }],
+    },
+    results_v2: { rows: [] },
+  },
+  [],
+);
+const fb = todayBlood.tickets.find((ticket) => ticket.productKey === "first");
+assert.equal(fb?.plays[0].name, "Example Player");
+assert.equal(fb?.plays[0].hr, "+525");
+assert.equal(fb?.plays[0].dk, null);
+assert.match(fb?.plays[0].detail ?? "", /12\.7%/);
+assert.match(fb?.plays[0].detail ?? "", /Not on DK/);
+assert.match(fb?.stamp ?? "", /Locked · final/);
+assert.match(fb?.stamp ?? "", /Thin slate/);
+assert.match(fb?.meta ?? "", /Estimated/);
+assert.equal(fb?.plays[0].why.line.startsWith("Volume"), true);
+assert.ok(fb?.plays[0].why.why.some((line) => line.startsWith("Matchup")));
 const phi = tables.leagues.NBA.groups.find((group) => group.name === "Atlantic")?.rows.find((row) => row.abbr === "PHI");
 assert.equal(phi?.cells[0], "7-1");
 assert.ok(tables.leagues.NHL.groups.every((group) => group.columns[0] === "W-L-OTL" && group.columns.includes("PTS")));

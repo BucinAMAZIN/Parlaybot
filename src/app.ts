@@ -25,10 +25,19 @@ if (latest) state.openDates.add(latest);
 
 let toastTimer = 0;
 
+function pickedPlays(): Play[] {
+  return [...state.selected].map((id) => findPlay(board, id)).filter((play): play is Play => !!play);
+}
+
+function bookFor(plays: Play[]): "hr" | "dk" {
+  if (plays.length && plays.every((play) => canOpen(play, "hr") && !canOpen(play, "dk"))) return "hr";
+  return state.book;
+}
+
 function selectable(): Play[] {
-  return [...state.selected]
-    .map((id) => findPlay(board, id))
-    .filter((play): play is Play => !!play && canOpen(play, state.book));
+  const plays = pickedPlays();
+  const book = bookFor(plays);
+  return plays.filter((play) => canOpen(play, book));
 }
 
 function applyChrome() {
@@ -66,7 +75,7 @@ function toLink(play: Play): LinkPlay {
   return toLinkPlay(play);
 }
 
-function openScope(scope: string, id: string) {
+function openScope(scope: string, id: string, forced?: "hr" | "dk") {
   let plays: Play[] = [];
   if (scope === "leg") {
     const play = findPlay(board, id);
@@ -74,10 +83,11 @@ function openScope(scope: string, id: string) {
   } else if (scope === "ticket") {
     plays = board.tickets.find((ticket) => ticket.id === id)?.plays ?? [];
   } else {
-    plays = [...state.selected].map((playId) => findPlay(board, playId)).filter((play): play is Play => !!play);
+    plays = pickedPlays();
   }
-  const ready = plays.filter((play) => canOpen(play, state.book));
-  const left = plays.filter((play) => !canOpen(play, state.book));
+  const book = forced ?? (scope === "leg" || scope === "ticket" ? state.book : bookFor(plays));
+  const ready = plays.filter((play) => canOpen(play, book));
+  const left = plays.filter((play) => !canOpen(play, book));
   if (!ready.length) {
     showToast("Nothing to load. A play that is off this book, already started, or already graded stays on the card and is not added to a slip.");
     return;
@@ -87,10 +97,10 @@ function openScope(scope: string, id: string) {
   if (!leg) return;
   const built =
     scope === "leg"
-      ? state.book === "hr"
+      ? book === "hr"
         ? hardRockLegLink(leg)
         : draftKingsLegLink(leg)
-      : state.book === "hr"
+      : book === "hr"
         ? hardRockSlipLink(links)
         : draftKingsSlipLink(links);
   const extra = left.length ? ` Left off the slip: ${left.map((play) => play.name).join(", ")}.` : "";
@@ -209,8 +219,77 @@ function onClick(event: Event) {
   }
   if (act === "range") {
     const key = action.dataset.key;
-    if (key === "14d" || key === "30d" || key === "60d" || key === "90d" || key === "all") state.profitRange = key;
+    if (key === "14d" || key === "30d" || key === "60d" || key === "90d" || key === "all") {
+      state.profitRange = key;
+      state.statsFrom = "";
+      state.statsTo = "";
+      state.statsAnchor = "";
+      state.statsDraft = "";
+    }
     savePrefs(state);
+    paint(false);
+    return;
+  }
+  if (act === "cal-toggle") {
+    state.statsCalOpen = !state.statsCalOpen;
+    paint(false);
+    return;
+  }
+  if (act === "cal-mode") {
+    const mode = action.dataset.key;
+    if (mode === "day" || mode === "week" || mode === "range") state.statsMode = mode;
+    paint(false);
+    return;
+  }
+  if (act === "cal-day") {
+    const date = action.dataset.date || "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    if (state.statsMode === "week") {
+      const [start, end] = weekOf(date);
+      state.statsAnchor = start;
+      state.statsDraft = end;
+    } else if (state.statsMode === "day") {
+      state.statsAnchor = date;
+      state.statsDraft = date;
+    } else if (!state.statsAnchor || state.statsDraft) {
+      state.statsAnchor = date;
+      state.statsDraft = "";
+    } else {
+      state.statsDraft = date;
+    }
+    paint(false);
+    return;
+  }
+  if (act === "cal-apply") {
+    const start = state.statsAnchor;
+    const end = state.statsDraft || state.statsAnchor;
+    if (start && end) {
+      state.statsFrom = start < end ? start : end;
+      state.statsTo = start < end ? end : start;
+      savePrefs(state);
+    }
+    state.statsCalOpen = false;
+    paint(false);
+    return;
+  }
+  if (act === "cal-clear") {
+    state.statsFrom = "";
+    state.statsTo = "";
+    state.statsAnchor = "";
+    state.statsDraft = "";
+    savePrefs(state);
+    paint(false);
+    return;
+  }
+  if (act === "stats-section") {
+    const key = action.dataset.key;
+    if (key === "all" || key === "heist" || key === "safe" || key === "edge" || key === "cappers" || key === "legday") state.statsSection = key;
+    paint(false);
+    return;
+  }
+  if (act === "stats-sport") {
+    const key = action.dataset.key || "";
+    state.statsSport = state.statsSport === key ? "" : key;
     paint(false);
     return;
   }
@@ -258,7 +337,8 @@ function onClick(event: Event) {
     return;
   }
   if (act === "open") {
-    openScope(action.dataset.scope || "leg", action.dataset.id || "");
+    const forced = action.dataset.book === "hr" || action.dataset.book === "dk" ? action.dataset.book : undefined;
+    openScope(action.dataset.scope || "leg", action.dataset.id || "", forced);
     return;
   }
   if (act === "save-share" || act === "send-share") {
@@ -288,8 +368,19 @@ function onChange(event: Event) {
     return;
   }
   bar.hidden = false;
-  const label = state.book === "hr" ? `Load ${plays.length} in Hard Rock` : `Open ${plays.length} selected in DraftKings`;
-  bar.innerHTML = `<button type="button" class="btn ${state.book}" data-act="open" data-scope="selected">${label}</button>`;
+  const book = bookFor(plays);
+  const label = book === "hr" ? `Load ${plays.length} in Hard Rock` : `Open ${plays.length} selected in DraftKings`;
+  bar.innerHTML = `<button type="button" class="btn ${book}" data-act="open" data-scope="selected">${label}</button>`;
+}
+
+function weekOf(iso: string): [string, string] {
+  const [year, month, date] = iso.split("-").map(Number);
+  const when = new Date(Date.UTC(year, month - 1, date));
+  const start = new Date(when);
+  start.setUTCDate(when.getUTCDate() - when.getUTCDay());
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+  return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
 }
 
 export function start() {

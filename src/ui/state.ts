@@ -33,6 +33,15 @@ export type AppState = {
   openDates: Set<string>;
   /** NCAAB group name. Empty uses the first group, which is the AP Top 25. */
   conference: string;
+  /** Custom stats dates. Empty means the 14D/30D/60D/90D/All chip is in charge. */
+  statsFrom: string;
+  statsTo: string;
+  statsCalOpen: boolean;
+  statsMode: "day" | "week" | "range";
+  statsSection: "all" | "heist" | "safe" | "edge" | "cappers" | "legday";
+  statsSport: string;
+  statsAnchor: string;
+  statsDraft: string;
 };
 
 const PREF_KEY = "parlaybot-v1";
@@ -58,6 +67,14 @@ export function defaultState(): AppState {
     profitRange: "14d",
     openDates: new Set(),
     conference: "",
+    statsFrom: "",
+    statsTo: "",
+    statsCalOpen: false,
+    statsMode: "range",
+    statsSection: "all",
+    statsSport: "",
+    statsAnchor: "",
+    statsDraft: "",
   };
 }
 
@@ -73,6 +90,10 @@ export function loadPrefs(state: AppState) {
     if (saved.profitRange === "14d" || saved.profitRange === "30d" || saved.profitRange === "60d" || saved.profitRange === "90d" || saved.profitRange === "all") {
       state.profitRange = saved.profitRange;
     }
+    if (typeof saved.statsFrom === "string" && typeof saved.statsTo === "string" && /^\d{4}-\d{2}-\d{2}$/.test(saved.statsFrom) && /^\d{4}-\d{2}-\d{2}$/.test(saved.statsTo)) {
+      state.statsFrom = saved.statsFrom;
+      state.statsTo = saved.statsTo;
+    }
   } catch {
     /* ignore a bad local save */
   }
@@ -81,6 +102,6 @@ export function loadPrefs(state: AppState) {
 export function savePrefs(state: AppState) {
   localStorage.setItem(
     PREF_KEY,
-    JSON.stringify({ book: state.book, text: state.text, theme: state.theme, alerts: state.alerts, profitRange: state.profitRange }),
+    JSON.stringify({ book: state.book, text: state.text, theme: state.theme, alerts: state.alerts, profitRange: state.profitRange, statsFrom: state.statsFrom, statsTo: state.statsTo }),
   );
 }
