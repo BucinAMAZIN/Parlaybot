@@ -96,6 +96,7 @@ html.day .ranges button.on{background:#17202b;color:#fff}
 .prt b:first-child{flex:1}
 .splits{display:flex;gap:10px;font-size:.78rem;color:#a9b4c2;margin-top:2px;flex-wrap:wrap}
 .alt{color:#c9a227}
+.pr.altrow{margin-left:12px;padding-top:2px}
 .via{display:block;color:#8b97a8;font-size:.75rem;font-weight:600;margin-top:2px}
 html.day .via{color:#3a4656}
 .spk.pos{color:#76f53a}.spk.neg{color:#ff5c5c}

@@ -5,6 +5,7 @@ import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentE
 import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
 import { sliceHistory } from "../src/lib/history.ts";
+import { dedupePlays, playKey } from "../src/data/dedupePlays.ts";
 import { normProp, normSide, normSport } from "../src/data/gradeLabels.ts";
 import { classifySport, sportLabel } from "../src/lib/sport.ts";
 import { adaptClv } from "../src/data/adaptClv.ts";
@@ -207,6 +208,14 @@ assert.equal(normSide("Franz Wagner Over 0.5", "points", true), "alt");
 assert.equal(normSide("Christian Braun 4+ Rebs", "@austinsprops · Other", false), "alt");
 assert.equal(normSide("Josh Giddey o7.5 Asts", "@austinsprops · Other", false), "alt");
 assert.equal(normSide("Kevin Durant o5.5 Rebs", "@austinsprops · Other", false), "alt");
+const braunAlt = { date: "2026-10-28", sport: "NBA", pick: "Christian Braun 4+ Rebs", stat: "0 REB", prop: "NBA alt line · o4.5 → 4+ · @austinsprops", res: "L", uu: -1, leg: false };
+const braunAgain = { date: "2026-10-28", sport: "NBA", pick: "Christian Braun 4+ Rebs", stat: "0 REB", prop: "@austinsprops · Other", res: "L", uu: -1, leg: false };
+const braunLine = { date: "2026-10-28", sport: "NBA", pick: "Christian Braun o4.5 Rebs", stat: "0 REB", prop: "@austinsprops · NBA rebounds (over)", res: "L", uu: -1, leg: false };
+assert.equal(playKey(braunAlt), playKey(braunAgain));
+assert.notEqual(playKey(braunAlt), playKey(braunLine));
+const deduped = dedupePlays([braunAlt, braunAgain, braunLine, { date: "2026-10-29", sport: "NBA", pick: "Christian Braun 4+ Rebs", stat: "0 REB", prop: "@austinsprops · Other", res: "W", uu: 0.4, leg: false }]);
+assert.equal(deduped.rows.length, 3);
+assert.equal(deduped.droppedUnits.get("2026-10-28"), -1);
 assert.equal(normSide("Cameron Boozer o24.5 PR", "@austinsprops · Other", false), "alt");
 assert.equal(normSport("NCAAM"), "NCAAB");
 const blood = adaptDesk(

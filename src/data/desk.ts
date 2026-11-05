@@ -19,6 +19,7 @@ import type {
 import type { CardNote } from "../lib/cardFilter.ts";
 import { formatSigned } from "../lib/format.ts";
 import { classifySport, sportLabel } from "../lib/sport.ts";
+import { dedupePlays } from "./dedupePlays.ts";
 import { capperOf, normProp, normSide, normSport } from "./gradeLabels.ts";
 import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
@@ -329,7 +330,7 @@ function night(rows: Row[], iso: string, clv: Map<string, number>): { results: S
   };
 }
 
-function seriesFrom(chart: unknown, rows: Row[], year: number): SeriesPoint[] {
+function seriesFrom(chart: unknown, rows: Row[], year: number, droppedUnits?: Map<string, number>): SeriesPoint[] {
   const last = new Map<string, number>();
   const order: string[] = [];
   for (const pair of list(chart)) {
@@ -361,12 +362,23 @@ function seriesFrom(chart: unknown, rows: Row[], year: number): SeriesPoint[] {
     nextMonth = month;
     isos[index] = `${cursor}-${monthText.padStart(2, "0")}-${dateText.padStart(2, "0")}`;
   }
-  return order.map((day, index) => {
+  const points = order.map((day, index) => {
     const iso = isos[index];
     const bucket = byDay.get(iso);
     const rate = bucket ? pctOf(bucket.w, bucket.l) : null;
     return { day, iso, profit: last.get(day) ?? 0, winRate: rate };
   });
+  if (!droppedUnits?.size) return points;
+  let debt = 0;
+  let prev = "";
+  for (const point of points) {
+    for (const [iso, units] of droppedUnits) {
+      if (iso > prev && point.iso && iso <= point.iso) debt += units;
+    }
+    point.profit -= debt;
+    prev = point.iso ?? prev;
+  }
+  return points;
 }
 
 function gradesFrom(rows: Row[]): GradeMark[] {
@@ -602,10 +614,11 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   if (!rowsOf(td.legs).length && str(td.rolled_off || td.msg)) notices.push({ text: str(td.rolled_off || td.msg), section: "lotto", sport: null });
 
   const resultRows = rowsOf(isRow(data.results_v2) ? data.results_v2.rows : null);
-  const graded = lastGraded(resultRows, iso || "9999");
+  const unique = dedupePlays(resultRows);
+  const graded = lastGraded(unique.rows, iso || "9999");
   const clv = adaptClv(data.clv);
   const settled = graded
-    ? night(resultRows, graded, clv ? clvLookup(clv.plays) : new Map())
+    ? night(unique.rows, graded, clv ? clvLookup(clv.plays) : new Map())
     : { results: [], recap: { when: "No graded night in the file", units: "—", summary: "Nothing to total.", rows: [] } };
   const year = Number((iso || graded || "2026").slice(0, 4)) || 2026;
 
@@ -625,15 +638,15 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     liveMood: null,
     results: settled.results,
     recap: settled.recap,
-    series: seriesFrom(isRow(data.record) ? data.record.chart : null, resultRows, year),
-    grades: gradesFrom(resultRows),
-    rings: ringsFrom(resultRows),
+    series: seriesFrom(isRow(data.record) ? data.record.chart : null, unique.rows, year, unique.droppedUnits),
+    grades: gradesFrom(unique.rows),
+    rings: ringsFrom(unique.rows),
     nascar: { when: "", rows: [] },
     edgePicks: [],
     edgeSkipped: 0,
     stars: starTeams(tickets),
     standings: adaptDeskStandings((isRow(data.standings) ? data.standings : {}) as DeskStandings, ncaab),
-    privateStats: privateFrom(data, resultRows),
+    privateStats: privateFrom(data, unique.rows),
     teamVs: data.teamvs ?? null,
     updated: updatedLabel(data.generated),
     heistStamp: heistMark,

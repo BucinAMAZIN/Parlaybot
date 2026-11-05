@@ -117,6 +117,14 @@ function sportCards(grades: GradeMark[], open: string): string {
     .join("");
 }
 
+function propRow(name: string, list: GradeMark[], splits: string, note: string, alt: boolean): string {
+  if (!list.length) return "";
+  const wins = list.filter((row) => row.win).length;
+  const units = list.reduce((sum, row) => sum + row.units, 0);
+  const pct = Math.round((wins / list.length) * 100);
+  return `<div class="pr${alt ? " altrow" : ""}"><div class="prt"><b>${esc(name)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span></div>${splits ? `<div class="splits">${splits}</div>` : ""}${note}</div>`;
+}
+
 function propBlock(rows: GradeMark[]): string {
   const groups = new Map<string, GradeMark[]>();
   for (const row of rows) {
@@ -127,22 +135,21 @@ function propBlock(rows: GradeMark[]): string {
   const body = [...groups.entries()]
     .sort((a, b) => (a[0] === "Misc" ? 1 : b[0] === "Misc" ? -1 : b[1].length - a[1].length))
     .map(([prop, list]) => {
-      const wins = list.filter((row) => row.win).length;
-      const units = list.reduce((sum, row) => sum + row.units, 0);
-      const pct = list.length ? Math.round((wins / list.length) * 100) : 0;
-      const splits = (["over", "under", "alt"] as const)
+      const regular = list.filter((row) => row.side !== "alt");
+      const alts = list.filter((row) => row.side === "alt");
+      const splits = (["over", "under"] as const)
         .map((side) => {
-          const subset = list.filter((row) => row.side === side);
+          const subset = regular.filter((row) => row.side === side);
           if (!subset.length) return "";
-          const w = subset.filter((row) => row.win).length;
-          const label = side === "over" ? "Over" : side === "under" ? "Under" : "Alt line";
-          const via = [...new Set(subset.filter((row) => row.detail && row.capper).map((row) => row.capper as string))];
-          const note = side === "alt" && via.length ? ` <span class="via">via ${via.map((name) => esc(name)).join(", ")}</span>` : "";
-          return `<span class="${side === "alt" ? "alt" : ""}">${label} ${w}-${subset.length - w}${note}</span>`;
+          const wins = subset.filter((row) => row.win).length;
+          const label = side === "over" ? "Over" : "Under";
+          return `<span>${label} ${wins}-${subset.length - wins}</span>`;
         })
         .filter(Boolean)
         .join("");
-      return `<div class="pr"><div class="prt"><b>${esc(prop)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span></div><div class="splits">${splits}</div></div>`;
+      const via = [...new Set(alts.map((row) => row.capper).filter((name): name is string => !!name))];
+      const note = via.length ? `<div class="via">${via.map((name) => `via ${esc(name)}`).join(" · ")}</div>` : "";
+      return `${propRow(prop, regular, splits, "", false)}${propRow(`${prop} Alt`, alts, "", note, true)}`;
     })
     .join("");
   return `<div class="props">${body}</div>`;
