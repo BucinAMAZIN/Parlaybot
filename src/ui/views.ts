@@ -567,11 +567,14 @@ export function renderSheet(state: AppState, board: Board): string {
 <div class="srow"><b>Book</b><div class="toggle"><button type="button" class="${state.book === "hr" ? "on" : ""}" data-act="book" data-book="hr">Hard Rock</button><button type="button" class="${state.book === "dk" ? "on" : ""}" data-act="book" data-book="dk">DraftKings</button></div></div>
 <div class="srow"><b>Theme</b><div class="toggle"><button type="button" class="${state.theme === "night" ? "on" : ""}" data-act="theme" data-theme="night">Night</button><button type="button" class="${state.theme === "day" ? "on" : ""}" data-act="theme" data-theme="day">Day</button></div></div>
 <div class="srow"><b>Text size</b><div class="toggle">${size("md", "A", "1rem")}${size("lg", "A", "1.25rem")}${size("xl", "A", "1.5rem")}</div></div>
-${alertRow("Locks", "When today's tickets lock", state.alerts.locks, "locks")}
-${alertRow("Finals", "When a ticket settles", state.alerts.finals, "finals")}
-${alertRow("NFL red zone / TD", "Your TD legs in the red zone", state.alerts.redzone, "redzone")}
-${alertRow("Price moves on locked picks", "Off until you turn it on", state.alerts.price, "price")}
-<p class="sub">Saved on this phone. v1 has no push server, so these switches do not send alerts.</p>
+<h3>Phone alerts</h3>
+<p class="sub" id="push-status" role="status">${esc(pushStatusText(state))}</p>
+${pushRow("New picks", "When a new pick is added", state.pushDelivery === "on" && state.pushWant.picks, "picks")}
+${pushRow("Ticket locks", "When a ticket locks", state.pushDelivery === "on" && state.pushWant.locks, "locks")}
+${alertRow("Finals", "Saved on this phone only", state.alerts.finals, "finals")}
+${alertRow("NFL red zone / TD", "Saved on this phone only", state.alerts.redzone, "redzone")}
+${alertRow("Price moves on locked picks", "Saved on this phone only", state.alerts.price, "price")}
+<p class="sub">Finals, red zone, and price switches do not send notifications.</p>
 ${board.uiBuild ? `<p class="stamp about">${esc(board.uiBuild)}</p>` : ""}
 <div class="tfoot"><button type="button" class="btn share" data-act="close">Close</button></div></div></div>`;
   }
@@ -586,6 +589,20 @@ ${board.uiBuild ? `<p class="stamp about">${esc(board.uiBuild)}</p>` : ""}
     return `<div class="sheetback" data-act="close"><div class="sheet"><h2>Share</h2><p>This ticket can't be shared.</p><button type="button" class="btn share" data-act="close">Close</button></div></div>`;
   }
   return `<div class="sheetback" data-act="close"><div class="sheet"><div class="grab"></div><h2>Share ticket</h2><div class="sub">Friends see the legs, odds and result. No profit or bankroll.</div>${sharePreview(card)}<div class="tfoot"><button type="button" class="btn share" data-act="save-share">Save image</button><button type="button" class="btn hr" data-act="send-share">Send to friends</button></div></div></div>`;
+}
+
+function pushStatusText(state: AppState): string {
+  if (state.pushDelivery === "unsupported") return "This browser can't receive closed-app alerts.";
+  if (state.pushDelivery === "standalone") return "On iPhone, add ParlayBOT to your Home Screen, open that icon, then turn alerts on.";
+  if (state.pushDelivery === "denied") return "Notifications are blocked. Allow them for ParlayBOT in system settings.";
+  if (state.pushDelivery === "unavailable") return "Alert delivery isn't set up yet, so this phone will not be notified.";
+  if (state.pushDelivery === "on") return "On. Alerts can arrive while ParlayBOT is closed. No profit or units are included.";
+  if (state.pushDelivery === "unknown") return "Checking whether this phone can receive alerts.";
+  return "Off. Turn on new picks or ticket locks to subscribe this phone.";
+}
+
+function pushRow(title: string, sub: string, on: boolean, kind: string): string {
+  return `<div class="srow"><div><b>${esc(title)}</b><div class="sub">${esc(sub)}</div></div><button type="button" class="sw ${on ? "" : "no"}" data-act="push" data-kind="${kind}" aria-pressed="${on}" aria-label="${esc(title)}, ${on ? "on" : "off"}"></button></div>`;
 }
 
 function alertRow(title: string, sub: string, on: boolean, key: string): string {

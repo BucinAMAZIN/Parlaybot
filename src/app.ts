@@ -14,6 +14,7 @@ import { shareCardIsPrivate } from "./lib/shareCard.ts";
 import { canvasBlob, drawShareCard } from "./lib/shareImage.ts";
 import { canOpen, toLinkPlay } from "./ui/bits.ts";
 import { cardForShare, render, sportsFor } from "./ui/views.ts";
+import { disablePush, readPushDelivery, subscribePush } from "./lib/pushClient.ts";
 import { defaultState, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
 
 const EMPTY_NCAAB: StandingLeague = { note: "No data yet", columns: [], groups: [] };
@@ -200,6 +201,7 @@ function onClick(event: Event) {
   if (act === "settings") {
     state.sheet = { kind: "settings" };
     paint(false);
+    void refreshPushStatus();
     return;
   }
   if (act === "rules") {
@@ -223,6 +225,12 @@ function onClick(event: Event) {
     state.text = size === "lg" || size === "xl" ? size : "md";
     savePrefs(state);
     paint(false);
+    return;
+  }
+  if (act === "push") {
+    const kind = action.dataset.kind;
+    if (kind !== "picks" && kind !== "locks") return;
+    void togglePush(kind);
     return;
   }
   if (act === "alert") {
@@ -398,6 +406,30 @@ function onChange(event: Event) {
   const book = bookFor(plays);
   const label = book === "hr" ? `Load ${plays.length} in Hard Rock` : `Open ${plays.length} selected in DraftKings`;
   bar.innerHTML = `<button type="button" class="btn ${book}" data-act="open" data-scope="selected">${label}</button>`;
+}
+
+async function refreshPushStatus() {
+  state.pushDelivery = await readPushDelivery(state.pushWant, state.pushAck);
+  if (state.sheet?.kind === "settings") paint(false);
+}
+
+async function togglePush(kind: "picks" | "locks") {
+  const next = { ...state.pushWant, [kind]: !(state.pushDelivery === "on" && state.pushWant[kind]) };
+  if (!next.picks && !next.locks) {
+    const result = await disablePush();
+    state.pushWant = next;
+    state.pushAck = result.ack;
+    state.pushDelivery = result.delivery;
+    savePrefs(state);
+    paint(false);
+    return;
+  }
+  const result = await subscribePush(next);
+  state.pushWant = result.delivery === "on" ? next : state.pushWant;
+  state.pushAck = result.ack;
+  state.pushDelivery = result.delivery;
+  savePrefs(state);
+  paint(false);
 }
 
 function weekOf(iso: string): [string, string] {
