@@ -12,7 +12,7 @@ import {
 } from "./lib/links.ts";
 import { shareCardIsPrivate } from "./lib/shareCard.ts";
 import { canvasBlob, drawShareCard } from "./lib/shareImage.ts";
-import { canOpen, toLinkPlay } from "./ui/bits.ts";
+import { canOpen, linkMismatch, toLinkPlay } from "./ui/bits.ts";
 import { cardForShare, render, sportsFor } from "./ui/views.ts";
 import { disablePush, readPushDelivery, subscribePush } from "./lib/pushClient.ts";
 import { defaultState, knownView, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
@@ -105,7 +105,10 @@ function openScope(scope: string, id: string, forced?: "hr" | "dk") {
   const ready = plays.filter((play) => canOpen(play, book));
   const left = plays.filter((play) => !canOpen(play, book));
   if (!ready.length) {
-    showToast("Nothing to load. A play that is off this book, already started, or already graded stays on the card and is not added to a slip.");
+    const mismatched = book === "hr" ? plays.filter((play) => linkMismatch(play, "hr")) : [];
+    showToast(mismatched.length
+      ? "Hard Rock link unavailable. The stored selection opens a different game or prop, so it is not launched."
+      : "Nothing to load. A play that is off this book, already started, or already graded stays on the card and is not added to a slip.");
     return;
   }
   const links = ready.map(toLink);

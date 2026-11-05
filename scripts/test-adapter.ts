@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { adaptEdgePicks, flatUnitResult, gradeResult, inStarBand } from "../src/data/adaptEdgePicks.ts";
 import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentEdgeFeed.ts";
-import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
+import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink, HR_MISMATCH_NOTE } from "../src/lib/links.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
 import { fileBounds, historyScope, sliceHistory } from "../src/lib/history.ts";
 import { matchingPlays } from "../src/ui/statsScreen.ts";
@@ -104,6 +104,48 @@ if (slip.status === "ready") {
   assert.equal(slip.url, "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/111,222");
   assert.match(slip.detail ?? "", /Not on HR/);
 }
+const wrongSid = "1051261159191216543";
+const wrong = hardRockLegLink({
+  id: "mcneese",
+  name: "McNeese Cowboys ML (vs UNT; CBB free play)",
+  hrSid: wrongSid,
+  hrLink: `https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/${wrongSid}`,
+});
+assert.equal(wrong.status, "mismatch");
+if (wrong.status === "mismatch") assert.equal(wrong.detail, HR_MISMATCH_NOTE);
+assert.equal(JSON.stringify(wrong).includes(wrongSid), false);
+const mixed = hardRockSlipLink([
+  { id: "ok", name: "Other play", hrSid: "111" },
+  { id: "mcneese", name: "McNeese Cowboys ML (vs UNT; CBB free play)", hrSid: wrongSid },
+]);
+assert.equal(mixed.status, "ready");
+if (mixed.status === "ready") {
+  assert.equal(mixed.url.includes(wrongSid), false);
+  assert.match(mixed.url, /betslip\/111$/);
+  assert.match(mixed.detail ?? "", /Not launched/);
+}
+const onlyWrong = hardRockSlipLink([{ id: "mcneese", name: "McNeese Cowboys ML", hrSid: wrongSid }]);
+assert.equal(onlyWrong.status, "mismatch");
+const capperBoard = adaptDesk(
+  {
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    cappers: [{
+      name: "@showtimepicks2",
+      today: [
+        { sport: "NCAAB", pick: "McNeese Cowboys ML (vs UNT; CBB free play)", odds: "-142", hr_sid: wrongSid, hr_link: `https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/${wrongSid}`, game: "MCN @ UNT" },
+        { sport: "Tennis", pick: "Tomas Martin Etcheverry ML (rare tennis play)", odds: "-135" },
+      ],
+    }],
+    results_v2: { rows: [] },
+  },
+  { note: "", columns: [], groups: [] },
+);
+const showtime = capperBoard.tickets.find((item) => item.productKey === "cappers")?.plays ?? [];
+assert.equal(showtime[0]?.name.includes("McNeese"), true);
+assert.equal(showtime[0]?.hrSid, wrongSid);
+assert.equal(showtime[1]?.name.includes("Etcheverry"), true);
+assert.equal(showtime[1]?.hrSid, undefined);
+assert.equal(hardRockLegLink({ id: showtime[0].id, name: showtime[0].name, hrSid: showtime[0].hrSid, hrLink: showtime[0].hrLink }).status, "mismatch");
 
 const dkSid = "0QA385792709#2349946626_13L42648Q1-1115091407Q20";
 const dkLink = `https://sportsbook.draftkings.com/event/34937000?outcomes=${encodeURIComponent(dkSid)}`;

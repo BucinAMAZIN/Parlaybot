@@ -31,7 +31,18 @@ export type LinkPlay = {
 export type BuiltLink =
   | { status: "ready"; url: string; detail?: string }
   | { status: "legs"; urls: { name: string; url: string }[]; detail: string }
-  | { status: "missing"; detail: string };
+  | { status: "missing"; detail: string }
+  | { status: "mismatch"; detail: string };
+
+/**
+ * Selection ids confirmed to open a different game or prop than the desk row they are stored on.
+ * 1051261159191216543 is the hr_sid and hr_link on @showtimepicks2 "McNeese Cowboys ML (vs UNT; CBB free play)".
+ * The public share page does not name the market, and the file has no second verified McNeese ML id.
+ */
+const HR_WRONG_SELECTION = new Set(["1051261159191216543"]);
+
+export const HR_MISMATCH_NOTE =
+  "Hard Rock link unavailable. The stored selection id opens a different game or prop, so it is not launched.";
 
 const HR_ORIGIN = "https://share.hardrock.bet/";
 const HR_SLIP = "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/";
@@ -56,6 +67,7 @@ function hrUrl(sid: string): string {
 
 export function hardRockLegLink(play: LinkPlay): BuiltLink {
   const sid = hrSidOf(play);
+  if (sid && HR_WRONG_SELECTION.has(sid)) return { status: "mismatch", detail: HR_MISMATCH_NOTE };
   if (!sid) return { status: "missing", detail: `Not on HR. ${play.name} has no Hard Rock selection id.` };
   const stored = play.hrLink ?? "";
   if (stored.startsWith(HR_ORIGIN) && stored.endsWith(`/betslip/${sid}`)) return { status: "ready", url: stored };
@@ -65,14 +77,24 @@ export function hardRockLegLink(play: LinkPlay): BuiltLink {
 export function hardRockSlipLink(plays: LinkPlay[]): BuiltLink {
   const sids: string[] = [];
   const missing: string[] = [];
+  const held: string[] = [];
   for (const play of plays) {
     const sid = hrSidOf(play);
+    if (sid && HR_WRONG_SELECTION.has(sid)) {
+      held.push(play.name);
+      continue;
+    }
     if (!sid) missing.push(play.name);
     else if (!sids.includes(sid)) sids.push(sid);
   }
+  if (!sids.length && held.length) return { status: "mismatch", detail: `${HR_MISMATCH_NOTE} Not launched: ${held.join(", ")}.` };
   if (!sids.length) return { status: "missing", detail: "Not on HR. None of these plays have a Hard Rock selection id." };
   const url = hrUrl(sids.join(","));
-  if (missing.length) return { status: "ready", url, detail: `Not on HR: ${missing.join(", ")}.` };
+  const notes = [
+    missing.length ? `Not on HR: ${missing.join(", ")}.` : "",
+    held.length ? `Not launched: ${held.join(", ")}. ${HR_MISMATCH_NOTE}` : "",
+  ].filter(Boolean);
+  if (notes.length) return { status: "ready", url, detail: notes.join(" ") };
   return { status: "ready", url };
 }
 

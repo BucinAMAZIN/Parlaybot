@@ -49,8 +49,14 @@ export function canOpen(play: Play, book: BookId): boolean {
   return built.status === "ready";
 }
 
+export function linkMismatch(play: Play, book: BookId): boolean {
+  if (book !== "hr") return false;
+  return hardRockLegLink(toLinkPlay(play)).status === "mismatch";
+}
+
 /** Main list: a real selection id, or a blocked play that still has this book's price. */
 export function listedOn(play: Play, book: BookId): boolean {
+  if (linkMismatch(play, book)) return true;
   if (play.blocked && priceOn(play, book)) return true;
   return canOpen(play, book);
 }
@@ -93,7 +99,8 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   const chipRow = chips.length ? `<div class="chips">${chips.join("")}</div>` : "";
   const grade = play.gradeNote ? `<div class="sub ${play.gradeNote.tone}">${esc(play.gradeNote.text)}</div>` : "";
   let button: string;
-  if (off || (!blocked && !canOpen(play, book))) button = `<span class="na">Not on ${bookCode(book)}</span>`;
+  if (!off && linkMismatch(play, book)) button = `<span class="na">Hard Rock link unavailable. The stored selection opens a different game or prop.</span>`;
+  else if (off || (!blocked && !canOpen(play, book))) button = `<span class="na">Not on ${bookCode(book)}</span>`;
   else if (play.blocked === "started") button = `<span class="na">Blocked: game started</span>`;
   else if (play.blocked === "graded") button = `<span class="na">Graded · game over</span>`;
   else button = `<button type="button" class="btn ${book}" data-act="open" data-scope="leg" data-id="${esc(play.id)}" data-book="${book}">Open in ${bookName(book)}</button>`;
