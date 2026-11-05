@@ -50,7 +50,7 @@ export type AppState = {
   statsSport: string;
   statsAnchor: string;
   statsDraft: string;
-  /** Last night disclosure. Starts closed and is not saved. */
+  /** Yesterday’s Results disclosure. Starts closed and is not saved. */
   nightOpen: boolean;
   /** Open prop list. Null on the Results overview. Not saved. */
   resultsPick: { sport: string; prop: string; alt: boolean } | null;
