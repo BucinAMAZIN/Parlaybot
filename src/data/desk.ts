@@ -1,3 +1,4 @@
+import { adaptClv, clvLookup, normPick } from "./adaptClv.ts";
 import { adaptDeskStandings, type DeskStandings } from "./adaptStandings.ts";
 import type { Board, PrivateStats, StatRow } from "./board.ts";
 import type {
@@ -258,7 +259,7 @@ function pctOf(w: number, l: number): number | null {
   return w + l ? Math.round((w / (w + l)) * 100) : null;
 }
 
-function night(rows: Row[], iso: string): { results: SettledTicket[]; recap: Recap } {
+function night(rows: Row[], iso: string, clv: Map<string, number>): { results: SettledTicket[]; recap: Recap } {
   const day = rows.filter((row) => str(row.date) === iso && row.leg !== true && ["W", "L", "V", "P"].includes(str(row.res)));
   const byCat = new Map<string, Row[]>();
   for (const row of day) {
@@ -275,13 +276,16 @@ function night(rows: Row[], iso: string): { results: SettledTicket[]; recap: Rec
   for (const [cat, items] of byCat) {
     const legs: SettledLeg[] = items.map((row) => {
       const res = str(row.res) as SettledLeg["result"];
+      const name = str(row.pick) || str(row.prop) || "Play";
+      const clvPct = clv.get(`${iso}|${normPick(name)}`);
       return {
-        name: str(row.pick) || str(row.prop) || "Play",
+        name,
         stat: [str(row.prop), str(row.odds)].filter(Boolean).join(" · "),
         result: res,
         grade: "",
         note: str(row.stat),
         beatClose: null,
+        clvPct,
       };
     });
     const w = legs.filter((leg) => leg.result === "W").length;
@@ -548,7 +552,10 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
 
   const resultRows = rowsOf(isRow(data.results_v2) ? data.results_v2.rows : null);
   const graded = lastGraded(resultRows, iso || "9999");
-  const settled = graded ? night(resultRows, graded) : { results: [], recap: { when: "No graded night in the file", units: "—", summary: "Nothing to total.", rows: [] } };
+  const clv = adaptClv(data.clv);
+  const settled = graded
+    ? night(resultRows, graded, clv ? clvLookup(clv.plays) : new Map())
+    : { results: [], recap: { when: "No graded night in the file", units: "—", summary: "Nothing to total.", rows: [] } };
   const year = Number((iso || graded || "2026").slice(0, 4)) || 2026;
 
   return {
@@ -583,5 +590,6 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     standingsUpdated: standingsLabel(data.standings),
     uiBuild: uiBuildLabel(data.ui_build),
     teamBuilt: builtLabel(data.teamvs),
+    clv,
   };
 }

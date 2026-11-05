@@ -265,6 +265,11 @@ function onClick(event: Event) {
 
 function onChange(event: Event) {
   const input = event.target as HTMLInputElement;
+  if (input.matches?.("select[data-act='conference']")) {
+    state.conference = input.value;
+    paint(false);
+    return;
+  }
   if (!input.matches?.(".chk input")) return;
   const id = input.dataset.id;
   if (!id) return;

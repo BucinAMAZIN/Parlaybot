@@ -26,7 +26,8 @@ Screens are laid out for 360px and 390px, including the large-text settings (A /
 | Live scores | `src/data/espn.ts` | ESPN scoreboard and summary, the same public URLs the desk page uses. |
 | Fixture | `fixtures/edge-picks-sample.json` | Offline fallback only, labeled SAMPLE DATA when the desk file does not load. |
 | Sample card | `src/data/sampleBoard.ts` | Fallback card. Not used once the desk file loads. |
-| Standings adapter | `src/data/adaptStandings.ts` | `fixtures/desk-standings.json` is the desk snapshot for NBA, NHL, NFL, MLB, and NCAAF. NCAAB stays the labeled sample in `src/data/standings.sample.json`. |
+| Standings adapter | `src/data/adaptStandings.ts` | Desk standings for NBA, NHL, NFL, MLB, NCAAF, and NCAAB. NCAAB falls back to the labeled sample only when that league is missing from the file. |
+| Closing line value | `src/data/adaptClv.ts` | Private Stats card and a chip on a graded result when the pick matches `clv.plays`. |
 | Book links | `src/lib/links.ts` | Hard Rock betslip URL and DraftKings single-leg URL, matching the live desk. Multi-leg DK opens each leg on its own. No id means Not on HR or Not on DK. |
 | Share image | `src/lib/shareCard.ts` and `src/lib/shareImage.ts` | Ticket legs, odds, and result. No units, profit, or bankroll. |
 

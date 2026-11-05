@@ -17,6 +17,7 @@ import {
   series,
 } from "./sampleBoard.ts";
 import { standings as fallbackStandings } from "./standings.ts";
+import type { ClvCard } from "./adaptClv.ts";
 import type { Capper, LiveGame, LiveTicket, Mood, Play, Recap, SeriesPoint, SettledTicket, StandingsFile, Ticket } from "./types.ts";
 
 export type StatRow = { name: string; sub: string; right: string };
@@ -64,6 +65,7 @@ export type Board = {
   standingsUpdated: string | null;
   uiBuild: string | null;
   teamBuilt: string | null;
+  clv: ClvCard | null;
 };
 
 const ALIAS: Record<string, string> = { NYK: "NY" };
@@ -111,6 +113,7 @@ export function loadBoard(): Board {
     standingsUpdated: null,
     uiBuild: null,
     teamBuilt: null,
+    clv: null,
   };
 }
 

@@ -84,6 +84,8 @@ export type SettledLeg = {
   note: string;
   /** Null when the feed has no closing-line note. */
   beatClose: boolean | null;
+  /** Closing-line percent when a CLV play matches this graded pick. */
+  clvPct?: number;
 };
 
 export type SettledTicket = {
@@ -166,7 +168,9 @@ export type StandingRow = {
 
 export type StandingGroup = { name: string; columns: string[]; rows: StandingRow[] };
 
-export type StandingLeague = { note: string; columns: string[]; groups: StandingGroup[] };
+export type StandingGame = { away: string; home: string; when: string };
+
+export type StandingLeague = { note: string; columns: string[]; groups: StandingGroup[]; games?: StandingGame[] };
 
 export type StandingsFile = {
   source: string;

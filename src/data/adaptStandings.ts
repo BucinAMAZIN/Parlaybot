@@ -1,9 +1,8 @@
 import type { StandingGroup, StandingLeague, StandingRow, StandingsFile } from "./types.ts";
 
 /**
- * Desk standings snapshot (NBA, NHL, NFL, MLB, NCAAF).
- * Row shape from data.json standings.leagues: t, ab, rec, pct, gb, pts, home, road, l10, strk, diff, div.
- * NCAAB is not in that file and stays the labeled sample league passed in.
+ * Desk standings snapshot. Row shape: t, ab, rec, pct, gb, pts, home, road, l10, strk, diff, div.
+ * NCAAB uses the same league object when it is present. The sample league is only the fallback.
  */
 
 export type DeskRow = {
@@ -19,13 +18,18 @@ export type DeskRow = {
   strk?: string | null;
   diff?: string | null;
   div?: string | null;
+  seed?: string | null;
 };
+
+export type DeskGame = { a?: string | null; h?: string | null; st?: string | null };
 
 export type DeskGroup = { name?: string; rows?: DeskRow[] };
 
+export type DeskLeague = { groups?: DeskGroup[]; games?: DeskGame[]; note?: string };
+
 export type DeskStandings = {
   updated?: string;
-  leagues?: Record<string, { groups?: DeskGroup[]; note?: string }>;
+  leagues?: Record<string, DeskLeague>;
 };
 
 const NBA_COLS = ["W-L", "PCT", "GB", "Home", "Away", "L10", "Strk", "Diff", "Div"];
@@ -120,6 +124,52 @@ function ncaaf(groups: DeskGroup[]): StandingGroup[] {
   });
 }
 
+const NCAAB_CONF = ["W-L", "PCT", "GB", "Home", "Away", "Strk", "Conf", "Diff"];
+
+function ncaabLeague(raw: DeskLeague | undefined, fallback: StandingLeague, when: string): StandingLeague {
+  const source = raw?.groups ?? [];
+  if (!source.length) return fallback;
+  const groups = [...source].sort((a, b) => Number(/^ap\b/i.test(b.name || "")) - Number(/^ap\b/i.test(a.name || "")));
+  const tables = groups.map((group) => {
+    const ap = /^ap\b/i.test(group.name || "");
+    return {
+      name: group.name || "NCAAB",
+      columns: ap ? ["W-L"] : NCAAB_CONF,
+      rows: (group.rows ?? []).map((row, index) => {
+        const title = String(row.t || row.ab || "");
+        const ranked = /^(\d+)\.\s*(.*)$/.exec(title);
+        if (ap) {
+          return {
+            rank: ranked ? Number(ranked[1]) : index + 1,
+            abbr: text(row.ab, "?"),
+            label: ranked ? ranked[2] : title,
+            cells: [text(row.rec)],
+            starred: false,
+          };
+        }
+        const seed = Number(row.seed);
+        return {
+          rank: Number.isFinite(seed) && seed > 0 ? seed : index + 1,
+          abbr: text(row.ab, "?"),
+          label: title,
+          cells: [wl(row), text(row.pct), text(row.gb, "-"), text(row.home), text(row.road), text(row.strk), text(row.div), text(row.diff)],
+          starred: false,
+        };
+      }),
+    };
+  });
+  const games = (raw?.games ?? []).flatMap((game) => {
+    const away = text(game.a, "");
+    const home = text(game.h, "");
+    if (!away || !home || away === "–" || home === "–") return [];
+    return [{ away, home, when: text(game.st, "") }];
+  });
+  const note = raw?.note?.trim()
+    ? `${when} ${raw.note}`
+    : `${when} NCAAB. AP Top 25 is the record in the file. Conferences use W-L, PCT, GB, home, away, streak, conference record, and diff.`;
+  return { note, columns: NCAAB_CONF, groups: tables, games };
+}
+
 function league(note: string, columns: string[], groups: StandingGroup[]): StandingLeague {
   return { note, columns, groups };
 }
@@ -141,7 +191,7 @@ export function adaptDeskStandings(raw: DeskStandings, ncaab: StandingLeague): S
       NFL: league(`${when} NFL by division. L10 is blank in this snapshot.`, NBA_COLS, nfl),
       MLB: league(`${when} ${mlbNote}RS and RA are not in the snapshot, so those columns are omitted.`, MLB_COLS, baseball),
       NCAAF: league(`${when} NCAAF. AP Top 25 is overall record and rank only. Conference tables use the snapshot's div, home, away, streak, and diff. PF and PA are not in the file.`, NCAAF_AP_COLS, college),
-      NCAAB: ncaab,
+      NCAAB: ncaabLeague(leagues.NCAAB, ncaab, when),
     },
   };
 }

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { adaptEdgePicks, flatUnitResult, gradeResult, inStarBand } from "../src/data/adaptEdgePicks.ts";
 import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentEdgeFeed.ts";
 import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
+import { adaptClv } from "../src/data/adaptClv.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
 import { adaptDesk } from "../src/data/desk.ts";
 import { builtLabel, clockEt, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../src/lib/stamps.ts";
@@ -129,6 +130,43 @@ assert.equal(count("NHL"), 32);
 assert.equal(count("NFL"), 32);
 assert.equal(count("NBA"), 30);
 assert.ok(tables.leagues.NCAAB.note.includes("SAMPLE"));
+const withCollege = adaptDeskStandings(
+  {
+    updated: "2026-11-05 08:43 AM ET",
+    leagues: {
+      NCAAB: {
+        games: [{ a: "WAKE", h: "VAN", st: "11/5 - 6:00 PM EST" }],
+        groups: [
+          { name: "AP Top 25", rows: [{ t: "1. Florida", ab: "FLA", rec: "0-0" }] },
+          { name: "Big Ten Conference", rows: [{ t: "Bryant Bulldogs", ab: "BRY", rec: "1-0", pct: "1.000", gb: "-", home: "1-0", road: "0-0", strk: "W1", div: "0-0", diff: "+5", seed: "1" }] },
+        ],
+      },
+    },
+  },
+  sampleNcaab,
+);
+assert.equal(withCollege.leagues.NCAAB.groups[0].name, "AP Top 25");
+assert.equal(withCollege.leagues.NCAAB.groups[0].rows[0].label, "Florida");
+assert.equal(withCollege.leagues.NCAAB.groups[1].rows[0].cells[0], "1-0");
+assert.equal(withCollege.leagues.NCAAB.groups[1].columns.includes("PCT"), true);
+assert.equal(withCollege.leagues.NCAAB.games?.[0].away, "WAKE");
+assert.ok(!withCollege.leagues.NCAAB.note.includes("SAMPLE"));
+const clv = adaptClv({
+  built: "2026-11-05T08:43:22-05:00",
+  error: null,
+  plays: [
+    { pick_id: "2026-11-04|potd|NHL|seth jones over 0.5 assists|x", pick: "Seth Jones Over 0.5 Assists", section: "Play of the Day", date: "2026-11-04", posted_odds: "-120", close_odds: "-110", posted_line: 0.5, close_line: 0.5, clv_pct: 1.16 },
+  ],
+  by_section: { "Play of the Day": { count: 1, avg_clv: 1.16, beat_close: 1, beat_close_pct: 100 } },
+  totals: { count: 1, avg_clv: 1.16, beat_close: 1, beat_close_pct: 100 },
+});
+assert.equal(clv?.built, "8:43 AM ET");
+assert.equal(clv?.stale, false);
+assert.equal(clv?.beatPct, 100);
+assert.equal(adaptClv(null), null);
+assert.equal(adaptClv({ plays: [], totals: {}, by_section: {} }), null);
+const stale = adaptClv({ error: "late", plays: [{ pick: "A Over 1", date: "2026-11-04", clv_pct: -1, posted_odds: "-110", close_odds: "-120" }], totals: { count: 1, avg_clv: -1, beat_close: 0, beat_close_pct: 0 } });
+assert.equal(stale?.stale, true);
 const phi = tables.leagues.NBA.groups.find((group) => group.name === "Atlantic")?.rows.find((row) => row.abbr === "PHI");
 assert.equal(phi?.cells[0], "7-1");
 assert.ok(tables.leagues.NHL.groups.every((group) => group.columns[0] === "W-L-OTL" && group.columns.includes("PTS")));

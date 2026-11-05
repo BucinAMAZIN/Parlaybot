@@ -31,6 +31,8 @@ export type AppState = {
   feedFilter: Record<string, { team: string; period: string }>;
   profitRange: "7d" | "30d" | "season";
   openDates: Set<string>;
+  /** NCAAB group name. Empty uses the first group, which is the AP Top 25. */
+  conference: string;
 };
 
 const PREF_KEY = "parlaybot-v1";
@@ -55,6 +57,7 @@ export function defaultState(): AppState {
     feedFilter: {},
     profitRange: "30d",
     openDates: new Set(),
+    conference: "",
   };
 }
 

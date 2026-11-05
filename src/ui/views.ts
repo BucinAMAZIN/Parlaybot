@@ -435,7 +435,7 @@ function results(state: AppState, board: Board): string {
       const legs = ticket.legs
         .map(
           (leg) =>
-            `<div class="leg"><div><b>${esc(leg.name)}</b><div class="sub">${esc(leg.stat)}</div><div>${leg.grade ? `<span class="grade">${esc(leg.grade)}</span>` : ""}${esc(leg.note)}</div>${leg.beatClose == null ? "" : `<div class="sub clv ${leg.beatClose ? "W" : "L"}">${leg.beatClose ? "✓ Beat close" : "✗ Missed close"}</div>`}</div><span class="res ${leg.result}">${leg.result}</span></div>`,
+            `<div class="leg"><div><b>${esc(leg.name)}</b><div class="sub">${esc(leg.stat)}</div><div>${leg.grade ? `<span class="grade">${esc(leg.grade)}</span>` : ""}${esc(leg.note)}</div>${leg.clvPct == null ? "" : `<div class="stamp clvchip ${leg.clvPct > 0 ? "W" : leg.clvPct < 0 ? "L" : ""}">${esc(signedPct(leg.clvPct))} CLV</div>`}${leg.beatClose == null ? "" : `<div class="sub clv ${leg.beatClose ? "W" : "L"}">${leg.beatClose ? "✓ Beat close" : "✗ Missed close"}</div>`}</div><span class="res ${leg.result}">${leg.result}</span></div>`,
         )
         .join("");
       return `<section class="ticket"><header><div style="display:flex;gap:12px"><div class="thumb">Ticket<br>photo</div><div><h3>${esc(ticket.title)}</h3><div class="sub">${esc(ticket.meta)}</div></div></div><span style="display:flex;align-items:center;gap:6px">${mascot(ticket.mood, 40)}<span class="res ${ticket.result}" style="font-size:1.375rem">${ticket.result === "W" ? "Won" : ticket.result === "L" ? "Lost" : "Void"}</span></span></header>${legs}<div class="tfoot"><button type="button" class="btn share" data-act="share" data-id="${esc(ticket.id)}" data-settled="1">Share as image</button></div></section>`;
@@ -520,6 +520,7 @@ function stats(state: AppState, board: Board): string {
     return `<div class="hdr"><h1 style="font-size:1.75rem">Stats</h1><button type="button" class="stdchip" data-act="standings" data-from="stats">📊 Standings</button></div><div class="priv">🔒 Only you can see this</div>
 <div class="card"><div class="hdr"><h2>Profit</h2><div class="toggle">${rangeButtons}</div></div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
 <div class="card"><h2><span class="tag of">OFFICIAL</span> Win rate by product</h2><div class="sub">${esc(priv.ringNote)}</div><div class="rings">${rings}</div></div>
+${clvCard(board)}
 <div class="card"><h2><span class="tag un">UNOFFICIAL</span> For fun · tracked only</h2><div class="sub">From the desk summary. Never in the official record.</div><table class="tbl">${statsRows(priv.unofficial)}</table></div>
 <div class="card"><h2>Hit % by prop</h2><div class="sub">Desk record.props. No unit column — the file does not publish one here.</div><table class="tbl">${statsRows(priv.props)}</table></div>
 ${green}
@@ -536,6 +537,35 @@ ${green}
 <div class="card"><h2><span class="tag fx">FIXTURE</span> Edge feed record</h2><div class="priv">🔒 Only you can see this</div><div class="sub">Flat 1u at the Hard Rock price, summed from the fixture. Not the desk bankroll. ${board.edgeSkipped ? `${board.edgeSkipped} rows skipped.` : "No rows skipped."}</div><div class="big W" style="font-size:1.75rem">${formatSigned(record.units)}u</div><div class="sub">${record.wins}-${record.losses} · ${hit}% of graded plays · ${record.voids} void · ${record.pushes} push</div><table class="tbl">${sportRows}</table></div>`;
 }
 
+function signedPct(n: number): string {
+  const text = Math.abs(n).toFixed(2);
+  if (n > 0) return `+${text}%`;
+  if (n < 0) return `−${text}%`;
+  return `${text}%`;
+}
+
+function clvCard(board: Board): string {
+  const clv = board.clv;
+  if (!clv) return "";
+  const sections = clv.sections
+    .map(
+      (section) =>
+        `<tr><td>${esc(section.name)}</td><td class="sub">${section.beat} of ${section.count}</td><td>${section.beatPct}%</td><td class="${section.avg > 0 ? "W" : section.avg < 0 ? "L" : ""}">${esc(signedPct(section.avg))}</td></tr>`,
+    )
+    .join("");
+  const plays = clv.recent
+    .map((play) => {
+      const line = play.postedLine || play.closeLine ? ` · line ${esc(play.postedLine ?? "—")} → ${esc(play.closeLine ?? "—")}` : "";
+      return `<tr><td>${esc(play.pick)}<div class="sub">${esc(play.section)} · ${esc(play.postedOdds || "—")} → ${esc(play.closeOdds || "—")}${line}</div></td><td class="${play.clvPct > 0 ? "W" : play.clvPct < 0 ? "L" : ""}">${esc(signedPct(play.clvPct))}</td></tr>`;
+    })
+    .join("");
+  const beat = clv.beatPct == null ? "" : `<div><div class="big" style="font-size:1.75rem">${clv.beatPct}%</div><div class="sub">beat the close${clv.beat != null ? ` · ${clv.beat} of ${clv.count}` : ""}</div></div>`;
+  const avg = clv.avg == null ? "" : `<div><div class="big ${clv.avg > 0 ? "W" : clv.avg < 0 ? "L" : ""}" style="font-size:1.75rem">${esc(signedPct(clv.avg))}</div><div class="sub">average CLV</div></div>`;
+  const built = clv.built ? `<p class="stamp">Built ${esc(clv.built)}</p>` : "";
+  const stale = clv.stale ? `<p class="stamp">CLV data may be stale</p>` : "";
+  return `<div class="card"><h2>Closing line value</h2><div class="priv">🔒 Only you can see this</div><div class="sub">How often the posted line beat the closing line. From the desk file.</div>${built}${stale}<div class="split">${beat}${avg}</div><table class="tbl"><tr><th>Section</th><th>Beat</th><th></th><th>Avg</th></tr>${sections}</table><h3 style="margin:12px 0 4px">Recent closes</h3><table class="tbl">${plays}</table></div>`;
+}
+
 function gradedHit(record: { wins: number; losses: number }): string {
   const n = record.wins + record.losses;
   return n ? `${Math.round((record.wins / n) * 100)}%` : "—";
@@ -546,7 +576,17 @@ function standingsView(state: AppState, board: Board): string {
   const tabs = LEAGUES.map(
     (id) => `<button type="button" class="${id === state.league ? "on" : ""}" data-act="league" data-key="${id}">${id}</button>`,
   ).join("");
-  const tables = (league?.groups ?? [])
+  const ncaab = state.league === "NCAAB" && (league?.groups.length ?? 0) > 1;
+  const selectedName = league?.groups.some((group) => group.name === state.conference) ? state.conference : league?.groups[0]?.name ?? "";
+  const shown = ncaab ? (league?.groups ?? []).filter((group) => group.name === selectedName) : league?.groups ?? [];
+  const picker = ncaab
+    ? `<label class="confpick">Conference<select data-act="conference">${(league?.groups ?? []).map((group) => `<option value="${esc(group.name)}"${group.name === selectedName ? " selected" : ""}>${esc(group.name)}</option>`).join("")}</select></label>`
+    : "";
+  const games = (league?.games ?? [])
+    .map((game) => `<div class="sub">${esc(game.away)} @ ${esc(game.home)}${game.when ? ` · ${esc(game.when)}` : ""}</div>`)
+    .join("");
+  const gameBlock = games ? `<div class="sub" style="margin-top:8px"><b>Games</b></div>${games}` : "";
+  const tables = shown
     .map((group) => {
       if (!group.rows.length) return `<p class="empty">${esc(group.name)}</p>`;
       const head = group.columns.map((column) => `<th>${esc(column)}</th>`).join("");
@@ -567,7 +607,8 @@ function standingsView(state: AppState, board: Board): string {
     })
     .join("");
   const when = board.standingsUpdated ? `<p class="stamp">${esc(board.standingsUpdated)}</p>` : "";
-  return `<button type="button" class="back" data-act="nav" data-view="${state.standingsFrom}">‹ Back</button><h1 style="font-size:1.75rem">Standings</h1>${when}<div class="sub">Six sports · ★ = team in one of your sample plays today · swipe tables sideways; team column stays put</div><div class="sub" style="margin-bottom:6px">${esc(league?.note ?? "")}</div><div class="lgtabs" role="tablist">${tabs}</div>${tables}`;
+  const starNote = board.feedMode === "live" ? "★ = a team on today's card" : "★ = team in one of your sample plays today";
+  return `<button type="button" class="back" data-act="nav" data-view="${state.standingsFrom}">‹ Back</button><h1 style="font-size:1.75rem">Standings</h1>${when}<div class="sub">Six sports · ${starNote} · swipe tables sideways; team column stays put</div><div class="sub" style="margin-bottom:6px">${esc(league?.note ?? "")}</div><div class="lgtabs" role="tablist">${tabs}</div>${picker}${gameBlock}${tables}`;
 }
 
 function sharePreview(card: ShareCard): string {

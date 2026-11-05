@@ -81,6 +81,15 @@ body.book-dk .chk input{accent-color:#2ea85a}
 .stamprow{margin:4px 0 8px;font-size:.9rem}
 .stamprow .stamp{display:inline;margin:0 0 0 6px}
 .stamp.about{margin-top:10px}
+.stamp.clvchip{margin-top:2px}
+.stamp.clvchip.W{color:#76f53a}
+.stamp.clvchip.L{color:#ff5c5c}
+html.day .stamp.clvchip.W{color:#146c2e}
+html.day .stamp.clvchip.L{color:#c4232a}
+.confpick{display:block;margin:8px 0 4px;font-size:.8rem;font-weight:700;color:#a9b4c2}
+.confpick select{display:block;width:100%;margin-top:4px;font:inherit;font-size:1rem;font-weight:600;padding:8px 10px;border-radius:10px;background:#161b22;color:#e8eef6;border:1px solid #2a313c}
+html.day .confpick{color:#3a4656}
+html.day .confpick select{background:#fff;color:#17202b;border-color:#d5dce6}
 .brand .gear{flex:none}
 @media(min-width:900px){.brand .logo{height:64px}}
 html.lg .brand .logo,html.xl .brand .logo{height:54px}
