@@ -11,6 +11,8 @@ import {
   winLine,
 } from "../src/data/gamecast.ts";
 import { gradeTeamBet, sortLiveGames, teamBet } from "../src/data/liveCard.ts";
+import { courtHardware, threePointPath } from "../src/ui/court.ts";
+import { buildNumber, newerBuild } from "../src/lib/buildWatch.ts";
 
 const away = courtPoint(16, 24, false);
 assert.ok(away);
@@ -145,5 +147,34 @@ const cashed = gradeTeamBet({ kind: "total", line: 145.5, under: false }, 80, 70
 assert.equal(cashed.pace, "hit");
 const under = gradeTeamBet({ kind: "total", line: 145.5, under: true }, 80, 70, null, "post");
 assert.equal(under.pace, "dead");
+
+const ncaamLeft = threePointPath(true, false);
+const ncaamRight = threePointPath(false, false);
+const nbaLeft = threePointPath(true, true);
+const nbaRight = threePointPath(false, true);
+assert.match(ncaamLeft, /L 9\.93 3\.35/);
+assert.match(ncaamRight, /L 84\.07 3\.35/);
+assert.match(nbaLeft, /L 14\.20 3 /);
+assert.match(nbaRight, /L 79\.80 3 /);
+const college = courtHardware(false);
+const pro = courtHardware(true);
+for (const svg of [college, pro]) {
+  assert.match(svg, /cx="19" cy="25" r="6"/);
+  assert.match(svg, /cx="75" cy="25" r="6"/);
+  assert.match(svg, /cx="5\.25" cy="25" r="0\.75"/);
+  assert.match(svg, /cx="88\.75" cy="25" r="0\.75"/);
+}
+assert.match(college, /L 9\.93 3\.35/);
+assert.match(pro, /L 14\.20 3 /);
+assert.doesNotMatch(college, /M 0 3\.48/);
+assert.doesNotMatch(pro, /A 23\.75 23\.75 0 0 1 0 /);
+
+assert.equal(buildNumber('<meta name="parlaybot-build" content="27" />'), "27");
+assert.equal(buildNumber('<meta content="28" name="parlaybot-build">'), "28");
+assert.equal(buildNumber("<html></html>"), "");
+assert.equal(newerBuild("26", "27"), true);
+assert.equal(newerBuild("27", "27"), false);
+assert.equal(newerBuild("28", "27"), false);
+assert.equal(newerBuild("", "27"), false);
 
 console.log("gamecast tests ok");

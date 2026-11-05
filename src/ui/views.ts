@@ -21,6 +21,7 @@ import {
 } from "./bits.ts";
 import { displayCat, sectionMatch, sportTitle } from "../data/gradeLabels.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type GameCast } from "../data/gamecast.ts";
+import { courtHardware } from "./court.ts";
 import { noteVisible } from "../lib/cardFilter.ts";
 import { matchingPlays, statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
 import { SPORT_ORDER, sportLabel } from "../lib/sport.ts";
@@ -410,23 +411,13 @@ function pillRow(gameId: string, label: string, current: string, keys: string[],
 
 function courtBlock(gameId: string, cast: GameCast, filter: { team: string; period: string }): string {
   const shown = filterShots(cast.shots, filter.team, filter.period);
-  const ncaam = cast.court !== "nba";
-  const radius = ncaam ? 22.15 : 23.75;
-  const paint = ncaam ? 12 : 16;
-  const dy = Math.sqrt(Math.max(0, radius * radius - 5.25 * 5.25));
-  const py = (50 - paint) / 2;
-  const arc = (side: "left" | "right") => {
-    const sweep = side === "left" ? 1 : 0;
-    const x = side === "left" ? 0 : 94;
-    return `<path class="court-line" d="M ${x} ${(25 - dy).toFixed(2)} A ${radius} ${radius} 0 0 ${sweep} ${x} ${(25 + dy).toFixed(2)}" fill="none"/>`;
-  };
   const marks = shown
     .map((shot, index) => shotMark(shot, index === shown.length - 1))
     .join("");
   const note = cast.shots.length
     ? ""
     : `<text class="court-note" x="47" y="27" text-anchor="middle">${esc(cast.pre ? "Fills in once the game starts" : "Shot locations not available for this game")}</text>`;
-  const svg = `<svg class="court" viewBox="-1 -1 96 52" role="img" aria-label="Shot chart"><rect class="court-floor" x="0" y="0" width="94" height="50"/><rect class="court-line" x="0" y="0" width="94" height="50" fill="none"/><line class="court-line" x1="47" y1="0" x2="47" y2="50"/><circle class="court-line" cx="47" cy="25" r="6" fill="none"/>${arc("left")}${arc("right")}<rect class="court-line" x="0" y="${py}" width="19" height="${paint}" fill="none"/><rect class="court-line" x="75" y="${py}" width="19" height="${paint}" fill="none"/><circle class="court-line" cx="5.25" cy="25" r="0.8" fill="none"/><circle class="court-line" cx="88.75" cy="25" r="0.8" fill="none"/>${marks}${note}</svg>`;
+  const svg = `<svg class="court" viewBox="-1 -1 96 52" role="img" aria-label="Shot chart"><rect class="court-floor" x="0" y="0" width="94" height="50"/><rect class="court-line" x="0" y="0" width="94" height="50" fill="none"/><line class="court-line" x1="47" y1="0" x2="47" y2="50"/><circle class="court-line" cx="47" cy="25" r="6" fill="none"/>${courtHardware(cast.court === "nba", esc(cast.home.logo))}${marks}${note}</svg>`;
   const teams = ["All", cast.away.abbr, cast.home.abbr].filter(Boolean);
   return `${pillRow(gameId, "Team", filter.team, teams, "team")}${pillRow(gameId, "Period", filter.period, ["All", ...cast.periods], "period")}<div class="courtwrap">${svg}</div><p class="legendline"><span>● made</span><span>✕ missed</span><span>○ latest</span><b>${esc(fgLine(shown, cast.away.abbr))}</b><b>${esc(fgLine(shown, cast.home.abbr))}</b></p>`;
 }

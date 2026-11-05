@@ -303,7 +303,9 @@ details.why .ours{font-size:.6875rem;background:#2a2140;color:#c9b6ff;border-rad
 .courtwrap{width:100%;overflow:hidden}
 .court,.field,.rink,.diamond{width:100%;height:auto;display:block}
 .court-floor{fill:#16324f}
-.court-line{stroke:#d7e6f8;stroke-width:.55}
+.court-line{stroke:#d7e6f8;stroke-width:.55;fill:none}
+.court-paint{fill:#d7e6f8;opacity:.14;stroke:none}
+.court-rim{fill:#f97316;stroke:#9a3412;stroke-width:.2}
 .court-note{fill:#d7e6f8;font-size:3.1px}
 .shot-ring{stroke:#fff;stroke-width:.4}
 .grass{fill:#1c7a3c}
@@ -428,6 +430,7 @@ html.day .book button.on.dk{background:#117a22;color:#fff}
 html.day .warnline{color:#7a4e00}
 html.day .court-floor{fill:#e7f3ea}
 html.day .court-line{stroke:#1d4e34}
+html.day .court-paint{fill:#1d4e34;opacity:.1}
 html.day .court-note{fill:#1d4e34}
 html.day .shot-ring{stroke:#17202b}
 html.day .rink-ice{fill:#f3f7fb}

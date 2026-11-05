@@ -16,6 +16,7 @@ import { canOpen, linkMismatch, toLinkPlay } from "./ui/bits.ts";
 import { cardForShare, render, sportsFor } from "./ui/views.ts";
 import { disablePush, readPushDelivery, subscribePush } from "./lib/pushClient.ts";
 import { defaultState, knownView, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
+import { buildNumber, newerBuild } from "./lib/buildWatch.ts";
 
 const EMPTY_NCAAB: StandingLeague = { note: "No data yet", columns: [], groups: [] };
 
@@ -556,13 +557,57 @@ export function start() {
   paint(false);
   void refreshDesk();
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") void refreshDesk();
+    if (document.visibilityState !== "visible") return;
+    void refreshDesk();
+    void watchBuild();
   });
-  window.addEventListener("focus", () => void refreshDesk());
+  window.addEventListener("focus", () => {
+    void refreshDesk();
+    void watchBuild();
+  });
   window.setInterval(() => void refreshDesk(), 3 * 60 * 1000);
+  window.setInterval(() => void refreshLiveOnly(), 30 * 1000);
+  window.setInterval(() => void watchBuild(), 60 * 1000);
 }
 
 let refreshing = false;
+const runningBuild = document.querySelector('meta[name="parlaybot-build"]')?.getAttribute("content") ?? "";
+
+function busyPainting(): boolean {
+  return state.sheet != null || document.activeElement instanceof HTMLSelectElement;
+}
+
+async function refreshLiveOnly() {
+  if (document.visibilityState !== "visible" || refreshing) return;
+  const watching = state.view === "live" || board.liveGames.some((game) => !game.pre && !game.final);
+  if (!watching) return;
+  refreshing = true;
+  try {
+    await attachLive(board);
+    if (!busyPainting()) paint(false);
+  } catch {
+    /* keep the scores already on the card */
+  } finally {
+    refreshing = false;
+  }
+}
+
+async function watchBuild() {
+  if (document.visibilityState !== "visible" || !runningBuild) return;
+  const base = import.meta.env?.BASE_URL || "/";
+  try {
+    const response = await fetch(`${base}?_b=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) return;
+    const remote = buildNumber(await response.text());
+    if (!newerBuild(runningBuild, remote)) return;
+    localStorage.setItem("parlaybot-build", remote);
+    const url = new URL(location.href);
+    url.searchParams.set("b", remote);
+    location.replace(url.toString());
+  } catch {
+    /* stay on this build */
+  }
+}
 
 async function refreshDesk() {
   if (refreshing) return;
