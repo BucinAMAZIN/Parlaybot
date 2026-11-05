@@ -119,22 +119,29 @@ export function ringSvg(pct: number, label: string): string {
 export function chartSvg(points: SeriesPoint[]): string {
   const w = 340;
   const h = 150;
+  if (points.length < 2) return `<p class="empty">Not enough chart points in this file.</p>`;
   const profit = points.map((point) => point.profit);
   const mx = Math.max(...profit);
   const mn = Math.min(...profit);
+  const span = mx === mn ? 1 : mx - mn;
   const n = points.length;
   const xy = points.map((point, i) => {
     const x = 10 + (i * (w - 20)) / (n - 1);
-    const y = h - 20 - ((point.profit - mn) / (mx - mn)) * (h - 40);
+    const y = h - 20 - ((point.profit - mn) / span) * (h - 40);
     return [x, y] as const;
   });
   const line = "M" + xy.map(([x, y]) => `${x.toFixed(0)},${y.toFixed(0)}`).join(" L");
   const area = `${line} L${xy[xy.length - 1][0].toFixed(0)},${h - 20} L${xy[0][0].toFixed(0)},${h - 20} Z`;
+  const rates = points.map((point) => point.winRate).filter((rate): rate is number => rate != null);
+  const wide = rates.some((rate) => rate < 40 || rate > 70);
+  const lo = wide ? 0 : 45;
+  const hi = wide ? 100 : 65;
   const wr = points
-    .map((point, i) => {
+    .flatMap((point, i) => {
+      if (point.winRate == null) return [];
       const x = 10 + (i * (w - 20)) / (n - 1);
-      const y = h - 20 - ((point.winRate - 45) / 20) * (h - 40);
-      return `${x.toFixed(0)},${y.toFixed(0)}`;
+      const y = h - 20 - ((point.winRate - lo) / (hi - lo)) * (h - 40);
+      return [`${x.toFixed(0)},${y.toFixed(0)}`];
     })
     .join(" ");
   const labels = points

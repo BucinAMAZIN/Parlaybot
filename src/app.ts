@@ -1,4 +1,7 @@
 import { loadBoard, findPlay, type Board } from "./data/board.ts";
+import { adaptDesk, fetchDesk } from "./data/desk.ts";
+import { attachLive } from "./data/espn.ts";
+import { standings as fallbackStandings } from "./data/standings.ts";
 import type { Play } from "./data/types.ts";
 import { edgeDates } from "./data/presentEdgeFeed.ts";
 import {
@@ -14,7 +17,7 @@ import { canOpen, toLinkPlay } from "./ui/bits.ts";
 import { cardForShare, render } from "./ui/views.ts";
 import { defaultState, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
 
-const board: Board = loadBoard();
+let board: Board = loadBoard();
 const state: AppState = defaultState();
 loadPrefs(state);
 const latest = edgeDates(board.edgePicks)[0];
@@ -315,4 +318,38 @@ export function start() {
     paint(true);
   });
   paint(false);
+  void refreshDesk();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void refreshDesk();
+  });
+  window.addEventListener("focus", () => void refreshDesk());
+  window.setInterval(() => void refreshDesk(), 3 * 60 * 1000);
+}
+
+let refreshing = false;
+
+async function refreshDesk() {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    const raw = await fetchDesk();
+    const next = adaptDesk(raw, fallbackStandings.leagues.NCAAB);
+    try {
+      await attachLive(next);
+    } catch {
+      next.liveNote = "ESPN scoreboard did not load. Scores stay blank until it does.";
+    }
+    board = next;
+    for (const id of [...state.selected]) {
+      if (!findPlay(board, id)) state.selected.delete(id);
+    }
+    paint(false);
+  } catch {
+    if (board.feedMode !== "live") {
+      board = loadBoard();
+      paint(false);
+    }
+  } finally {
+    refreshing = false;
+  }
 }

@@ -4,6 +4,7 @@ import { adaptEdgePicks, flatUnitResult, gradeResult, inStarBand } from "../src/
 import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentEdgeFeed.ts";
 import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink } from "../src/lib/links.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
+import { adaptDesk } from "../src/data/desk.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled } from "../src/lib/shareCard.ts";
 import { results, rings, sampleTickets } from "../src/data/sampleBoard.ts";
 import { winRateBand } from "../src/ui/bits.ts";
@@ -159,5 +160,59 @@ assert.equal(winRateBand(49.9), "low");
 assert.equal(winRateBand(40), "low");
 assert.equal(winRateBand(39.9), "bad");
 assert.deepEqual(rings.map((ring) => winRateBand(ring.pct)), ["good", "bad", "low", "mid", "mid", "good", "mid", "good"]);
+
+const ncaab = { note: "NCAAB SAMPLE", columns: [], groups: [] };
+const liveDesk = adaptDesk(
+  {
+    generated: 1793880835,
+    today: {
+      date: "2026-11-05",
+      tickets: [
+        { name: "POTD", pick: "Brandin Podziemski Over 16.5 Points", odds: "-105", hr_sid: "5029125622698475931", hr_link: "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/5029125622698475931", dk_sid: "0QA1", dk_link: "nope" },
+        { name: "Safe +100 / Alt Parlay", pick: "builds at the 10 AM window, not at 7 AM.", legs: [] },
+      ],
+      sports: {},
+    },
+    heist: { status: "thin", msg: "Not enough bought-down legs yet", legs: [] },
+    edge: { picks: [{ sport: "NHL", pick: "Anton Frondell Over 0.5 Assists", hr: "+275", hr_sid: "4589013658088112520", hr_link: "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/4589013658088112520", hr_state: "open", dk: { odds: "+178", na: false }, dk_sid: "0QA386239029#2351687617_13L42133Q1", dk_link: "https://sportsbook.draftkings.com/event/34951598?outcomes=0QA386239029%232351687617_13L42133Q1", result: "Pending" }] },
+    legday: { board: [{ sport: "NBA", pick: "Bam Adebayo Under 14.5 Reb + Ast", odds: "-130", hr_sid: "7863240223742886304", hr_link: "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/7863240223742886304", dk: { na: true, odds: null }, dk_absent: true }] },
+    cappers: [
+      { name: "@showtimepicks2", w: 1, l: 2, pct: 33, today: [{ sport: "TENNIS", pick: "Tomas Martin Etcheverry ML", odds: "-120", dk_absent: true }] },
+      { name: "@nickm_hockey", w: 2, l: 1, pct: 67, today: [] },
+    ],
+    results_v2: {
+      rows: [
+        { date: "2026-11-04", cat: "POTD", pick: "Davion Mitchell Over 11.5 Points", odds: "-125", res: "L", stat: "11 PTS", uu: -1, leg: false },
+        { date: "2026-11-04", cat: "Edge", pick: "One Over 1.5", odds: "-110", res: "W", stat: "2", uu: 0.91, leg: false },
+      ],
+      summary: { F: { tickets: { w: 0, l: 5, units: -5 } }, T: { tickets: { w: 0, l: 3, units: -3 } } },
+    },
+    record: { chart: [["11/04", -111]], props: [{ prop: "NHL SOG", w: 47, l: 37, pct: 56 }] },
+    edge_record: { overall: { w: 124, l: 213, p: 2, pct: 37, units: -8.27, pending: 25 } },
+    standings: { updated: "2026-11-05", leagues: {} },
+  },
+  ncaab,
+);
+assert.equal(liveDesk.feedMode, "live");
+assert.equal(liveDesk.banner, null);
+assert.equal(liveDesk.tickets.some((ticket) => ticket.productKey === "heist"), false);
+assert.ok(liveDesk.notices.some((note) => /HEIST/.test(note)));
+assert.ok(liveDesk.notices.some((note) => /10 AM/.test(note)));
+const frondell = liveDesk.tickets.flatMap((ticket) => ticket.plays).find((play) => /Frondell/.test(play.name));
+assert.ok(frondell?.hrSid);
+assert.equal(frondell?.dk, "+178");
+const bam = liveDesk.tickets.flatMap((ticket) => ticket.plays).find((play) => /Adebayo/.test(play.name));
+assert.equal(bam?.dk, null);
+assert.equal(bam?.dkSid, undefined);
+const show = liveDesk.cappers.find((capper) => capper.name === "@showtimepicks2");
+assert.equal(show?.plays.length, 1);
+assert.equal(show?.plays[0].hrSid, undefined);
+assert.equal(liveDesk.cappers.find((capper) => capper.name === "@nickm_hockey")?.plays.length, 0);
+assert.equal(liveDesk.recap.units, "-0.09u");
+assert.equal(liveDesk.rings.find((ring) => ring.label === "POTD")?.pct, 0);
+assert.equal(liveDesk.rings.find((ring) => ring.label === "Edge")?.pct, 100);
+assert.equal(liveDesk.privateStats?.edgeUnits, "-8.27u");
+assert.match(liveDesk.standings.leagues.NCAAB.note, /SAMPLE/);
+assert.equal(liveDesk.results[0].legs[0].beatClose, null);
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

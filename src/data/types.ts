@@ -46,7 +46,9 @@ export type Play = {
   status?: PlayerStatus;
   matchup?: { away: TeamSide; home: TeamSide; rankChip?: string };
   why: WhyBlock;
-  source: "sample" | "edge-feed";
+  source: "sample" | "edge-feed" | "desk";
+  /** Desk game string, used only to match an ESPN scoreboard row. */
+  gameText?: string;
   hrEvent?: string;
   pinId?: number;
   /** Hard Rock betslip selection id (hr_sid). Not the event id. */
@@ -75,17 +77,18 @@ export type Ticket = {
 export type SettledLeg = {
   name: string;
   stat: string;
-  result: "W" | "L";
+  result: "W" | "L" | "V" | "P";
   grade: string;
   note: string;
-  beatClose: boolean;
+  /** Null when the feed has no closing-line note. */
+  beatClose: boolean | null;
 };
 
 export type SettledTicket = {
   id: string;
   title: string;
   meta: string;
-  result: "W" | "L";
+  result: "W" | "L" | "V";
   ticketOdds?: string;
   legs: SettledLeg[];
   mood: "cash" | "hook";
@@ -113,7 +116,7 @@ export type LiveTicket = {
 
 export type LiveGame = {
   id: string;
-  league: "NBA" | "NHL";
+  league: "NBA" | "NHL" | "NFL" | "MLB" | "NCAA" | "WNBA";
   away: string;
   home: string;
   awayName: string;
@@ -126,9 +129,17 @@ export type LiveGame = {
   awaySide: TeamSide;
   homeSide: TeamSide;
   legs: LiveLeg[];
+  liveFeed?: LiveFeed;
 };
 
-export type SeriesPoint = { day: string; profit: number; winRate: number };
+export type LiveFeed = {
+  pbp: { team: string; event: string; when: string; score: string; desc: string; period: string }[];
+  box: { headers: string[]; rows: { cells: string[]; mine: boolean; header?: string }[] };
+  teamStats: { name: string; away: string; home: string }[];
+  real: boolean;
+};
+
+export type SeriesPoint = { day: string; profit: number; winRate: number | null };
 
 export type CapperGroup = "heist" | "an";
 

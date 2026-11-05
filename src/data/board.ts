@@ -16,16 +16,34 @@ import {
   sampleTickets,
   series,
 } from "./sampleBoard.ts";
-import type { Capper, LiveGame, LiveTicket, Play, Recap, SeriesPoint, SettledTicket, Ticket } from "./types.ts";
+import { standings as fallbackStandings } from "./standings.ts";
+import type { Capper, LiveGame, LiveTicket, Mood, Play, Recap, SeriesPoint, SettledTicket, StandingsFile, Ticket } from "./types.ts";
+
+export type StatRow = { name: string; sub: string; right: string };
+
+export type PrivateStats = {
+  unofficial: StatRow[];
+  props: StatRow[];
+  edgeUnits: string;
+  edgeLine: string;
+  edgeSports: StatRow[];
+  green: StatRow[];
+  ringNote: string;
+};
 
 export type Board = {
   dateLabel: string;
+  feedMode: "live" | "fallback";
+  banner: string | null;
+  slateDate: string;
+  notices: string[];
   tickets: Ticket[];
   cappers: Capper[];
   liveTickets: LiveTicket[];
   liveGames: LiveGame[];
   liveNote: string;
   liveUpdated: string;
+  liveMood: { mood: Mood; title: string; hit: number; alive: number; dead: number; pre: number } | null;
   results: SettledTicket[];
   recap: Recap;
   series: SeriesPoint[];
@@ -34,6 +52,10 @@ export type Board = {
   edgePicks: EdgePick[];
   edgeSkipped: number;
   stars: Set<string>;
+  standings: StandingsFile;
+  privateStats: PrivateStats | null;
+  /** Raw desk `teamvs` object. ESPN is preferred; this is the fallback rank table. */
+  teamVs: unknown;
 };
 
 const ALIAS: Record<string, string> = { NYK: "NY" };
@@ -51,12 +73,17 @@ export function loadBoard(): Board {
   tickets.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   return {
     dateLabel: CARD_DATE,
+    feedMode: "fallback",
+    banner: "OFFLINE FALLBACK — SAMPLE DATA. The desk file did not load, so this card is the fixture.",
+    slateDate: "",
+    notices: [],
     tickets,
     cappers,
     liveTickets,
     liveGames,
     liveNote: LIVE_NOTE,
     liveUpdated: LIVE_UPDATED,
+    liveMood: null,
     results,
     recap,
     series,
@@ -65,10 +92,13 @@ export function loadBoard(): Board {
     edgePicks: adapted.picks,
     edgeSkipped: adapted.skipped.length,
     stars: starTeams(tickets),
+    standings: fallbackStandings,
+    privateStats: null,
+    teamVs: null,
   };
 }
 
-function starTeams(tickets: Ticket[]): Set<string> {
+export function starTeams(tickets: Ticket[]): Set<string> {
   const stars = new Set<string>();
   for (const ticket of tickets) {
     if (ticket.id === "edge-feed") continue;

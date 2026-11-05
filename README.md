@@ -22,8 +22,10 @@ Screens are laid out for 360px and 390px, including the large-text settings (A /
 | --- | --- | --- |
 | Edge-picks adapter | `src/data/adaptEdgePicks.ts` | Turns the fixture array into typed plays. It only renames and classifies fields already on the row. |
 | Feed presenter | `src/data/presentEdgeFeed.ts` | Builds the Edge feed ticket, grades, and the flat-1u record from adapted rows. |
-| Fixture | `fixtures/edge-picks-sample.json` | Read-only snapshot of the current pick feed. |
-| Sample card | `src/data/sampleBoard.ts` | Heist, Safe +100, official tickets, cappers, props, live, and last night. Labeled sample. |
+| Desk adapter | `src/data/desk.ts` | Fetches `desk-dashboard/parlay/data.json` at runtime and maps plays, records, and standings. Read only. |
+| Live scores | `src/data/espn.ts` | ESPN scoreboard and summary, the same public URLs the desk page uses. |
+| Fixture | `fixtures/edge-picks-sample.json` | Offline fallback only, labeled SAMPLE DATA when the desk file does not load. |
+| Sample card | `src/data/sampleBoard.ts` | Fallback card. Not used once the desk file loads. |
 | Standings adapter | `src/data/adaptStandings.ts` | `fixtures/desk-standings.json` is the desk snapshot for NBA, NHL, NFL, MLB, and NCAAF. NCAAB stays the labeled sample in `src/data/standings.sample.json`. |
 | Book links | `src/lib/links.ts` | Hard Rock betslip URL and DraftKings single-leg URL, matching the live desk. Multi-leg DK opens each leg on its own. No id means Not on HR or Not on DK. |
 | Share image | `src/lib/shareCard.ts` and `src/lib/shareImage.ts` | Ticket legs, odds, and result. No units, profit, or bankroll. |
@@ -38,6 +40,6 @@ Profit and win rate are marked “Only you can see this”. They are not on the 
 
 ## Tests
 
-`npm test` checks the adapter against the fixture (351 rows, grades, no invented DK price), the link builders, and that share cards do not contain a unit profit.
+`npm test` checks the fixture adapter (351 rows, grades, no invented DK price), a small desk-file mapping, the link builders, and that share cards do not contain a unit profit.
 
 `node scripts/verify.mjs` drives the preview build in Chrome at 390, 360, and 1280. Start `npm run preview` first. It needs Chrome.
