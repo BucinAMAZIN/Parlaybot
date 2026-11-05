@@ -205,7 +205,9 @@ assert.equal(normProp("Other", "First Blood", "First Blood 7-leg", ""), "First B
 assert.equal(normProp("Other", "mystery market", "some pick", ""), "Misc");
 assert.equal(normSide("Franz Wagner Over 0.5", "points", true), "alt");
 assert.equal(normSide("Christian Braun 4+ Rebs", "@austinsprops · Other", false), "alt");
-assert.equal(normSide("Josh Giddey o7.5 Asts", "@austinsprops · Other", false), "over");
+assert.equal(normSide("Josh Giddey o7.5 Asts", "@austinsprops · Other", false), "alt");
+assert.equal(normSide("Kevin Durant o5.5 Rebs", "@austinsprops · Other", false), "alt");
+assert.equal(normSide("Cameron Boozer o24.5 PR", "@austinsprops · Other", false), "alt");
 assert.equal(normSport("NCAAM"), "NCAAB");
 const blood = adaptDesk(
   {
