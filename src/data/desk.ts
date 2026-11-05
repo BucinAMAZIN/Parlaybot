@@ -22,6 +22,7 @@ import { classifySport, sportLabel } from "../lib/sport.ts";
 import { dedupePlays } from "./dedupePlays.ts";
 import { isTicketRow, ticketParts } from "./ticketLegs.ts";
 import { capperOf, normProp, normSide, normSport } from "./gradeLabels.ts";
+import { buildHeist } from "./heist.ts";
 import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
 export const DESK_URL = "https://bucinamazin.github.io/desk-dashboard/parlay/data.json";
@@ -550,11 +551,10 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   const notices: CardNote[] = [];
 
   const heist = isRow(data.heist) ? data.heist : null;
-  const heistPlays = takePlays(rowsOf(heist?.legs), "heist", statuses, new Set());
   const heistMark = heistLabel(heist);
-  const heistTicket = ticket("heist", "heist", "THE HEIST", heist ? str(heist.msg) || str(heist.status) || "Desk" : "Desk", heistPlays, "main", heist ? oddsOf(heist.odds) ?? undefined : undefined, heistMark);
-  if (heistTicket) tickets.push(heistTicket);
-  else if (heist && (str(heist.msg) || str(heist.status))) notices.push({ text: `${str(heist.msg) || str(heist.status)}. No legs in the file.`, section: "heist", sport: null });
+  const heistCards = buildHeist(heist, statuses);
+  tickets.push(...heistCards.tickets);
+  if (heistCards.notice) notices.push(heistCards.notice);
 
   const safe = isRow(data.safe100) ? data.safe100 : {};
   const safePlays = takePlays(rowsOf(safe.legs ?? safe.plays), "safe", statuses, new Set());

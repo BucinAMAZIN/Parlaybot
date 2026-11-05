@@ -41,6 +41,11 @@ export type BuiltLink =
  */
 const HR_WRONG_SELECTION = new Set(["1051261159191216543"]);
 
+/** True only for a selection id known to open the wrong game or prop. Names are not blocked. */
+export function isBlockedHrSid(sid: string): boolean {
+  return HR_WRONG_SELECTION.has(sid);
+}
+
 export const HR_MISMATCH_NOTE =
   "Hard Rock link unavailable. The stored selection id opens a different game or prop, so it is not launched.";
 

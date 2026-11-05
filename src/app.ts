@@ -97,12 +97,17 @@ function openScope(scope: string, id: string, forced?: "hr" | "dk") {
     const play = findPlay(board, id);
     if (play) plays = [play];
   } else if (scope === "ticket") {
-    plays = board.tickets.find((ticket) => ticket.id === id)?.plays ?? [];
+    plays = (board.tickets.find((ticket) => ticket.id === id)?.plays ?? []).filter((play) => play.slip !== false);
   } else {
     plays = pickedPlays();
   }
   const book = forced ?? (scope === "leg" || scope === "ticket" ? state.book : bookFor(plays));
-  const ready = plays.filter((play) => canOpen(play, book));
+  const ticket = scope === "ticket" ? board.tickets.find((item) => item.id === id) : undefined;
+  if (scope === "ticket" && book === "dk" && ticket?.dkSlipNote) {
+    showToast(ticket.dkSlipNote);
+    return;
+  }
+  const ready = plays.filter((play) => canOpen(play, book) && play.slip !== false);
   const left = plays.filter((play) => !canOpen(play, book));
   if (!ready.length) {
     const mismatched = book === "hr" ? plays.filter((play) => linkMismatch(play, "hr") || play.hrUnverified) : [];

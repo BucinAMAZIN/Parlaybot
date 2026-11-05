@@ -1,5 +1,6 @@
 import type { Board } from "./board.ts";
 import type { LegPace, LiveFeed, LiveGame, LiveLeg, LiveTicket, Mood, Play, Ticket } from "./types.ts";
+import { propLine } from "../lib/propLine.ts";
 
 /**
  * Same public scoreboard the desk page uses. Summaries fill box score,
@@ -131,8 +132,9 @@ const STATS: [RegExp, string, string][] = [
   [/rebounds?\s*\+\s*assists?|reb \+ ast|ast \+ reb/i, "rebounds+assists", "REB+AST"],
   [/points?\s*\+\s*rebounds?\s*\+\s*assists?|\bpra\b/i, "points+rebounds+assists", "PRA"],
   [/points?\s*\+\s*rebounds?/i, "points+rebounds", "PTS+REB"],
-  [/points?\s*\+\s*assists?/i, "points+assists", "PTS+AST"],
+  [/points?\s*\+\s*assists?|\bpa\b/i, "points+assists", "PTS+AST"],
   [/rec(?:eiving)? y(?:ards|ds)/i, "receivingYards", "REC YDS"],
+  [/receptions?\b/i, "receptions", "REC"],
   [/rush(?:ing)? y(?:ards|ds)/i, "rushingYards", "RUSH YDS"],
   [/assists?/i, "assists", "AST"],
   [/rebounds?/i, "rebounds", "REB"],
@@ -189,28 +191,28 @@ function readStat(summary: Json, player: string, key: string): number | null {
   return found ? total : null;
 }
 
-function propOf(name: string, league: LiveGame["league"]): { player: string; line: number; under: boolean; unit: string; key: string } | null {
-  const match = name.match(/^(.+?)\s+(Over|Under)\s+(\d+(?:\.\d+)?)\s+(.+)$/i);
-  if (!match) return null;
-  const market = match[4];
-  if (league === "NHL" && /^(points?|pts)$/i.test(market)) {
-    return { player: match[1], line: Number(match[3]), under: /^under/i.test(match[2]), unit: "PTS", key: "goals+assists" };
+function propOf(name: string, league: LiveGame["league"]): { player: string; line: number; under: boolean; plus: boolean; unit: string; key: string } | null {
+  const parsed = propLine(name);
+  if (!parsed) return null;
+  if (league === "NHL" && /^(points?|pts)$/i.test(parsed.market)) {
+    return { player: parsed.player, line: parsed.line, under: parsed.under, plus: parsed.plus, unit: "PTS", key: "goals+assists" };
   }
-  const stat = STATS.find(([pattern]) => pattern.test(market));
+  const stat = STATS.find(([pattern]) => pattern.test(parsed.market));
   if (!stat) return null;
-  return { player: match[1], line: Number(match[3]), under: /^under/i.test(match[2]), unit: stat[2], key: stat[1] };
+  return { player: parsed.player, line: parsed.line, under: parsed.under, plus: parsed.plus, unit: stat[2], key: stat[1] };
 }
 
-function paceOf(current: number, line: number, under: boolean, event: EventRow): LegPace {
+function paceOf(current: number, line: number, under: boolean, plus: boolean, event: EventRow): LegPace {
   if (event.state === "pre") return "pre";
   const done = event.state === "post";
+  const cleared = plus ? current >= line : current > line;
   if (under) {
     if (current > line) return "dead";
     if (done) return current < line ? "hit" : "on";
     return "on";
   }
-  if (current > line) return "hit";
-  if (done) return current === line ? "on" : "dead";
+  if (cleared) return "hit";
+  if (done) return !plus && current === line ? "on" : "dead";
   const gone = elapsed(event);
   if (gone < 0.08) return "on";
   const projected = current / gone;
@@ -231,7 +233,7 @@ function legFor(play: Play, event: EventRow): LiveLeg | null {
     current: known ? value : 0,
     line: prop.line,
     unit: prop.unit,
-    pace: !started ? "pre" : known ? paceOf(value, prop.line, prop.under, event) : "pre",
+    pace: !started ? "pre" : known ? paceOf(value, prop.line, prop.under, prop.plus, event) : "pre",
     source: !started ? "Not started · ESPN" : known ? "ESPN box score" : "Not in the ESPN box score yet",
     why: play.why,
   };

@@ -20,7 +20,7 @@ const MOOD_LABEL: Record<Mood, string> = {
 };
 
 export function asset(path: string): string {
-  const base = import.meta.env.BASE_URL || "/";
+  const base = import.meta.env?.BASE_URL || "/";
   return `${base}${path.replace(/^\//, "")}`;
 }
 
@@ -62,6 +62,7 @@ export function listedOn(play: Play, book: BookId): boolean {
 }
 
 export function renderWhy(block: WhyBlock): string {
+  if (!block.why.length && !block.whyNot.length) return "";
   const tag = block.ours ? "Our read" : "Why";
   const ours = block.ours ? `<span class="ours">ours, not the capper's</span>` : "";
   const whyItems = block.why.length ? `<ul>${block.why.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : "";
@@ -80,9 +81,13 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
     ? `<div class="ctx"><span class="tm"><b>${esc(play.matchup.away.abbr)}</b> ${esc(play.matchup.away.record)} · ${esc(play.matchup.away.standing)}</span><span class="vs">vs</span><span class="tm"><b>${esc(play.matchup.home.abbr)}</b> ${esc(play.matchup.home.record)} · ${esc(play.matchup.home.standing)}</span></div>`
     : "";
   const rank = play.matchup?.rankChip ? `<div class="chips"><span class="chip mr">📊 ${esc(play.matchup.rankChip)}</span></div>` : "";
-  const alt = play.alt
-    ? `<div class="bd"><span class="tag">Alt line</span><s>${esc(play.alt.before)}</s><span class="arrow">→</span><b>${esc(play.alt.after)}</b></div>`
-    : "";
+  const moved = book === "dk" ? play.altDk : play.alt;
+  const altTag = play.altTag ? `<span class="tag">Alt line</span>` : "";
+  const alt = moved
+    ? `<div class="bd">${altTag}<s>${esc(moved.before)}</s><span class="arrow">→</span><b>${esc(moved.after)}</b></div>`
+    : altTag
+      ? `<div class="bd">${altTag}</div>`
+      : "";
   const marks = play.markers?.length
     ? `<div class="mks">${play.markers.map((mark) => `<span class="mk ${mark.kind === "assist" ? "warn" : mark.kind}">${esc(mark.label)}</span>`).join("")}</div>`
     : "";
@@ -96,18 +101,27 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
     chips.push(`<span class="chip st ${tone}" title="Player status, reported before the game. Display only, the play stays.">🩺 ${esc(play.status.label)}${when}</span>`);
   }
   if (play.goalieConfirmed) chips.push(`<span class="chip q">🥅 Goalie · Confirmed</span>`);
+  if (play.legState) chips.push(`<span class="chip q">${esc(play.legState)}</span>`);
+  if (play.books) chips.push(`<span class="chip ${play.books.hr && play.books.dk ? "ok" : "q"}">${play.books.hr ? "HR ✓" : "HR ✗"} · ${play.books.dk ? "DK ✓" : "DK ✗"}</span>`);
   const chipRow = chips.length ? `<div class="chips">${chips.join("")}</div>` : "";
   const grade = play.gradeNote ? `<div class="sub ${play.gradeNote.tone}">${esc(play.gradeNote.text)}</div>` : "";
+  const posted = play.posted ? `<div class="sub">${esc(play.posted)}</div>` : "";
+  const live = play.liveNote ? `<div class="sub">${esc(play.liveNote)}</div>` : "";
+  const flag = play.flagNote ? `<div class="warnline">${esc(play.flagNote)}</div>` : "";
+  const hold = !off && (book === "hr" ? play.hrHold : play.dkHold);
+  const title = book === "dk" && play.dkName ? play.dkName : play.name;
   let button: string;
-  if (!off && book === "hr" && (linkMismatch(play, book) || play.hrUnverified)) button = `<span class="na">${esc(play.hrUnverified || "Hard Rock link unavailable. The stored selection opens a different game or prop.")}</span>`;
+  if (hold) button = `<span class="na">${esc(hold)}</span>`;
+  else if (!off && book === "hr" && (linkMismatch(play, book) || play.hrUnverified)) button = `<span class="na">${esc(play.hrUnverified || "Hard Rock link unavailable. The stored selection opens a different game or prop.")}</span>`;
   else if (off || (!blocked && !canOpen(play, book))) button = `<span class="na">Not on ${bookCode(book)}</span>`;
   else if (play.blocked === "started") button = `<span class="na">Blocked: game started</span>`;
   else if (play.blocked === "graded") button = `<span class="na">Graded · game over</span>`;
   else button = `<button type="button" class="btn ${book}" data-act="open" data-scope="leg" data-id="${esc(play.id)}" data-book="${book}">Open in ${bookName(book)}</button>`;
   const box = check
-    ? `<label class="chk"><input type="checkbox" data-id="${esc(play.id)}" ${checked} aria-label="Select ${esc(play.name)}"></label>`
+    ? `<label class="chk"><input type="checkbox" data-id="${esc(play.id)}" ${checked} aria-label="Select ${esc(title)}"></label>`
     : "";
-  return `<div class="play">${box}<div class="pbody"><div class="prow"><b>${esc(play.name)}</b><span class="odds">${esc(odds)}</span></div><div class="sub">${esc(play.detail)}</div>${fee}${ctx}${rank}${alt}${marks}${chipRow}${grade}${renderWhy(play.why)}<div class="btns">${button}</div></div></div>`;
+  const why = play.showWhy === false ? "" : renderWhy(play.why);
+  return `<div class="play">${box}<div class="pbody"><div class="prow"><b>${esc(title)}</b><span class="odds">${esc(odds)}</span></div><div class="sub">${esc(play.detail)}</div>${posted}${live}${fee}${ctx}${rank}${alt}${flag}${marks}${chipRow}${grade}${why}<div class="btns">${button}</div></div></div>`;
 }
 
 /** >=55 green, 50–54.9 yellow, 40–49.9 orange, under 40 red. */

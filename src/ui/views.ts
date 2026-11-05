@@ -33,7 +33,8 @@ const NAV: [ViewId, string][] = [
 ];
 
 const PRODUCTS: [string, string][] = [
-  ["heist", "THE HEIST"],
+  ["heist", "Heist"],
+  ["heist-alt", "Heist Alt"],
   ["safe", "Safe +100"],
   ["potd", "POTD"],
   ["parlay", "Parlay +100"],
@@ -111,24 +112,47 @@ function bookToggle(book: AppState["book"]): string {
 
 function renderTicket(ticket: Ticket, state: AppState): string {
   const book = ticket.productKey === "first" ? "hr" : state.book;
-  const on = ticket.plays.filter((play) => listedOn(play, book));
-  const off = ticket.plays.filter((play) => !listedOn(play, book));
+  const on = ticket.showAll ? ticket.plays : ticket.plays.filter((play) => listedOn(play, book));
+  const off = ticket.showAll ? [] : ticket.plays.filter((play) => !listedOn(play, book));
   const who = bookCode(book);
   const offHtml = off.length
     ? `<details class="off"><summary>${off.length} play${off.length === 1 ? "" : "s"} not on ${who}, tap to view ▾</summary>${off.map((play) => renderPlay(play, book, state.selected, true)).join("")}</details>`
     : "";
-  const openLegs = on.filter((play) => canOpen(play, book));
-  const foot = off.length
-    ? `<span class="na">${on.length} of ${on.length + off.length} legs on ${who}</span>`
-    : openLegs.length
-      ? `<button type="button" class="btn ${book}" data-act="open" data-scope="ticket" data-id="${esc(ticket.id)}" data-book="${book}">Whole ticket in ${bookName(book)}</button>`
-      : `<span class="na">No open legs</span>`;
+  const openLegs = on.filter((play) => canOpen(play, book) && play.slip !== false);
+  const foot = ticketFoot(ticket, state, on.length, off.length, openLegs.length);
   const share = ticket.share
     ? `<button type="button" class="btn share" data-act="share" data-id="${esc(ticket.id)}" data-settled="0">Share as image</button>`
     : "";
   const badge = ticket.badge === "cappers" ? `<span class="tag un">CAPPERS</span>` : "";
   const stamp = ticket.stamp ? `<div class="stamp">${esc(ticket.stamp)}</div>` : "";
-  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div></div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected)).join("")}${offHtml}<div class="tfoot">${foot}</div></section>`;
+  const warnings = (ticket.warnings ?? []).map((line) => `<p class="warnline">${esc(line)}</p>`).join("");
+  const subset = ticket.playCount && state.sport !== "All" && ticket.plays.length < ticket.playCount
+    ? `<p class="sub">Showing ${ticket.plays.length} of ${ticket.playCount} legs for ${esc(sportLabel(state.sport))}. The price above is the full ticket.</p>`
+    : "";
+  const skips = noteList(ticket.skips, "Not added to Heist");
+  const excluded = noteList(ticket.excluded, "Not on Heist Alt");
+  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div>${warnings}${subset}</div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected)).join("")}${offHtml}${skips}${excluded}<div class="tfoot">${foot}</div></section>`;
+}
+
+function noteList(rows: { capper: string; pick: string; reason: string }[] | undefined, label: string): string {
+  if (!rows?.length) return "";
+  const items = rows
+    .map((row) => `<li><b>${esc(row.capper || "Capper")}</b> ${esc(row.pick)} — ${esc(row.reason)}</li>`)
+    .join("");
+  return `<details class="off"><summary>${esc(label)} (${rows.length}) ▸</summary><ul class="skiplist">${items}</ul></details>`;
+}
+
+function ticketFoot(ticket: Ticket, state: AppState, on: number, off: number, openLegs: number): string {
+  const book = ticket.productKey === "first" ? "hr" : state.book;
+  if (ticket.dkSlipNote && book === "dk") return `<p class="sub">${esc(ticket.dkSlipNote)}</p>`;
+  if (ticket.slipLabel && book === "hr") {
+    const note = ticket.slipNote ? `<p class="sub">${esc(ticket.slipNote)}</p>` : "";
+    if (!ticket.hrSlip) return `<span class="na">No verified Hard Rock legs</span>${note}`;
+    return `<button type="button" class="btn hr" data-act="open" data-scope="ticket" data-id="${esc(ticket.id)}" data-book="hr">${esc(ticket.slipLabel)}</button>${note}`;
+  }
+  if (off) return `<span class="na">${on} of ${on + off} legs on ${bookCode(book)}</span>`;
+  if (openLegs) return `<button type="button" class="btn ${book}" data-act="open" data-scope="ticket" data-id="${esc(ticket.id)}" data-book="${book}">Whole ticket in ${bookName(book)}</button>`;
+  return `<span class="na">No open legs</span>`;
 }
 
 function productChips(board: Board, state: AppState): string {
@@ -225,7 +249,7 @@ function today(state: AppState, board: Board): string {
   const tickets = visibleTickets(board, state);
   const visiblePlays = tickets.flatMap((ticket) => ticket.plays);
   const gameList = board.liveGames.filter((game) => visiblePlays.some((play) => playOnGame(play, game)));
-  const sections = ["heist", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
+  const sections = ["heist", "heist-alt", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
   const blocks = sections
     .map((section) => {
       if (state.product && state.product !== section) return "";

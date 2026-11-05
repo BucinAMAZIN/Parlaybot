@@ -15,7 +15,7 @@ h1,h2,h3{margin:0;font-size:1.375rem;line-height:1.25}
 .btn.hr{background:#7b3fe4}
 .btn.dk{background:#1f6f3f}
 .btn.share{background:#2a313c;color:#fff}
-.na{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border-radius:12px;border:1px dashed #4a5361;color:#a9b4c2;font-size:1rem}
+.na{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border-radius:12px;border:1px dashed #4a5361;color:#a9b4c2;font-size:1rem;white-space:normal;max-width:100%;text-align:left}
 .ticket{background:#161b22;border:1px solid #2a313c;border-radius:18px;padding:16px;margin:16px 0}
 .ticket header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;flex-wrap:wrap}
 .ticket header h3{font-size:1.375rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -27,8 +27,12 @@ body.book-dk .chk input{accent-color:#2ea85a}
 .prow{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .prow b{font-size:1.0625rem;flex:1;min-width:0}
 .odds{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
-.btns,.tfoot{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
-.bd{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px}
+.btns,.tfoot{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;max-width:100%}
+.tfoot .btn{white-space:normal;text-align:center;max-width:100%}
+.bd{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;overflow-wrap:anywhere}
+.warnline{color:#ffcc66;margin:4px 0;overflow-wrap:anywhere}
+.skiplist{margin:0;padding:0 0 8px 18px}
+.skiplist li{margin:6px 0;overflow-wrap:anywhere}
 .bd s{color:#8b95a3}
 .arrow{color:#ffcc00;font-weight:800}
 .mks{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
@@ -394,6 +398,7 @@ html.day .book button{color:#3a4656}
 html.day .topnav button.on{background:#17202b;color:#fff}
 html.day .book button.on.hr{background:#f5c400;color:#111}
 html.day .book button.on.dk{background:#117a22;color:#fff}
+html.day .warnline{color:#7a4e00}
 html.day .chip.ok{color:#0f5c28;border-color:#8fbfa2}
 html.day .chip.warn,
 html.day .chip.mr{color:#7a4e00}

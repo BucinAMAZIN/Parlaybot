@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { adaptEdgePicks, flatUnitResult, gradeResult, inStarBand } from "../src/data/adaptEdgePicks.ts";
 import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentEdgeFeed.ts";
-import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink, HR_MISMATCH_NOTE } from "../src/lib/links.ts";
+import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink, HR_MISMATCH_NOTE, isBlockedHrSid } from "../src/lib/links.ts";
+import { propLine } from "../src/lib/propLine.ts";
+import { movedAltLine, readHrLive, verifiedLegSid } from "../src/data/heist.ts";
+import { renderPage, visibleTickets } from "../src/ui/views.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
 import { fileBounds, historyScope, sliceHistory } from "../src/lib/history.ts";
 import { matchingPlays } from "../src/ui/statsScreen.ts";
-import { knownView, viewFromHash } from "../src/ui/state.ts";
+import { knownView, viewFromHash, type AppState } from "../src/ui/state.ts";
 import { dedupePlays, playKey } from "../src/data/dedupePlays.ts";
 import { isTicketRow, ticketParts } from "../src/data/ticketLegs.ts";
 import { normProp, normSide, normSport } from "../src/data/gradeLabels.ts";
@@ -17,7 +20,7 @@ import { adaptDesk, showsPreparedBoard } from "../src/data/desk.ts";
 import { builtLabel, clockEt, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../src/lib/stamps.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled } from "../src/lib/shareCard.ts";
 import { results, rings, sampleTickets } from "../src/data/sampleBoard.ts";
-import { winRateBand } from "../src/ui/bits.ts";
+import { renderPlay, winRateBand } from "../src/ui/bits.ts";
 
 const raw = JSON.parse(readFileSync(new URL("../fixtures/edge-picks-sample.json", import.meta.url), "utf8"));
 const adapted = adaptEdgePicks(raw);
@@ -576,5 +579,184 @@ assert.deepEqual(nhlParlay?.plays.map((play) => play.name), ["Leg A Over 0.5 Poi
 assert.equal(allParlay?.plays.some((play) => play.name.includes("Overall")), true);
 assert.equal(nhlParlay?.plays.some((play) => play.name.includes("Overall")), false);
 assert.equal(allParlay?.plays.some((play) => play.name.includes("Leg A")), false);
+
+const blocked = new Set(["1051261159191216543"]);
+const unverifiedIds = new Set(["8468082854109249946"]);
+assert.equal(verifiedLegSid({ hr_sid: "6868061461558722991" }, unverifiedIds, blocked), true);
+assert.equal(verifiedLegSid({ hr_sid: "8468082854109249946" }, unverifiedIds, blocked), false);
+assert.equal(verifiedLegSid({ hr_sid: "1051261159191216543" }, unverifiedIds, blocked), false);
+assert.equal(verifiedLegSid({ hr_sid: "111", hr_why: "could not read the leg text" }, unverifiedIds, blocked), false);
+assert.equal(verifiedLegSid({}, unverifiedIds, blocked), false);
+assert.equal(isBlockedHrSid("6868061461558722991"), false);
+assert.equal(isBlockedHrSid("1051261159191216543"), true);
+assert.equal(isBlockedHrSid("McNeese Cowboys ML"), false);
+const numberLive = readHrLive(-130);
+assert.equal(numberLive.kind, "number");
+if (numberLive.kind === "number") assert.equal(numberLive.price, "−130");
+const textLive = readHrLive("-115");
+assert.equal(textLive.kind, "number");
+if (textLive.kind === "number") assert.equal(textLive.price, "−115");
+const objectLive = readHrLive({ label: "Live HR price -240 as of 17:26 ET (game started; posted odds unchanged)", price: "-240", at: "2026-11-05T17:26:15-05:00" });
+assert.equal(objectLive.kind, "object");
+if (objectLive.kind === "object") {
+  assert.match(objectLive.label, /Live HR price -240/);
+  assert.equal(objectLive.price, "−240");
+  assert.equal(objectLive.at, "2026-11-05T17:26:15-05:00");
+}
+assert.equal(readHrLive(null).kind, "empty");
+assert.equal(movedAltLine({ hr_pick: "Rashod Bateman 5+ Rec Yards", pick: "Rashod Bateman Over 13.5 Rec Yards (BAL vs JAX)", hr: "5+ -325", bd_flag: null }, new Set()), true);
+assert.equal(movedAltLine({ hr_pick: "Josh Cuevas 1+ Receptions", pick: "Josh Cuevas 1.5 Receptions O", hr: "1+ -300" }, new Set()), true);
+assert.equal(movedAltLine({ hr_pick: "Justice Hill o2.5 Receptions", pick: "Justice Hill Over 2.5 Receptions", hr: "original line kept · no buy-down in range", bd_flag: "no buy-down in range" }, new Set(["Justice Hill o2.5 Receptions"])), false);
+assert.equal(movedAltLine({ hr_pick: "Player 4+ Receptions", pick: "Player Over 9.5 Receptions", hr: "original line kept", bd_flag: null }, new Set()), false);
+assert.equal(movedAltLine({ hr_pick: "Justice Hill o2.5 Receptions", pick: "Justice Hill Over 9.5 Receptions", hr: "o2.5 -130" }, new Set(["Justice Hill o2.5 Receptions"])), false);
+const five = propLine("Rashod Bateman 5+ Rec Yards");
+assert.equal(five?.plus, true);
+assert.equal(five?.line, 5);
+const kept = propLine("Justice Hill o2.5 Receptions");
+assert.equal(kept?.plus, false);
+assert.equal(kept?.line, 2.5);
+const quoted = propLine('Zay Flowers 4.5 Receptions "O"');
+assert.equal(quoted?.line, 4.5);
+assert.equal(quoted?.under, false);
+const pa = propLine("Anthony Black 16+ PA");
+assert.equal(pa?.plus, true);
+assert.equal(pa?.line, 16);
+assert.equal(pa?.market, "PA");
+
+const hillDk = "0QA385138139#2346933658_13L88808Q1-1278560502Q20";
+const hillDkLink = `https://sportsbook.draftkings.com/event/34118164?outcomes=${encodeURIComponent(hillDk)}`;
+const heistBoard = adaptDesk(
+  {
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    player_status: { players: [{ key: "justice hill", label: "Questionable", posted: "4:45 PM ET" }] },
+    heist: {
+      status: "live",
+      final: true,
+      stake: "1u",
+      odds: 13670,
+      hr_ticket: {
+        n: 4,
+        of: 8,
+        link: "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/1224216296611250609,289795581415653771,3115191231613895049,7257196704145998232",
+        unverified: ["8468082854109249946"],
+      },
+      legs: [
+        { capper: "@alexcaruso", sport: "NFL", pick: "Justice Hill Over 2.5 Receptions", orig: "Justice Hill Over 2.5 Receptions", orig_odds: -130, odds: -130, game: "BAL vs JAX; NFL Play of the Day", start: "2026-11-05 20:15", hr_sid: "1224216296611250609", hr_link: "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/1224216296611250609", hr_live: -130, dk_sid: hillDk, dk_link: hillDkLink, dk_live: "-150" },
+        { capper: "@alexcaruso", sport: "NBA", pick: "Wendell Carter Over 11.5 Points", orig: "Wendell Carter Over 11.5 Points", orig_odds: -145, odds: -145, game: "ORL @ PHX", start: "2026-11-05 21:00", hr_sid: "289795581415653771", hr_live: -145 },
+        { capper: "@alexcaruso", sport: "NFL", pick: "Rashod Bateman Over 13.5 Rec Yards", orig: "Rashod Bateman Over 13.5 Rec Yards", orig_odds: -115, odds: -115, game: "BAL vs JAX", start: "2026-11-05 20:15", hr_sid: "3115191231613895049", hr_live: "-115", why: "Target share up" },
+        { capper: "@austinsprops", sport: "NFL", pick: 'Zay Flowers 4.5 Receptions "O"', orig: 'Zay Flowers 4.5 Receptions "O"', orig_odds: 133, odds: -120, game: "BAL vs JAX", start: "2026-11-05 20:15", hr_why: "could not read the leg text" },
+        { capper: "@austinsprops", sport: "NBA", pick: 'Anthony Black 18.5 PA "O"', odds: -140, game: "ORL @ PHX", start: "2026-11-05 21:00", hr_why: "could not read the leg text" },
+        { capper: "@austinsprops", sport: "NBA", pick: "Anthony Black 14.5 Pts O", odds: -130, game: "ORL @ PHX", start: "2026-11-05 21:00", hr_sid: "7257196704145998232", hr_live: -130 },
+        { capper: "@austinsprops", sport: "NFL", pick: "Josh Cuevas 1.5 Receptions O", odds: 160, game: "BAL vs JAX", start: "2026-11-05 20:15", hr_sid: "8468082854109249946", hr_why: "Unverified link: mismatch: stat targets vs market rec (Receptions)" },
+        { capper: "@showtimepicks2", sport: "NCAAB", pick: "McNeese Cowboys ML", odds: -142, game: "vs UNT; CBB free play", start: "2026-11-05 17:00", hr_sid: "6868061461558722991", hr_why: null, hr_live: { label: "Live HR price -240 as of 17:26 ET (game started; posted odds unchanged)", price: "-240", at: "2026-11-05T17:26:15-05:00" } },
+      ],
+      skipped: [{ capper: "@alexcaruso", why: "n/a at Hard Rock (exact line, no buy-down rung)", pick: "James Cameron 10+ Rec Yards" }],
+      conv: [
+        { capper: "@alexcaruso", sport: "NFL", pick: "Rashod Bateman Over 13.5 Rec Yards (BAL vs JAX)", hr_pick: "Rashod Bateman 5+ Rec Yards", hr: "5+ -325", hr_odds: -325, grade_odds: -325, bd: true, hr_sid: "2796913401698320777", game: "JAX @ BAL", kick: "8:15 PM ET", start: "2026-11-05 20:15", dk: "n/a at DK (no exact DK line at HR rung 5+)", dk_absent: true },
+        { capper: "@alexcaruso", sport: "NFL", pick: "Justice Hill Over 2.5 Receptions (BAL vs JAX)", hr_pick: "Justice Hill o2.5 Receptions", hr: "original line kept · no buy-down in range (no HR alt in -250..-425)", hr_odds: null, grade_odds: -130, bd: false, bd_flag: "no buy-down in range", hr_sid: "922756596554138013", game: "JAX @ BAL", kick: "8:15 PM ET", dk_pick: "Justice Hill o2.5 Receptions", dk_sid: hillDk, dk_link: hillDkLink, dk_live: "-150" },
+        { capper: "@alexcaruso", sport: "NBA", pick: "Wendell Carter Over 11.5 Points (ORL @ PHX)", hr_pick: "Wendell Carter 9+ Points", hr: "9+ -350", grade_odds: -350, bd: true, hr_sid: "8680423899671953803", game: "ORL @ PHX", kick: "9:00 PM ET" },
+        { capper: "@austinsprops", sport: "NFL", pick: "Josh Cuevas 1.5 Receptions O (BAL vs JAX)", hr_pick: "Josh Cuevas 1+ Receptions", hr: "1+ -300", grade_odds: -300, bd: false, hr_sid: "4554454777924288922", game: "JAX @ BAL", kick: "8:15 PM ET", dk_pick: "Josh Cuevas 1+ Receptions", dk_sid: "0QA385508152#2348847953_13L88808Q1794588810Q20", dk_link: "https://sportsbook.draftkings.com/event/34118164?outcomes=0QA385508152%232348847953_13L88808Q1794588810Q20", dk_live: "-300" },
+        { capper: "@austinsprops", sport: "NFL", pick: 'Zay Flowers 4.5 Receptions "O" (BAL vs JAX)', hr_pick: "Zay Flowers 4+ Receptions", hr: "4+ -260", grade_odds: -260, bd: false, hr_sid: "4320493816986599819", game: "JAX @ BAL", kick: "8:15 PM ET" },
+        { capper: "@austinsprops", sport: "NBA", pick: "Anthony Black 14.5 Pts O (ORL @ PHX)", hr_pick: "Anthony Black 12+ Pts", hr: "12+ -275", grade_odds: -275, bd: false, hr_sid: "4914480472983208344", game: "ORL @ PHX", kick: "9:00 PM ET" },
+        { capper: "@austinsprops", sport: "NBA", pick: 'Anthony Black 18.5 PA "O" (ORL @ PHX)', hr_pick: "Anthony Black 16+ PA", hr: "16+ -300", grade_odds: -300, bd: false, hr_sid: "3959915023555494311", game: "ORL @ PHX", kick: "9:00 PM ET" },
+        { capper: "@showtimepicks2", sport: "NCAAB", pick: "McNeese Cowboys ML (vs UNT)", hr_pick: null, excluded: "ML (not a prop)", hr: "not convertible (parlay/TD/ML: original kept)" },
+      ],
+      bd_ticket: { legs: 7, odds: 898, bought: 6, flagged: ["Justice Hill o2.5 Receptions"], band: [-425, -250], target: -325 },
+    },
+    legday: { board: [{ sport: "NBA", pick: "Bam Adebayo Under 1.5 Rebounds", odds: "-130" }] },
+    first_blood: { date: "2026-11-05", title: "First Blood", legs: [{ player: "Sample Skater", team: "TBL", market: "First goal", odds: "+500", sport: "NHL" }] },
+    results_v2: { rows: [] },
+  },
+  ncaab,
+);
+const mainHeist = heistBoard.tickets.find((item) => item.id === "heist");
+const altHeist = heistBoard.tickets.find((item) => item.id === "heist-alt");
+assert.ok(mainHeist && altHeist);
+assert.equal(mainHeist.plays.length, 8);
+assert.equal(altHeist.plays.length, 7);
+assert.equal(mainHeist.meta.includes("+13670"), true);
+assert.equal(mainHeist.meta.includes("1u"), true);
+assert.equal(mainHeist.stamp, "Final");
+assert.equal(altHeist.meta.includes("+898"), true);
+assert.match(altHeist.meta, /6 of 7 legs on an Alt line near −325/);
+assert.equal(altHeist.plays.filter((play) => play.altTag).length, 6);
+const hillAlt = altHeist.plays.find((play) => play.name.includes("Justice Hill"));
+assert.equal(hillAlt?.altTag, false);
+assert.match(hillAlt?.flagNote ?? "", /No alt line in −250 to −425 — original line kept/);
+assert.equal(/buy-down/i.test(hillAlt?.flagNote ?? ""), false);
+const hillHtml = renderPlay(hillAlt!, "hr", new Set());
+assert.equal(hillHtml.includes('class="tag">Alt line'), false);
+assert.match(hillHtml, /Questionable/);
+assert.match(hillHtml, /4:45 PM ET/);
+const batemanAlt = altHeist.plays.find((play) => play.name.includes("5+"));
+assert.equal(batemanAlt?.altTag, true);
+assert.equal(batemanAlt?.hr, "−325");
+assert.equal(batemanAlt?.id.startsWith("heist-alt-"), true);
+const batemanMain = mainHeist.plays.find((play) => play.name.includes("Bateman"));
+assert.notEqual(batemanMain?.id, batemanAlt?.id);
+assert.notEqual(batemanMain?.hrSid, batemanAlt?.hrSid);
+assert.match(renderPlay(batemanAlt!, "hr", new Set()), /Over 13\.5 Rec Yards/);
+assert.match(renderPlay(batemanAlt!, "dk", new Set()), /Not on DK/);
+const cuevasAlt = altHeist.plays.find((play) => play.name.includes("1+"));
+assert.match(renderPlay(cuevasAlt!, "dk", new Set()), /1\+ Receptions/);
+assert.match(renderPlay(cuevasAlt!, "dk", new Set()), /class="tag">Alt line/);
+const flowers = mainHeist.plays.find((play) => play.name.includes("Flowers"));
+assert.match(flowers?.posted ?? "", /\+133/);
+assert.equal(flowers?.hr, "−120");
+assert.match(flowers?.hrHold ?? "", /HR link unavailable: could not read the leg text/);
+const cuevas = mainHeist.plays.find((play) => play.name.includes("Cuevas"));
+assert.equal(cuevas?.hrSid, undefined);
+assert.equal(cuevas?.slip, false);
+assert.equal(cuevas?.hrHold, "Unverified HR link — held");
+const mcneese = mainHeist.plays.find((play) => play.name.includes("McNeese"));
+assert.equal(mcneese?.hrSid, "6868061461558722991");
+assert.equal(mcneese?.slip, true);
+assert.equal(mcneese?.hr, "−142");
+assert.match(mcneese?.liveNote ?? "", /Live HR price -240/);
+assert.equal(hardRockLegLink({ id: mcneese!.id, name: mcneese!.name, hrSid: mcneese!.hrSid, hrLink: mcneese!.hrLink }).status, "ready");
+const slipIds = (mainHeist.hrSlip ?? "").split("betslip/")[1]?.split(",") ?? [];
+assert.deepEqual(slipIds, ["1224216296611250609", "289795581415653771", "3115191231613895049", "7257196704145998232", "6868061461558722991"]);
+assert.equal(slipIds.includes("8468082854109249946"), false);
+assert.equal(slipIds.includes("1051261159191216543"), false);
+assert.equal(mainHeist.slipLabel, "Whole Heist in Hard Rock (5 of 8 verified legs)");
+const builtSlip = hardRockSlipLink(mainHeist.plays.filter((play) => play.slip !== false).map((play) => ({ id: play.id, name: play.name, hrSid: play.hrSid, hrLink: play.hrLink })));
+assert.equal(builtSlip.status, "ready");
+if (builtSlip.status === "ready") assert.equal(builtSlip.url, mainHeist.hrSlip);
+const altIds = (altHeist.hrSlip ?? "").split("betslip/")[1]?.split(",") ?? [];
+assert.equal(altIds.length, 7);
+assert.equal(altIds.includes("1224216296611250609"), false);
+assert.equal(altHeist.slipLabel, "Whole Heist Alt in Hard Rock (all 7 legs)");
+assert.equal(mainHeist.plays.some((play) => play.id.startsWith("heist-alt-")), false);
+assert.match(mainHeist.skips?.[0]?.reason ?? "", /no Alt line rung/);
+assert.equal(/buy-down/i.test(mainHeist.skips?.[0]?.reason ?? ""), false);
+assert.match(altHeist.excluded?.[0]?.reason ?? "", /ML \(not a prop\)/);
+const blank = (): AppState => ({
+  view: "today", book: "hr", sport: "All", product: null, selected: new Set(), text: "md", theme: "night",
+  alerts: { locks: false, finals: false, redzone: false, price: false }, pushWant: { picks: false, locks: false }, pushAck: false, pushDelivery: "off",
+  sheet: null, league: "NBA", standingsFrom: "today", gamePanel: {}, openGames: new Set(), gamesOpen: false, gamesSport: "All", feedFilter: {},
+  profitRange: "14d", openDates: new Set(), conference: "", statsFrom: "", statsTo: "", statsCalOpen: false, statsMode: "range", statsSection: "all",
+  statsSport: "", statsAnchor: "", statsDraft: "", nightOpen: false, resultsPick: null, openResultDates: new Set(), openTickets: new Set(),
+});
+const page = renderPage(blank(), heistBoard);
+assert.equal(page.indexOf('id="ticket-heist"') < page.indexOf('id="ticket-heist-alt"'), true);
+assert.match(page, /Heist Alt/);
+assert.match(page, /Whole Heist in Hard Rock \(5 of 8 verified legs\)/);
+assert.match(page, /Whole Heist Alt in Hard Rock \(all 7 legs\)/);
+assert.match(page, /Unverified HR link — held/);
+assert.equal(/buy-down/i.test(page), false);
+assert.equal(/ALT PROPS TRACKED/i.test(page), false);
+assert.match(page, /Props/);
+assert.match(page, /First Blood/);
+const nfl = renderPage({ ...blank(), sport: "NFL" }, heistBoard);
+assert.match(nfl, /Showing 4 of 8 legs for NFL/);
+assert.match(nfl, /Showing 4 of 7 legs for NFL/);
+assert.match(nfl, /all 7 legs/);
+assert.match(nfl, /5 of 8 verified legs/);
+const dkPage = renderPage({ ...blank(), book: "dk" }, heistBoard);
+assert.match(dkPage, /DraftKings opens each leg on its own/);
+assert.equal(dkPage.includes("Whole Heist in Hard Rock"), false);
+assert.equal(dkPage.includes("Whole Heist Alt in Hard Rock"), false);
+assert.equal(visibleTickets(heistBoard, { ...blank(), sport: "NCAAB" }).some((ticket) => ticket.id === "heist-alt"), false);
+assert.equal(visibleTickets(heistBoard, { ...blank(), sport: "NCAAB" }).find((ticket) => ticket.id === "heist")?.plays.length, 1);
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

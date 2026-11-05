@@ -60,6 +60,30 @@ export type Play = {
   /** Feed hr_why when the stored Hard Rock selection could not be verified. Not a book-absence flag. */
   hrUnverified?: string;
   gradeNote?: { text: string; tone: "W" | "L" | "V" };
+  /** Posted capper line when it differs from the live book line. Display only. */
+  posted?: string;
+  /** In-play Hard Rock note. Does not replace the posted odds. */
+  liveNote?: string;
+  /** False hides the Why chip when the file has no note. */
+  showWhy?: boolean;
+  /** HR / DK availability, display only. */
+  books?: { hr: boolean; dk: boolean };
+  /** Replaces the Hard Rock button. The leg stays on the card. */
+  hrHold?: string;
+  /** Replaces the DraftKings button. */
+  dkHold?: string;
+  /** False keeps this leg off the one-tap Hard Rock ticket. */
+  slip?: boolean;
+  /** Alt line tag. Separate from the before → after text. */
+  altTag?: boolean;
+  /** DraftKings before → after. Hard Rock uses `alt`. */
+  altDk?: { before: string; after: string };
+  /** Flagged alt row. No Alt line tag. */
+  flagNote?: string;
+  /** DraftKings line title when it differs from the Hard Rock title. */
+  dkName?: string;
+  /** PENDING, LIVE, or FINAL from the file. */
+  legState?: string;
 };
 
 export type Ticket = {
@@ -81,6 +105,21 @@ export type Ticket = {
    * A sport id is only that sport's board. Unset tickets still filter by each play's sport.
    */
   board?: string;
+  /** Render every leg in file order, including ones this book cannot open. */
+  showAll?: boolean;
+  /** Leg count before a sport chip filters the card. */
+  playCount?: number;
+  /** One-tap Hard Rock label. Uses the full ticket, not the sport subset. */
+  slipLabel?: string;
+  /** Why some legs are off the one-tap slip. */
+  slipNote?: string;
+  /** DraftKings has no whole-ticket link. */
+  dkSlipNote?: string;
+  /** Verified Hard Rock deep link for the whole ticket. */
+  hrSlip?: string;
+  warnings?: string[];
+  skips?: { capper: string; pick: string; reason: string }[];
+  excluded?: { capper: string; pick: string; reason: string }[];
 };
 
 /** One recorded leg of a historical ticket. Empty strings mean that field was not in the file. */
