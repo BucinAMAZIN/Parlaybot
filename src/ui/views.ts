@@ -75,7 +75,7 @@ function shell(active: ViewId, inner: string): string {
     ([id, label]) =>
       `<button type="button" class="${id === active ? "on" : ""}" data-act="nav" data-view="${id}">${label}${id === "live" ? `<i class="livedot">●</i>` : ""}</button>`,
   ).join("");
-  return `<div class="samplebar">SAMPLE DATA — Edge feed rows are the attached fixture</div><div class="wrap"><header class="brand"><img class="logo" src="${asset("brand/parlaybot-header.png")}" alt="ParlayBOT"></header><nav class="topnav">${nav}</nav>${inner}</div>`;
+  return `<div class="samplebar">SAMPLE DATA — Edge feed rows are the attached fixture</div><div class="wrap"><header class="brand"><img class="logo" src="${asset("brand/parlaybot-header.png")}?v=visor" alt="ParlayBOT"><button type="button" class="gear" data-act="settings" aria-label="Settings">⚙</button></header><nav class="topnav">${nav}</nav>${inner}</div>`;
 }
 
 function bookToggle(book: AppState["book"]): string {
@@ -185,7 +185,7 @@ function today(state: AppState, board: Board): string {
       : "Showing plays live on DraftKings · DK price incl. fee (Florida DK Predictions). Legs are picked on Hard Rock. TD City hidden (no plays today).";
   const left = `${bookToggle(state.book)}${recapCard(board)}<div class="card"><h2>Last 14 days</h2><div class="sub">${esc(windowed.headline)}</div><div class="priv">🔒 Only you can see this</div>${chartSvg(windowed.points)}<div class="rings">${rings}</div></div>`;
   const right = `<div class="sub" style="margin:2px 0 4px"><b>Games tonight</b> · tap a game for Feed · Box · VS</div>${games}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${blocks || `<p class="empty">No plays in this filter.</p>`}`;
-  return `<div class="hdrtop"><div class="sub">${esc(board.dateLabel)}</div><button type="button" class="gear" data-act="settings" aria-label="Settings">⚙</button></div><div class="home"><div>${left}</div><div>${right}</div></div>`;
+  return `<div class="sub date-line">${esc(board.dateLabel)}</div><div class="home"><div>${left}</div><div>${right}</div></div>`;
 }
 
 function renderLiveLeg(leg: LiveLeg): string {

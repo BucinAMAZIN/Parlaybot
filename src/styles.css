@@ -67,8 +67,9 @@ body.book-dk .chk input{accent-color:#2ea85a}
 .topnav button{flex:1 1 0;justify-content:center;padding:0 2px;font-size:.8125rem;min-width:0;white-space:nowrap;min-height:44px;display:flex;align-items:center;border-radius:12px;color:#a9b4c2;font-weight:700;background:none;border:0}
 .topnav button.on{color:#fff;background:#1d2430}
 .livedot{color:#ff5c5c;font-style:normal;margin-left:3px}
-.brand{display:flex;align-items:center;padding:6px 0 4px}
-.brand .logo{height:52px;width:auto;max-width:100%;display:block}
+.brand{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:6px 0 4px}
+.brand .logo{height:52px;width:auto;max-width:calc(100% - 56px);display:block}
+.brand .gear{flex:none}
 @media(min-width:900px){.brand .logo{height:64px}}
 html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .chip{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 9px;font-size:.75rem;font-weight:700;background:#1d2430;color:#cfd6df;border:1px solid #2c3542;white-space:nowrap}
@@ -116,6 +117,7 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .sw.no{background:#3a4452}
 .sw.no::after{right:auto;left:3px}
 .hdrtop{display:flex;justify-content:space-between;align-items:center}
+.date-line{margin:2px 0 10px}
 .gear{width:44px;height:44px;border-radius:12px;background:#1d2430;display:flex;align-items:center;justify-content:center;font-size:1.25rem;border:0;color:inherit}
 .sharecard{background:linear-gradient(160deg,#1b3a2a,#0d1117 70%);border:2px solid #76f53a;border-radius:20px;padding:20px;max-width:340px;margin:12px auto;position:relative}
 .sc-top{display:flex;justify-content:space-between;font-weight:800;letter-spacing:.06em}
