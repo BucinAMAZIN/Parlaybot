@@ -158,10 +158,10 @@ function recapCard(board: Board): string {
   return `<div class="recap"><div class="priv">🔒 Only you can see this</div><div class="sub">${esc(board.recap.when)}</div><div class="big ${tone}">${esc(board.recap.units)}</div><div class="sub" style="margin-bottom:8px">${esc(board.recap.summary)}</div>${rows}<div style="margin-top:12px"><button type="button" class="btn share" data-act="nav" data-view="results">See results</button></div></div>`;
 }
 
-function chartWindow(board: Board, range: RangeKey, sample: boolean): { points: SeriesPoint[]; headline: string; note: string; rings: { pct: number; label: string }[] } {
-  if (!board.series.length) return { points: [], headline: "No chart in this file", note: "", rings: board.rings };
+function chartWindow(board: Board, range: RangeKey, sample: boolean): { points: SeriesPoint[]; headline: string; note: string; rings: { pct: number; label: string }[]; ringsNote: string } {
+  if (!board.series.length) return { points: [], headline: "No chart in this file", note: "", rings: board.rings, ringsNote: "" };
   if (sample) {
-    return { points: board.series, headline: "+9.4u · 62% wins", note: "Sample series. It is not the desk history.", rings: board.rings };
+    return { points: board.series, headline: "+9.4u · 62% wins", note: "Sample series. It is not the desk history.", rings: board.rings, ringsNote: "Sample card." };
   }
   const windowed = sliceHistory(board.series, range);
   const grades = windowGrades(board.grades, windowed.from, windowed.to);
@@ -169,7 +169,8 @@ function chartWindow(board: Board, range: RangeKey, sample: boolean): { points: 
   const rate = windowWinRate(grades);
   const headline = delta == null ? "No chart in this file" : `${formatSigned(delta, 2)}u · ${rate == null ? "no graded tickets in this range" : `${rate}% wins`}`;
   const note = windowed.starts ? `History starts ${windowed.starts}.` : "Running units from the desk chart.";
-  return { points: windowed.points, headline, note, rings: windowRings(grades) };
+  const ringsNote = windowed.starts ? `History starts ${windowed.starts}. Win rates use the graded tickets on these dates.` : "Win rates use the graded tickets on these dates.";
+  return { points: windowed.points, headline, note, rings: windowRings(grades), ringsNote };
 }
 
 export function renderPage(state: AppState, board: Board): string {
@@ -545,7 +546,7 @@ function stats(state: AppState, board: Board): string {
       : "";
     return `<div class="hdr"><h1 style="font-size:1.75rem">Stats</h1><button type="button" class="stdchip" data-act="standings" data-from="stats">📊 Standings</button></div><div class="priv">🔒 Only you can see this</div>
 <div class="card"><h2>Profit</h2><div class="ranges" role="tablist" aria-label="Chart range">${rangeButtons}</div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
-<div class="card"><h2><span class="tag of">OFFICIAL</span> Win rate by product</h2><div class="sub">${esc(windowed.note)} Same dates as the chart.</div><div class="rings">${rings}</div></div>
+<div class="card"><h2><span class="tag of">OFFICIAL</span> Win rate by product</h2><div class="sub">${esc(windowed.ringsNote)}</div><div class="rings">${rings}</div></div>
 ${clvCard(board)}
 <div class="card"><h2><span class="tag un">UNOFFICIAL</span> For fun · tracked only</h2><div class="sub">From the desk summary. Never in the official record.</div><table class="tbl">${statsRows(priv.unofficial)}</table></div>
 <div class="card"><h2>Hit % by prop</h2><div class="sub">Desk record.props. No unit column — the file does not publish one here.</div><table class="tbl">${statsRows(priv.props)}</table></div>
