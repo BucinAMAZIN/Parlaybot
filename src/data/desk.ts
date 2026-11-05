@@ -137,7 +137,23 @@ function pickText(row: Row): string {
   return prop || player;
 }
 
-function playFrom(row: Row, id: string, statuses: Map<string, PlayerStatus>): Play | null {
+function sportOfRow(row: Row, hint = ""): Sport {
+  const named = str(row.sport) || (isRow(row.ctx) ? str(row.ctx.sport) : "") || hint;
+  const classified = classifySport(named);
+  if (named && classified !== "Other") return classified;
+  const ctx = isRow(row.ctx) ? row.ctx : {};
+  const src = `${JSON.stringify(ctx.usage ?? "")} ${JSON.stringify(ctx.game_day ?? "")}`;
+  if (/nhle|hockey/i.test(src)) return "NHL";
+  if (/college football|ncaaf/i.test(src)) return "NCAAF";
+  if (/college basketball|ncaam|ncaab/i.test(src)) return "NCAAB";
+  if (/nba/i.test(src)) return "NBA";
+  if (/nfl|football/i.test(src)) return "NFL";
+  const record = isRow(ctx.record) ? Object.values(ctx.record).map(String) : [];
+  if (record.some((value) => /^\d+-\d+-\d+$/.test(value))) return "NHL";
+  return classified;
+}
+
+function playFrom(row: Row, id: string, statuses: Map<string, PlayerStatus>, hint = ""): Play | null {
   const pick = pickText(row);
   if (isPlaceholder(pick)) return null;
   const dk = isRow(row.dk) ? row.dk : null;
@@ -160,7 +176,7 @@ function playFrom(row: Row, id: string, statuses: Map<string, PlayerStatus>): Pl
   else if (/assist/i.test(pick)) markers.push({ kind: "assist", label: "Assist" });
   const game = str(row.game) || str(ctx?.game);
   const start = str(row.start_et) || str(row.start) || str(row.kick);
-  const sport = sportOf(str(row.sport) || str(ctx?.sport));
+  const sport = sportOfRow(row, hint);
   const name = playerOf(pick);
   const status = statuses.get(norm(name));
   const alt = row.alt === true ? " · Alt line" : "";
@@ -226,10 +242,10 @@ function legsOrSelf(row: Row): Row[] {
   return legs.length ? legs : [row];
 }
 
-function takePlays(rows: Row[], prefix: string, statuses: Map<string, PlayerStatus>, seen: Set<string>): Play[] {
+function takePlays(rows: Row[], prefix: string, statuses: Map<string, PlayerStatus>, seen: Set<string>, hint = ""): Play[] {
   const plays: Play[] = [];
   rows.forEach((row, index) => {
-    const play = playFrom(row, `${prefix}-${index}`, statuses);
+    const play = playFrom(row, `${prefix}-${index}`, statuses, hint);
     if (!play) return;
     const key = norm(play.name);
     if (seen.has(key)) return;
@@ -502,7 +518,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   }
   for (const [sport, value] of Object.entries(sports)) {
     if (!isRow(value) || !isRow(value.parlay)) continue;
-    const plays = takePlays(legsOrSelf(value.parlay), `parlay-${sport}`, statuses, new Set());
+    const plays = takePlays(legsOrSelf(value.parlay), `parlay-${sport}`, statuses, new Set(), sport);
     const card = ticket(`parlay-${sport}`, "parlay", `Parlay +100 · ${sportLabel(sportOf(sport))}`, str(value.parlay.pick) || sport, plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay));
     if (card) tickets.push(card);
   }
