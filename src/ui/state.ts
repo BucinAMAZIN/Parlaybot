@@ -70,6 +70,12 @@ export type AppState = {
   openResultDates: Set<string>;
   /** Ticket rows opened for their recorded legs. Starts empty and is not saved. */
   openTickets: Set<string>;
+  /** Null follows the 10:00 AM ET rule. False peeks at today's slate before then. */
+  liveNight: boolean | null;
+  /** Football snap being previewed, keyed by game id or Today tracker key. */
+  snapPreview: Record<string, string>;
+  /** Bumped to replay a snap. Background polls leave it alone. */
+  snapGen: Record<string, number>;
 };
 
 /** A known tab name, with the retired Stats tab sent to Results. Empty and unknown hashes are null. */
@@ -130,6 +136,9 @@ export function defaultState(): AppState {
     resultsPick: null,
     openResultDates: new Set(),
     openTickets: new Set(),
+    liveNight: null,
+    snapPreview: {},
+    snapGen: {},
   };
 }
 

@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { absorbLiveLeg, abbrsMatch, box, firstBloodLeg, formatRankValue, liveTitle, mergeTags, propOf, readStat, teamStatsFor, trackPlayOnBoard } from "../src/data/espn.ts";
-import { adaptDesk } from "../src/data/desk.ts";
+import { absorbLiveLeg, abbrsMatch, box, firstBloodLeg, formatRankValue, liveTitle, liveWindowET, mergeTags, propOf, readStat, samePlayer, situationOf, slateLabel, teamStatsFor, trackPlayOnBoard } from "../src/data/espn.ts";
+import { adaptDesk, readSlateCache, rememberSlate, replayTag, replayYesterday, writeSlateCache } from "../src/data/desk.ts";
+import { emptyBoard } from "../src/data/board.ts";
 import { PACE, altAfter, mascot, renderPlay } from "../src/ui/bits.ts";
+import { renderPage, renderSheet } from "../src/ui/views.ts";
+import type { AppState } from "../src/ui/state.ts";
 import type { LiveGame, LiveLeg, Play, WhyBlock } from "../src/data/types.ts";
 
 const why: WhyBlock = { ours: false, line: "", why: [], whyNot: [] };
@@ -237,5 +240,114 @@ assert.equal(safeBoard.tickets.find((item) => item.productKey === "parlay")?.pla
 assert.equal(safeBoard.tickets.some((item) => item.plays.some((play) => play.tags?.includes("+100 ALT"))), true);
 assert.equal(safeBoard.tickets.some((item) => item.plays.some((play) => play.tags?.includes("+100 ALT · NHL"))), true);
 assert.equal(safeBoard.notices.some((note) => /No qualifying Alt Parlay/.test(note.text)), true);
+
+const morning = liveWindowET(new Date("2026-11-06T14:30:00Z"));
+assert.equal(morning.hourET, 9);
+assert.equal(morning.todayET, "2026-11-06");
+assert.equal(morning.yesterdayET, "2026-11-05");
+assert.equal(morning.defaultSlate, "2026-11-05");
+const ten = liveWindowET(new Date("2026-11-06T15:00:00Z"));
+assert.equal(ten.hourET, 10);
+assert.equal(ten.defaultSlate, "2026-11-06");
+const late = liveWindowET(new Date("2026-11-06T04:30:00Z"));
+assert.equal(late.hourET, 23);
+assert.equal(late.todayET, "2026-11-05");
+assert.equal(late.defaultSlate, "2026-11-05");
+assert.equal(slateLabel("2026-11-05"), "Nov 5");
+assert.deepEqual(situationOf({ situation: { possession: "33", awayTimeouts: 2, homeTimeouts: 3 } }), { possessionId: "33", awayTimeouts: 2, homeTimeouts: 3 });
+assert.equal(situationOf({}), null);
+assert.equal(samePlayer("Zay Flowers", "Zay Flowers"), true);
+
+const kept = rememberSlate(
+  [{ slateDate: "2026-11-03", tickets: [{ id: "a", plays: [{ id: "p" }] } as never], cappers: [], teamVs: null, teamBuilt: null }],
+  { slateDate: "2026-11-04", tickets: [], cappers: [{ id: "c", name: "@a", group: "heist", record: "", plays: [{ id: "p" } as never] }], teamVs: { built: "Thu" }, teamBuilt: "Built Thu" },
+);
+const two = rememberSlate(kept, { slateDate: "2026-11-05", tickets: [{ id: "b", plays: [{ id: "q" } as never] } as never], cappers: [], teamVs: null, teamBuilt: null });
+assert.deepEqual(two.map((item) => item.slateDate), ["2026-11-05", "2026-11-04"]);
+assert.equal(rememberSlate(two, { slateDate: "2026-11-06", tickets: [], cappers: [], teamVs: null, teamBuilt: null }).length, 2);
+const memory = { jar: new Map<string, string>(), getItem(key: string) { return this.jar.get(key) ?? null; }, setItem(key: string, value: string) { this.jar.set(key, value); } };
+writeSlateCache(memory, two);
+assert.equal(readSlateCache(memory)[0]?.slateDate, "2026-11-05");
+
+assert.equal(replayTag({ cat: "POTD", grp: "O" }), "POTD");
+assert.equal(replayTag({ cat: "Parlay +100", grp: "O" }), "+100");
+assert.equal(replayTag({ cat: "Edge", grp: "E" }), "Edge");
+assert.equal(replayTag({ cat: "LEG DAY", grp: "O" }), "Props");
+assert.equal(replayTag({ cat: "LEG DAY", grp: "O", alt: true }), "Props ALT");
+assert.equal(replayTag({ cat: "The Heist", grp: "O", alt: true, prop: "@showtimepicks2 · Spread" }), "Heist ALT");
+assert.equal(replayTag({ cat: "First Blood", grp: "F", leg: true }), "First Blood");
+assert.equal(replayTag({ cat: "Cappers", grp: "C", prop: "@austinsprops · NFL receptions (over)" }), "@austinsprops");
+const rebuilt = replayYesterday({
+  heist: { date: "2026-11-05", legs: [{ pick: "UTSA Roadrunners -1.5", sport: "NCAAF", odds: "-110", why: "Road spot" }] },
+  results_v2: { rows: [
+    { date: "2026-11-05", pick: "First Blood 8-leg", cat: "First Blood", grp: "F", prop: "First Blood", fam: "Parlay", sport: "NBA", leg: false },
+    { date: "2026-11-05", pick: "Franz Wagner first point scorer", cat: "First Blood", grp: "F", prop: "First Point Scorer", sport: "NBA", leg: true },
+    { date: "2026-11-05", pick: "2-leg", cat: "Parlay +100", grp: "O", sub: "Mikhail Sergachev Over 0.5 Points + Neal Pionk Over 1.5 Shots On Goal", prop: "Big 4 parlay", sport: "Big 4", leg: false },
+    { date: "2026-11-05", pick: "Zay Flowers Over 48.5 Receiving Yards", cat: "POTD", grp: "O", prop: "NFL receiving yards", sport: "NFL", leg: false },
+    { date: "2026-11-04", pick: "Old play Over 1.5 Points", cat: "Edge", grp: "E", sport: "NHL", leg: false },
+    { date: "2026-11-05", pick: "Justice Hill Over 2.5 Receptions", cat: "Cappers", grp: "C", prop: "@alexcaruso · NFL receptions (over)", sport: "NFL", leg: false },
+  ] },
+}, "2026-11-05");
+const names = [...rebuilt.tickets.flatMap((ticket) => ticket.plays), ...rebuilt.cappers.flatMap((capper) => capper.plays)].map((play) => play.name);
+assert.equal(names.includes("First Blood 8-leg"), false);
+assert.equal(names.includes("Franz Wagner first point scorer"), true);
+assert.equal(names.includes("Mikhail Sergachev Over 0.5 Points"), true);
+assert.equal(names.includes("Neal Pionk Over 1.5 Shots On Goal"), true);
+assert.equal(names.includes("Zay Flowers Over 48.5 Receiving Yards"), true);
+assert.equal(names.includes("Old play Over 1.5 Points"), false);
+assert.equal(names.includes("UTSA Roadrunners -1.5"), true);
+assert.equal(rebuilt.cappers[0]?.name, "@alexcaruso");
+assert.equal(rebuilt.tickets.find((ticket) => ticket.title === "POTD")?.plays[0]?.name, "Zay Flowers Over 48.5 Receiving Yards");
+assert.equal(rebuilt.tickets.find((ticket) => ticket.plays.some((play) => play.name.includes("UTSA")))?.plays[0]?.why.why[0], "Road spot");
+
+const liveState = {
+  view: "live",
+  book: "hr",
+  liveNight: null,
+  snapPreview: {},
+  snapGen: {},
+  openGames: new Set<string>(),
+  gamePanel: {},
+  feedFull: new Set<string>(),
+  feedFilter: {},
+  sheet: null,
+} as AppState;
+const card = emptyBoard();
+card.liveGames = [{
+  id: "g1",
+  league: "NCAAF",
+  away: "UTSA",
+  home: "FAU",
+  awayName: "UTSA",
+  homeName: "FAU",
+  awayScore: 7,
+  homeScore: 10,
+  clock: "8:00 - 2nd",
+  pre: false,
+  final: false,
+  possessionSide: "away",
+  awayTimeouts: 2,
+  homeTimeouts: 3,
+  awaySide: { abbr: "UTSA", record: "5-3", standing: "" },
+  homeSide: { abbr: "FAU", record: "4-4", standing: "" },
+  legs: [],
+  liveFeed: { pbp: [], box: { headers: [], rows: [] }, teamStats: [], real: true },
+} as LiveGame];
+const liveHtml = renderPage(liveState, card);
+assert.match(liveHtml, /class="poss-ball"/);
+assert.match(liveHtml, /aria-label="UTSA 2 timeouts remaining"/);
+assert.match(liveHtml, /aria-label="FAU 3 timeouts remaining"/);
+assert.match(liveHtml, /2 TO/);
+assert.match(liveHtml, /3 TO/);
+assert.match(liveHtml, /#facc15|#9a4f24/);
+const settings = renderSheet({ ...liveState, sheet: { kind: "settings" }, pushDelivery: "on", pushWant: { picks: true, locks: true }, text: "md", theme: "night" } as AppState, card);
+assert.match(settings, /Phone alerts/);
+assert.match(settings, /Ticket locks, final grades &amp; live NFL red-zone \/ TD alerts/);
+assert.match(settings, /Send test \/ re-sync/);
+assert.match(settings, /data-act="push-test"/);
+assert.doesNotMatch(settings, /Saved on this phone only/);
+assert.doesNotMatch(settings, /do not send notifications/);
+const iphone = renderSheet({ ...liveState, sheet: { kind: "settings" }, pushDelivery: "standalone", pushWant: { picks: false, locks: false }, text: "md", theme: "night" } as AppState, card);
+assert.match(iphone, /Home Screen/);
 
 console.log("live card tests ok");

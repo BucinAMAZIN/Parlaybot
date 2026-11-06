@@ -42,7 +42,52 @@ function slateDate(iso: string): string {
   return parts.replace(/-/g, "");
 }
 
-type EventTeam = { abbr: string; name: string; score: number; home: boolean; names: string[]; record: string };
+export type LiveWindow = {
+  hourET: number;
+  todayET: string;
+  yesterdayET: string;
+  /** Before 10:00 AM ET the Live tab stays on last night. */
+  defaultSlate: string;
+};
+
+/** Calendar day in America/New_York, plus the Live tab's default slate. */
+export function liveWindowET(now = new Date()): LiveWindow {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const pick = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  const todayET = `${pick("year")}-${pick("month")}-${pick("day")}`;
+  let hourET = Number(pick("hour"));
+  if (!Number.isFinite(hourET)) hourET = 0;
+  if (hourET === 24) hourET = 0;
+  const yesterdayET = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(Date.parse(`${todayET}T12:00:00Z`) - 24 * 60 * 60 * 1000));
+  return { hourET, todayET, yesterdayET, defaultSlate: hourET < 10 ? yesterdayET : todayET };
+}
+
+/** `Nov 5` for a slate date. */
+export function slateLabel(iso: string): string {
+  const [year, month, day] = iso.split("-").map(Number);
+  if (!year || !month || !day) return iso;
+  return new Date(Date.UTC(year, month - 1, day, 17)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+}
+
+type EventTeam = { id: string; abbr: string; name: string; score: number; home: boolean; names: string[]; record: string };
+
+export type ScoreSituation = {
+  possessionId: string;
+  awayTimeouts: number | null;
+  homeTimeouts: number | null;
+};
 
 type EventRow = {
   id: string;
@@ -57,6 +102,7 @@ type EventRow = {
   period: number;
   clock: string;
   summary?: Json;
+  situation?: ScoreSituation | null;
 };
 
 const ABBR_ALIAS: Record<string, string[]> = {
@@ -152,7 +198,7 @@ function eventOf(raw: unknown, league: LiveGame["league"], group: string, path: 
   const teams = (Array.isArray(comp.competitors) ? comp.competitors : []).flatMap((item) => {
     if (!isObj(item) || !isObj(item.team)) return [];
     const home = str(item.homeAway) === "home";
-    return [{ abbr: str(item.team.abbreviation) || "?", name: str(item.team.shortDisplayName) || str(item.team.displayName), score: num(item.score) ?? 0, home, names: namesOf(item.team), record: overallRecord(item.records) }];
+    return [{ id: str(item.team.id), abbr: str(item.team.abbreviation) || "?", name: str(item.team.shortDisplayName) || str(item.team.displayName), score: num(item.score) ?? 0, home, names: namesOf(item.team), record: overallRecord(item.records) }];
   });
   const away = teams.find((team) => !team.home);
   const home = teams.find((team) => team.home);
@@ -171,6 +217,23 @@ function eventOf(raw: unknown, league: LiveGame["league"], group: string, path: 
     date: str(comp.date) || str(raw.date),
     period: num(status.period) ?? 0,
     clock: str(status.displayClock),
+    situation: situationOf(comp),
+  };
+}
+
+function clampTimeouts(value: unknown): number | null {
+  const count = num(value);
+  if (count == null) return null;
+  return Math.max(0, Math.min(3, Math.round(count)));
+}
+
+export function situationOf(comp: Json): ScoreSituation | null {
+  const sit = isObj(comp.situation) ? comp.situation : null;
+  if (!sit) return null;
+  return {
+    possessionId: str(sit.possession),
+    awayTimeouts: clampTimeouts(sit.awayTimeouts),
+    homeTimeouts: clampTimeouts(sit.homeTimeouts),
   };
 }
 
@@ -258,7 +321,7 @@ const STATS: [RegExp, string, string][] = [
   [/blocked shots?/i, "blockedShots", "BLK"],
 ];
 
-function samePlayer(pick: string, display: string): boolean {
+export function samePlayer(pick: string, display: string): boolean {
   const clean = (value: string) => value.toLowerCase().replace(/\b(jr|sr|ii|iii|iv)\b/g, "").trim().split(/\s+/).filter(Boolean);
   const left = clean(pick);
   const right = clean(display);
@@ -782,7 +845,7 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
   });
   const ranks = teamStatsFor(event.summary, teamVs, event.league, event.away.abbr, event.away.name, event.home.abbr, event.home.name);
   const pre = event.state === "pre";
-  const cast = event.summary ? parseCast(event.summary, event.league) ?? undefined : undefined;
+  const cast = event.summary ? parseCast(event.summary, event.league, event.situation) ?? undefined : undefined;
   const awayScore = cast?.away.score ? Number(cast.away.score) : event.away.score;
   const homeScore = cast?.home.score ? Number(cast.home.score) : event.home.score;
   const teams = { away: { abbr: event.away.abbr, names: event.away.names }, home: { abbr: event.home.abbr, names: event.home.names } };
@@ -818,6 +881,17 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
   }
   const legs = [...buckets.values()];
   const clock = cast?.clock || (pre ? event.detail || "Not started" : event.state === "post" ? "Final" : event.detail || event.clock || "Live");
+  const final = cast ? cast.final : event.state === "post";
+  const started = cast ? cast.pre : pre;
+  const liveNow = !started && !final;
+  const football = event.league === "NFL" || event.league === "NCAAF";
+  let possessionSide: LiveGame["possessionSide"] = liveNow ? cast?.possessionSide ?? null : null;
+  if (liveNow && football && !possessionSide && event.situation?.possessionId) {
+    if (event.situation.possessionId === event.home.id) possessionSide = "home";
+    else if (event.situation.possessionId === event.away.id) possessionSide = "away";
+  }
+  const awayTimeouts = liveNow && football ? cast?.awayTimeouts ?? event.situation?.awayTimeouts ?? null : null;
+  const homeTimeouts = liveNow && football ? cast?.homeTimeouts ?? event.situation?.homeTimeouts ?? null : null;
   return {
     id: event.id,
     league: event.league,
@@ -829,11 +903,14 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
     homeScore: Number.isFinite(homeScore) ? homeScore : event.home.score,
     clock,
     start: event.date || undefined,
-    pre: cast ? cast.pre : pre,
-    final: cast ? cast.final : event.state === "post",
+    pre: started,
+    final,
     awaySide: { abbr: event.away.abbr, record: event.away.record || "—", standing: standingLabel(standings, event.league, event.away.abbr) || "—" },
     homeSide: { abbr: event.home.abbr, record: event.home.record || "—", standing: standingLabel(standings, event.league, event.home.abbr) || "—" },
     legs,
+    possessionSide,
+    awayTimeouts,
+    homeTimeouts,
     liveFeed: {
       pbp: cast
         ? cast.plays.slice(0, 12).map((item) => ({
@@ -1000,13 +1077,68 @@ async function scoreboard(group: string, path: string, league: LiveGame["league"
   });
 }
 
-export async function attachLive(board: Board): Promise<void> {
+function playerToken(name: string): string {
+  const cleaned = cleanLiveTitle(name).replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+  const parsed = propLine(cleaned);
+  if (parsed?.player) return parsed.player;
+  const cut = cleaned.split(/\s+(?:over|under|first|ml|[ou]\d|\d+\+)/i)[0]?.trim();
+  return cut || cleaned;
+}
+
+function boxHasPlayer(summary: Json | undefined, playName: string): boolean {
+  if (!summary || !isObj(summary.boxscore) || !Array.isArray(summary.boxscore.players)) return false;
+  const player = playerToken(playName);
+  if (!player) return false;
+  for (const team of summary.boxscore.players) {
+    if (!isObj(team) || !Array.isArray(team.statistics)) continue;
+    for (const group of team.statistics) {
+      if (!isObj(group) || !Array.isArray(group.athletes)) continue;
+      for (const athlete of group.athletes) {
+        if (!isObj(athlete)) continue;
+        const person = isObj(athlete.athlete) ? athlete.athlete : athlete;
+        const display = str(person.displayName) || str(person.shortName);
+        if (display && samePlayer(player, display)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function loadSummary(event: EventRow): Promise<void> {
+  if (event.summary) return;
+  try {
+    const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${event.group}/${event.path}/summary?event=${event.id}`, { cache: "no-store" });
+    if (response.ok) event.summary = (await response.json()) as Json;
+  } catch {
+    event.summary = undefined;
+  }
+}
+
+const PRO_LEAGUES = new Set<LiveGame["league"]>(["NFL", "NBA", "NHL", "MLB", "WNBA"]);
+
+export async function attachLive(board: Board, opts?: { matchPlayers?: boolean }): Promise<void> {
   const date = slateDate(board.slateDate);
   const fetched: EventRow[][] = [];
   for (const [group, path, league, extra] of LVL) fetched.push(await scoreboard(group, path, league, extra, date));
   const events = fetched.flat();
   const plays = [...board.tickets.flatMap((ticket) => ticket.plays), ...board.cappers.flatMap((capper) => capper.plays)];
   const wanted = events.filter((event) => plays.some((play) => matches(play, event)));
+  if (opts?.matchPlayers) {
+    const loose = plays.filter((play) => !wanted.some((event) => matches(play, event)));
+    const pros = events.filter((event) => PRO_LEAGUES.has(event.league) && !wanted.includes(event));
+    for (let index = 0; index < pros.length && loose.length; index += 8) {
+      const slice = pros.slice(index, index + 8);
+      await Promise.all(slice.map((event) => loadSummary(event)));
+      for (const event of slice) {
+        if (!event.summary || !loose.some((play) => boxHasPlayer(event.summary, play.name))) continue;
+        wanted.push(event);
+      }
+      for (let playIndex = loose.length - 1; playIndex >= 0; playIndex -= 1) {
+        const play = loose[playIndex];
+        if (play && wanted.some((event) => event.summary && boxHasPlayer(event.summary, play.name))) loose.splice(playIndex, 1);
+      }
+    }
+  }
   const capped = wanted.slice(0, 60);
   for (let index = 0; index < capped.length; index += 8) {
     await Promise.all(
@@ -1020,7 +1152,13 @@ export async function attachLive(board: Board): Promise<void> {
       }),
     );
   }
-  const games = sortLiveGames(wanted.map((event) => gameOf(event, plays.filter((play) => matches(play, event)), board.teamVs, board.teamBuilt, board.standings)));
+  const games = sortLiveGames(wanted.map((event) => gameOf(
+    event,
+    plays.filter((play) => matches(play, event) || (!!opts?.matchPlayers && !!event.summary && boxHasPlayer(event.summary, play.name))),
+    board.teamVs,
+    board.teamBuilt,
+    board.standings,
+  )));
   const mood = moodOf(games);
   board.liveGames = games;
   board.liveTickets = board.tickets.flatMap((ticket) => {

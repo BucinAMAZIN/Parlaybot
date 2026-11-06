@@ -231,8 +231,25 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .sharecard li{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-top:1px solid #2a3b33}
 .sc-foot{color:#a9b4c2;font-size:.875rem;margin-top:10px}
 .grouph{margin:18px 0 0;font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:#8b95a3}
-.ctx{display:flex;flex-wrap:wrap;gap:2px 8px;font-size:.78rem;color:#9aa4b2;margin-top:4px}
-.ctx .vs{color:#5d6675}
+.ctx{display:flex;flex-wrap:wrap;gap:4px 8px;font-size:.78rem;color:#9aa4b2;margin-top:4px;align-items:flex-start}
+.ctx .vs{color:#5d6675;align-self:center}
+.tm{display:inline-flex;flex-direction:column;align-items:flex-start;min-width:0;max-width:46%}
+.tmrow,.scoreteam{display:inline-flex;align-items:center;gap:3px;min-width:0}
+.poss-ball{width:14px;height:9px;flex:none;display:inline-block}
+.to-bars{display:inline-flex;align-items:center;gap:3px;margin-top:2px;line-height:1}
+.to-pills{display:inline-flex;gap:2px;align-items:center}
+.to-pills i{display:block;width:10px;height:3.5px;border-radius:99px;background:rgba(148,163,184,.25)}
+.to-pills i.on{background:#facc15}
+.to-lab{font-size:.62rem;font-weight:800;letter-spacing:.02em;color:#facc15}
+.liveslate{margin:8px 0 2px}
+.slatenote{margin:0 0 8px}
+.callbar{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:2px 0 8px}
+.callbar .callout{margin:0}
+.replay{border:1px solid #2c3644;background:#121820;color:#dbe7f5;border-radius:99px;padding:2px 8px;font-size:.72rem;font-weight:800;min-height:28px}
+.pbp.snap{cursor:pointer}
+.pbp.preview{box-shadow:inset 3px 0 0 #38bdf8}
+.castmeta{display:flex;flex-direction:column;min-width:0}
+.pushtest{margin:8px 0}
 .tm b{color:#dfe5ec}
 .mood{display:flex;align-items:center;gap:12px;margin:10px 0 0}
 .mascot{display:inline-block;background-repeat:no-repeat;background-size:100% 100%;image-rendering:pixelated;flex:none;animation:.8s steps(1,end) infinite}
@@ -363,6 +380,7 @@ details.why .ours{font-size:.6875rem;background:#2a2140;color:#c9b6ff;border-rad
 .castlogo{width:32px;height:32px;max-width:32px;object-fit:contain;flex:none}
 .game,.feed{min-width:0;max-width:100%}
 .callout{text-align:center;font-weight:800;letter-spacing:.05em;margin:2px 0 8px}
+.castside{align-items:center}
 .courtwrap{width:100%;overflow:hidden}
 .court,.field,.rink,.diamond{width:100%;height:auto;display:block}
 .court-floor{fill:#16324f}
