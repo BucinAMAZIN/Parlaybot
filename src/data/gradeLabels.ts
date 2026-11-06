@@ -79,14 +79,23 @@ export function displayCat(cat: string): string {
   return /^leg\s*day$/i.test(cat.trim()) ? "Props" : cat;
 }
 
-export function sectionMatch(cat: string | { cat: string; cats?: string[] }, section: string): boolean {
+export function sectionMatch(cat: string | { cat: string; cats?: string[]; ticketKey?: string }, section: string): boolean {
   if (cat && typeof cat === "object") {
     if (!section || section === "all") return true;
+    if (section === "plus100") return cat.ticketKey === "alt100" || sectionMatch(cat.cat, section) || (cat.cats ?? []).some((name) => sectionMatch(name, section));
+    if (section === "plus250") return cat.ticketKey === "alt250" || sectionMatch(cat.cat, section) || (cat.cats ?? []).some((name) => sectionMatch(name, section));
+    if (section === "safe") {
+      if (cat.ticketKey === "alt100" || cat.ticketKey === "alt250") return false;
+      const names = cat.cats?.length ? cat.cats : [cat.cat];
+      return names.some((name) => sectionMatch(name, section));
+    }
     const names = cat.cats?.length ? cat.cats : [cat.cat];
     return names.some((name) => sectionMatch(name, section));
   }
   if (!section || section === "all") return true;
   const name = cat.toLowerCase();
+  if (section === "plus100") return cat.trim() === "+100";
+  if (section === "plus250") return cat.trim() === "+250";
   if (section === "heist") return name.includes("heist");
   if (section === "safe") return name.includes("safe");
   if (section === "edge") return name === "edge" || name.startsWith("edge ");

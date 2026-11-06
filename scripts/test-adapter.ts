@@ -9,7 +9,6 @@ import { renderPage, sportsFor, visibleTickets } from "../src/ui/views.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
 import { fileBounds, historyScope, sliceHistory } from "../src/lib/history.ts";
 import { matchingPlays } from "../src/ui/statsScreen.ts";
-import { altPreviewTickets } from "../src/ui/altLayout.ts";
 import { knownView, viewFromHash, type AppState } from "../src/ui/state.ts";
 import { dedupePlays, playKey } from "../src/data/dedupePlays.ts";
 import { isTicketRow, ticketParts } from "../src/data/ticketLegs.ts";
@@ -753,29 +752,161 @@ const blank = (): AppState => ({
   profitRange: "14d", openDates: new Set(), conference: "", statsFrom: "", statsTo: "", statsCalOpen: false, statsMode: "range", statsSection: "all",
   statsSport: "", statsAnchor: "", statsDraft: "", nightOpen: false, openProps: new Set(), propSection: {}, openResultDates: new Set(), openTickets: new Set(),
 });
-assert.equal(knownView("#alt-layout"), "alt-layout");
-assert.equal(viewFromHash("#alt-layout"), "alt-layout");
-const preview = renderPage({ ...blank(), view: "alt-layout" }, heistBoard);
-assert.match(preview, /Layout preview/);
-assert.match(preview, /<h3>\+100 /);
-assert.match(preview, /<h3>\+250 /);
-assert.equal(preview.includes("Alt +100"), false);
-assert.equal(preview.includes("Alt +250"), false);
-assert.match(preview, /not Official Parlay \+100/);
-assert.match(preview, /Alt-line plays are allowed, not required/);
-assert.match(preview, /Retired Nov 6, 2026/);
-assert.match(preview, /Record not wired/);
-assert.match(preview, /not the \+100 record/);
-assert.match(preview, /PREVIEW SAMPLE/);
-assert.match(preview, /Open in Hard Rock/);
-assert.match(preview, /no \+500 ticket/i);
-assert.equal(/<h3>[^<]*\+500/.test(preview), false);
-assert.equal(preview.includes("12-4"), false);
-assert.equal(altPreviewTickets().some((ticket) => ticket.plays.some((play) => play.source !== "sample")), false);
+const nov6 = adaptDesk(
+  {
+    today: {
+      date: "2026-11-06",
+      tickets: [{ name: "+100 ticket", odds: "+119", pick: "2-leg +119 (1u)", legs: [{ pick: "Sample Official Over 1.5", sport: "NHL", hr_sid: "7218659737500516760", hr_link: "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/7218659737500516760" }] }],
+      sports: {},
+    },
+    safe100: {
+      date: "2026-11-06",
+      sports: {},
+      notes: { NBA: "No qualifying Alt Parlay today (NBA): legacy note.", TODAY: "No qualifying Alt Parlay today (Today): legacy note." },
+      extra: [],
+    },
+    safe250: {},
+    safe_retirement: { label: "Safe +100", retired_on: "2026-11-06", new_tickets_from: "2026-11-07", replacement_keys: ["safe100", "safe250"] },
+    safe100_record: { overall: { w: 9, l: 24, p: 0, pct: 27 }, by_sport: { NHL: { w: 2, l: 6, p: 0, pct: 25 } } },
+    alt100_record: { overall: { w: 0, l: 0, p: 0, pct: null }, by_sport: {} },
+    safe250_record: { overall: { w: 0, l: 0, p: 0, pct: null }, by_sport: {} },
+    results_v2: { rows: [{ date: "2026-11-04", cat: "Safe +100 (Alt Parlay)", prop: "Safe +100", pick: "Safe +100 3-leg", sport: "NHL", res: "W", uu: 1.13, fam: "Parlay" }] },
+  },
+  ncaab,
+);
+const plus100 = nov6.tickets.find((item) => item.productKey === "plus100");
+const plus250 = nov6.tickets.find((item) => item.productKey === "plus250");
+assert.equal(plus100?.title, "+100");
+assert.equal(plus250?.title, "+250");
+assert.equal(plus100?.plays.length, 0);
+assert.equal(plus250?.plays.length, 0);
+assert.match(plus100?.emptyNote ?? "", /2026-11-07 at 10:00 AM ET/);
+assert.match(plus100?.meta ?? "", /Not Official Parlay \+100/);
+assert.equal((plus100?.emptyNote ?? "").includes("legacy note"), false);
+assert.equal(nov6.notices.some((note) => /legacy note/.test(note.text)), false);
+assert.equal(nov6.tickets.find((item) => item.productKey === "parlay")?.title, "Parlay +100");
+assert.equal(nov6.tickets.some((item) => item.title.startsWith("Alt +")), false);
+assert.equal(nov6.propLedgers.find((item) => item.key === "safe100")?.w, 9);
+assert.equal(nov6.propLedgers.find((item) => item.key === "alt100")?.l, 0);
+assert.equal(nov6.propLedgers.find((item) => item.key === "safe250")?.w, 0);
+assert.equal(nov6.grades[0]?.ticketKey, undefined);
+assert.equal(sectionMatch(nov6.grades[0], "safe"), true);
+assert.equal(sectionMatch(nov6.grades[0], "plus100"), false);
+assert.equal(sectionMatch({ cat: "Parlay +100" }, "plus100"), false);
+const nov6Page = renderPage(blank(), nov6);
+assert.match(nov6Page, /<h3>\+100 /);
+assert.match(nov6Page, /<h3>\+250 /);
+assert.match(nov6Page, /Parlay \+100/);
+assert.equal(nov6Page.includes("Alt +100"), false);
+assert.equal(nov6Page.includes("Sample leg"), false);
+const verifiedHr = "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/9100000000000000101";
+const nov7 = adaptDesk(
+  {
+    today: { date: "2026-11-07", tickets: [], sports: {} },
+    safe_retirement: { label: "Safe +100", retired_on: "2026-11-06", new_tickets_from: "2026-11-07", replacement_keys: ["safe100", "safe250"] },
+    safe100: {
+      date: "2026-11-07",
+      label: "+100",
+      effective_from: "2026-11-07",
+      retired_safe_on: "2026-11-06",
+      sports: {
+        NHL: {
+          id: "2026-11-07|alt100|NHL|1",
+          ticket_key: "alt100",
+          label: "+100",
+          sport: "NHL",
+          n: 2,
+          odds: "+140",
+          legs: [
+            { pick: "Verified Skater Over 1.5 SOG", sport: "NHL", odds: "−280", hr_sid: "9100000000000000101", hr_link: verifiedHr, alt: true },
+            { pick: "No Link Skater Over 1.5 SOG", sport: "NHL", odds: "−260", hr_why: "no verified link" },
+          ],
+        },
+      },
+      notes: {},
+      availability: { NBA: { available: false, reason: "No combo cleared the +100 window." } },
+      extra: [],
+      closed: [],
+    },
+    safe250: {
+      date: "2026-11-07",
+      label: "+250",
+      effective_from: "2026-11-07",
+      sports: {
+        NHL: {
+          id: "2026-11-07|alt250|NHL|1",
+          ticket_key: "alt250",
+          label: "+250",
+          sport: "NHL",
+          n: 2,
+          odds: "+240",
+          book: "DK",
+          book_name: "DraftKings",
+          legs: [
+            { pick: "Verified Skater Over 2.5 SOG", sport: "NHL", dk_sid: "0QAPROP250A", dk_link: "https://sportsbook.draftkings.com/event/9100100?outcomes=0QAPROP250A" },
+          ],
+        },
+        NBA: {
+          id: "2026-11-07|alt250|NBA|2",
+          ticket_key: "alt250",
+          label: "+250",
+          sport: "NBA",
+          n: 2,
+          odds: "+260",
+          legs: [{ pick: "Reposted Skater Over 1.5 SOG", sport: "NBA", hr_sid: "9100000000000000102", hr_link: "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/9100000000000000102" }],
+        },
+      },
+      availability: {},
+      notes: {},
+      extra: [],
+      closed: [],
+    },
+    safe100_record: { overall: { w: 9, l: 24, p: 0, pct: 27 }, by_sport: {} },
+    alt100_record: { overall: { w: 1, l: 0, p: 0, pct: 100 }, by_sport: {} },
+    safe250_record: { overall: { w: 0, l: 1, p: 0, pct: 0 }, by_sport: {} },
+    results_v2: {
+      rows: [
+        { date: "2026-11-04", cat: "Safe +100 (Alt Parlay)", prop: "Safe +100", pick: "Safe +100 3-leg", sport: "NHL", res: "W", uu: 1.1, fam: "Parlay" },
+        { date: "2026-11-07", cat: "+100", label: "+100", ticket_key: "alt100", tid: "2026-11-07|ALT100|NHL|1", tk: "NHL", prop: "alt100", pick: "+100 2-leg #1", sport: "NHL", res: "W", uu: 1, fam: "Parlay", alt: true },
+        { date: "2026-11-07", cat: "+250", label: "+250", ticket_key: "alt250", tid: "2026-11-07|ALT250|NHL|1", tk: "NHL", prop: "alt250", pick: "+250 2-leg #1", sport: "NHL", res: "L", uu: -1, fam: "Parlay", alt: true },
+        { date: "2026-11-07", cat: "Parlay +100", prop: "Parlay +100", pick: "Parlay +100 2-leg", sport: "NHL", res: "W", uu: 1, fam: "Parlay" },
+      ],
+    },
+  },
+  ncaab,
+);
+const built100 = nov7.tickets.find((item) => item.id === "2026-11-07|alt100|NHL|1");
+const repost = nov7.tickets.find((item) => item.id === "2026-11-07|alt250|NBA|2");
+const unavailable = nov7.tickets.find((item) => item.productKey === "plus100" && item.board === "NBA");
+assert.equal(built100?.title, "+100");
+assert.equal(built100?.plays.length, 2);
+assert.equal(built100?.plays[0]?.hrLink, verifiedHr);
+assert.equal(built100?.plays[0]?.hrSid, "9100000000000000101");
+assert.equal(built100?.plays[1]?.hrLink, undefined);
+assert.equal(built100?.plays[1]?.hrSid, undefined);
+assert.match(built100?.hrSlip ?? "", /9100000000000000101/);
+assert.equal((built100?.hrSlip ?? "").includes("9100000000000000999"), false);
+assert.equal(repost?.title, "+250");
+assert.notEqual(repost?.id, nov7.tickets.find((item) => item.id === "2026-11-07|alt250|NHL|1")?.id);
+assert.match(unavailable?.emptyNote ?? "", /No combo cleared the \+100 window/);
+assert.equal(unavailable?.plays.length, 0);
+assert.equal(nov7.propLedgers.find((item) => item.key === "safe100")?.w, 9);
+assert.equal(nov7.propLedgers.find((item) => item.key === "alt100")?.w, 1);
+assert.equal(nov7.propLedgers.find((item) => item.key === "safe250")?.l, 1);
+const legacy = nov7.grades.find((grade) => grade.cat === "Safe +100 (Alt Parlay)");
+const next100 = nov7.grades.find((grade) => grade.ticketKey === "alt100");
+const next250 = nov7.grades.find((grade) => grade.ticketKey === "alt250");
+const official = nov7.grades.find((grade) => grade.cat === "Parlay +100");
+assert.equal(sectionMatch(legacy!, "safe"), true);
+assert.equal(sectionMatch(legacy!, "plus100"), false);
+assert.equal(sectionMatch(next100!, "plus100"), true);
+assert.equal(sectionMatch(next100!, "safe"), false);
+assert.equal(sectionMatch(next100!, "plus250"), false);
+assert.equal(sectionMatch(next250!, "plus250"), true);
+assert.equal(sectionMatch(next250!, "plus100"), false);
+assert.equal(sectionMatch(official!, "plus100"), false);
+assert.equal(sectionMatch(official!, "safe"), false);
 const page = renderPage(blank(), heistBoard);
-assert.equal(page.includes("Layout preview"), false);
-assert.equal(page.includes("preview-plus-250"), false);
-assert.equal(page.includes("Layout preview"), false);
 assert.equal(page.indexOf('id="ticket-heist"') < page.indexOf('id="ticket-heist-alt"'), true);
 assert.match(page, /Heist Alt/);
 assert.match(page, /Whole Heist in Hard Rock \(5 of 8 verified legs\)/);

@@ -1,7 +1,7 @@
 import type { BookId } from "../data/types.ts";
 import type { LeagueId } from "../data/standings.ts";
 
-export type ViewId = "today" | "live" | "results" | "stats" | "cappers" | "standings" | "alt-layout";
+export type ViewId = "today" | "live" | "results" | "stats" | "cappers" | "standings";
 export type TextSize = "md" | "lg" | "xl";
 export type Panel = "feed" | "box" | "vs";
 export type SportFilter = "All" | "Big 4" | "NHL" | "NBA" | "NFL" | "NCAAF" | "NCAAB" | "MLB" | "WNBA" | "NASCAR" | "Tennis" | "Other";
@@ -58,7 +58,7 @@ export type AppState = {
   statsTo: string;
   statsCalOpen: boolean;
   statsMode: "day" | "week" | "range";
-  statsSection: "all" | "heist" | "safe" | "edge" | "cappers" | "legday";
+  statsSection: "all" | "heist" | "safe" | "plus100" | "plus250" | "edge" | "cappers" | "legday";
   statsSport: string;
   statsAnchor: string;
   statsDraft: string;
@@ -84,7 +84,7 @@ export type AppState = {
 export function knownView(hash: string): ViewId | null {
   const name = hash.replace(/^#/, "");
   if (name === "stats") return "results";
-  if (name === "today" || name === "live" || name === "results" || name === "cappers" || name === "standings" || name === "alt-layout") return name;
+  if (name === "today" || name === "live" || name === "results" || name === "cappers" || name === "standings") return name;
   return null;
 }
 

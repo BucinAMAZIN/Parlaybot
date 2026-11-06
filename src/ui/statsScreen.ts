@@ -100,11 +100,14 @@ function weekdayLabel(iso: string): string {
   return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-const PROP_SECTIONS = ["all", "heist", "safe", "edge", "cappers", "legday"] as const;
+const PROP_SECTIONS = ["all", "heist", "safe", "plus100", "plus250", "edge", "cappers", "legday"] as const;
 
 function sectionLabel(key: (typeof PROP_SECTIONS)[number]): string {
   if (key === "all") return "All sections";
   if (key === "legday") return "Props";
+  if (key === "safe") return "Safe +100";
+  if (key === "plus100") return "+100";
+  if (key === "plus250") return "+250";
   return key[0].toUpperCase() + key.slice(1);
 }
 
@@ -224,9 +227,9 @@ export function statsCalendar(state: AppState, board: Board, from: string | null
 }
 
 export function statsSections(state: AppState): string {
-  return (["all", "heist", "safe", "edge", "cappers", "legday"] as const)
+  return (["all", "heist", "safe", "plus100", "plus250", "edge", "cappers", "legday"] as const)
     .map((key) => {
-      const label = key === "all" ? "All sections" : key === "legday" ? "Props" : key[0].toUpperCase() + key.slice(1);
+      const label = key === "all" ? "All sections" : key === "legday" ? "Props" : key === "safe" ? "Safe +100" : key === "plus100" ? "+100" : key === "plus250" ? "+250" : key[0].toUpperCase() + key.slice(1);
       return `<button type="button" class="${state.statsSection === key ? "on" : ""}" data-act="stats-section" data-key="${key}" aria-label="${label}">${label}</button>`;
     })
     .join("");

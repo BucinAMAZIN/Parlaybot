@@ -25,7 +25,6 @@ import { displayCat, sectionMatch } from "../data/gradeLabels.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type FootballMotion, type GameCast } from "../data/gamecast.ts";
 import { courtHardware, footballField, nhlRink } from "./court.ts";
 import { noteVisible } from "../lib/cardFilter.ts";
-import { altPreviewTickets, altRecordLayout, findAltPreviewPlay, findAltPreviewTicket } from "./altLayout.ts";
 import { statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
 import { BIG4_SPORTS, SPORT_ORDER, sportLabel } from "../lib/sport.ts";
 import type { AppState, SportFilter, ViewId } from "./state.ts";
@@ -63,6 +62,8 @@ const NAV: [ViewId, string][] = [
 const PRODUCTS: [string, string][] = [
   ["heist", "Heist"],
   ["heist-alt", "Heist Alt"],
+  ["plus100", "+100"],
+  ["plus250", "+250"],
   ["safe", "Safe +100"],
   ["potd", "POTD"],
   ["parlay", "Parlay +100"],
@@ -231,6 +232,7 @@ function singlesCard(ticket: Ticket): boolean {
 function ticketFoot(ticket: Ticket, state: AppState, on: number, off: number, openLegs: number): string {
   if (singlesCard(ticket)) return "";
   const book = ticket.productKey === "first" ? "hr" : state.book;
+  if (ticket.emptyNote && !on && !off) return `<p class="sub">${esc(ticket.emptyNote)}</p>`;
   if (ticket.dkSlipNote && book === "dk") return `<p class="sub">${esc(ticket.dkSlipNote)}</p>`;
   if (ticket.slipLabel && book === "hr") {
     const note = ticket.slipNote ? `<p class="sub">${esc(ticket.slipNote)}</p>` : "";
@@ -245,7 +247,7 @@ function ticketFoot(ticket: Ticket, state: AppState, on: number, off: number, op
 function productChips(board: Board, state: AppState): string {
   const buttons = PRODUCTS.map(([key, label]) => {
     const total = countPlays(board, key, "All");
-    const any = board.tickets.some((ticket) => ticket.productKey === key && ticket.plays.length);
+    const any = board.tickets.some((ticket) => ticket.productKey === key && (ticket.plays.length > 0 || !!ticket.emptyNote));
     const filtered = countPlays(board, key, state.sport);
     const noted = board.notices.some((note) => note.section === key);
     if (!total && !any && !noted) return "";
@@ -324,13 +326,21 @@ function chartWindow(board: Board, range: RangeKey, customFrom = "", customTo = 
   return { points: windowed.points, headline, note, rings: windowRings(grades, section), ringsNote, from: windowed.from, to: windowed.to, starts: windowed.starts };
 }
 
-function altLayoutPage(state: AppState, board: Board): string {
-  const cards = altPreviewTickets().map((ticket) => renderTicket(ticket, state, board)).join("");
-  return `<div class="layoutpreview"><p class="previewban">Layout preview. The tickets are named +100 and +250. They are not Official Parlay +100. Alt-line plays are allowed, not required. Sample legs are not today’s board and are not a feed. Wiring waits for the schema. There is no +500 ticket.</p>${bookToggle(state.book)}<h2 class="grouph">Today cards</h2><p class="sub">Same play row, verified book buttons, availability notes, and multi-select as the live cards.</p>${cards}${altRecordLayout(board)}</div>`;
+function propLedgerBlock(board: Board): string {
+  if (!board.propLedgers.length) return "";
+  const cards = board.propLedgers
+    .map((row) => {
+      const pushes = row.p ? `-${row.p}` : "";
+      const pct = row.pct == null ? "—" : `${row.pct}%`;
+      const sports = row.sports.map((sport) => `<div class="rrow"><span>${esc(sport.name)}</span><b>${esc(sport.line)}</b></div>`).join("");
+      const tone = row.key === "safe100" ? "retired" : "recordwait";
+      return `<section class="ticket ${tone}"><header><div><h3>${esc(row.title)}</h3><p class="stamp">${esc(row.detail)}</p><div class="sub">${row.w}-${row.l}${pushes} · ${esc(pct)}</div></div></header>${sports}</section>`;
+    })
+    .join("");
+  return `<h2 class="grouph">Prop ticket records</h2><p class="sub">Safe +100 stays retired on its own record. +100 and +250 are separate from each other and from Official Parlay +100.</p>${cards}`;
 }
 
 export function renderPage(state: AppState, board: Board): string {
-  if (state.view === "alt-layout") return shell("alt-layout", altLayoutPage(state, board), board);
   if (state.view === "today") return shell("today", today(state, board), board);
   if (state.view === "live") return shell("live", live(state, board), board);
   if (state.view === "results" || state.view === "stats") return shell("results", results(state, board), board);
@@ -348,7 +358,7 @@ function today(state: AppState, board: Board): string {
   const tickets = visibleTickets(board, state);
   const visiblePlays = tickets.flatMap((ticket) => ticket.plays);
   const gameList = board.liveGames.filter((game) => visiblePlays.some((play) => playOnGame(play, game)));
-  const sections = ["heist", "heist-alt", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
+  const sections = ["heist", "heist-alt", "plus100", "plus250", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
   const blocks = sections
     .map((section) => {
       if (state.product && state.product !== section) return "";
@@ -863,6 +873,7 @@ ${statsCalendar(state, board, windowed.from, windowed.to)}
 <nav class="scroller sport wrap" aria-label="Section">${statsSections(state)}</nav>
 <div class="card"><h2>Profit</h2><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
 ${four ? `<div class="card"><div class="rings">${four}</div></div>` : ""}
+${propLedgerBlock(board)}
 ${statsSports(state, board, windowed.from, windowed.to, (rows, prefix) => gradeHits(state, board, rows, prefix))}
 ${clvCard(board, windowed.from, windowed.to, state.statsSection)}`;
 }
@@ -1020,7 +1031,7 @@ ${board.uiBuild ? `<p class="stamp about">${esc(board.uiBuild)}</p>` : ""}
   }
   if (state.sheet.kind === "rules") {
     const sheet = state.sheet;
-    const ticket = board.tickets.find((item) => item.id === sheet.ticketId) ?? (state.view === "alt-layout" ? findAltPreviewTicket(sheet.ticketId) : undefined);
+    const ticket = board.tickets.find((item) => item.id === sheet.ticketId);
     const rules = ticket?.rules ?? ["No rules sheet for this product."];
     return `<div class="sheetback" data-act="close"><div class="sheet"><div class="grab"></div><h2>${esc(ticket?.title ?? "Rules")}</h2><ul>${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ul><div class="tfoot"><button type="button" class="btn share" data-act="close">Close</button></div></div></div>`;
   }
@@ -1047,7 +1058,7 @@ function pushRow(title: string, sub: string, on: boolean, kind: string): string 
 
 export function renderSelbar(state: AppState, board: Board): string {
   const plays = [...state.selected]
-    .map((id) => findPlay(board, id) ?? (state.view === "alt-layout" ? findAltPreviewPlay(id) : undefined))
+    .map((id) => findPlay(board, id))
     .filter((play): play is Play => !!play && canOpen(play, state.book));
   if (!plays.length) return `<div class="selbar" id="sel" hidden></div>`;
   const label = state.book === "hr" ? `Load ${plays.length} in Hard Rock` : `Open ${plays.length} selected in DraftKings`;

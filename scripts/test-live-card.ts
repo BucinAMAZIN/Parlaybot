@@ -237,9 +237,9 @@ const safeBoard = adaptDesk(
 );
 assert.equal(safeBoard.tickets.find((item) => item.productKey === "parlay")?.plays[0]?.tags?.[0], "+100 · Void");
 assert.equal(safeBoard.tickets.find((item) => item.productKey === "parlay")?.plays[0]?.blocked, "graded");
-assert.equal(safeBoard.tickets.some((item) => item.plays.some((play) => play.tags?.includes("+100 ALT"))), true);
-assert.equal(safeBoard.tickets.some((item) => item.plays.some((play) => play.tags?.includes("+100 ALT · NHL"))), true);
-assert.equal(safeBoard.notices.some((note) => /No qualifying Alt Parlay/.test(note.text)), true);
+assert.equal(safeBoard.tickets.find((item) => item.productKey === "parlay")?.title, "Parlay +100");
+assert.equal(safeBoard.tickets.some((item) => item.plays.some((play) => /Alt Skater|Alt Goalie/.test(play.name))), false);
+assert.equal(safeBoard.notices.some((note) => /No qualifying Alt Parlay/.test(note.text)), false);
 
 const morning = liveWindowET(new Date("2026-11-06T14:30:00Z"));
 assert.equal(morning.hourET, 9);

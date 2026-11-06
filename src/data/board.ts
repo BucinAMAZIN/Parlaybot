@@ -1,6 +1,7 @@
 import type { EdgePick } from "./adaptEdgePicks.ts";
 import type { ClvCard } from "./adaptClv.ts";
 import type { CardNote } from "../lib/cardFilter.ts";
+import type { PropLedger, PropRetirement } from "./propTickets.ts";
 import type { Capper, GradeMark, LiveGame, LiveTicket, Mood, Play, Recap, SeriesPoint, SettledTicket, StandingsFile, Ticket } from "./types.ts";
 
 export type StatRow = { name: string; sub: string; right: string };
@@ -56,6 +57,9 @@ export type Board = {
   fbLegs: { date: string; player: string; team: string; odds: string; hit: string; note: string }[];
   /** Last night's live card, kept until 10:00 AM ET. Null once today is the live slate. */
   nightLive: NightLive | null;
+  /** Safe +100, +100, and +250 ledgers. They are not Official Parlay +100. */
+  propLedgers: PropLedger[];
+  propRetirement: PropRetirement | null;
 };
 
 export type NightLive = {
@@ -120,6 +124,8 @@ export function emptyBoard(): Board {
     fbNote: "",
     fbLegs: [],
     nightLive: null,
+    propLedgers: [],
+    propRetirement: null,
   };
 }
 

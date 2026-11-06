@@ -14,7 +14,6 @@ import { shareCardIsPrivate } from "./lib/shareCard.ts";
 import { canvasBlob, drawShareCard } from "./lib/shareImage.ts";
 import { canOpen, linkMismatch, toLinkPlay } from "./ui/bits.ts";
 import { propOpenKey } from "./ui/statsScreen.ts";
-import { findAltPreviewPlay, findAltPreviewTicket } from "./ui/altLayout.ts";
 import { cardForShare, liveSlice, render, sportsFor } from "./ui/views.ts";
 import { disablePush, readPushDelivery, resyncPush, subscribePush } from "./lib/pushClient.ts";
 import { defaultState, knownView, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
@@ -45,7 +44,7 @@ loadPrefs(state);
 let toastTimer = 0;
 
 function locatePlay(id: string): Play | undefined {
-  return findPlay(board, id) ?? (state.view === "alt-layout" ? findAltPreviewPlay(id) : undefined);
+  return findPlay(board, id);
 }
 
 function pickedPlays(): Play[] {
@@ -118,13 +117,12 @@ function openScope(scope: string, id: string, forced?: "hr" | "dk") {
     const play = locatePlay(id);
     if (play) plays = [play];
   } else if (scope === "ticket") {
-    const ticketPlays = board.tickets.find((ticket) => ticket.id === id)?.plays ?? (state.view === "alt-layout" ? findAltPreviewTicket(id)?.plays : undefined) ?? [];
-    plays = ticketPlays.filter((play) => play.slip !== false);
+    plays = (board.tickets.find((ticket) => ticket.id === id)?.plays ?? []).filter((play) => play.slip !== false);
   } else {
     plays = pickedPlays();
   }
   const book = forced ?? (scope === "leg" || scope === "ticket" ? state.book : bookFor(plays));
-  const ticket = scope === "ticket" ? board.tickets.find((item) => item.id === id) ?? (state.view === "alt-layout" ? findAltPreviewTicket(id) : undefined) : undefined;
+  const ticket = scope === "ticket" ? board.tickets.find((item) => item.id === id) : undefined;
   if (scope === "ticket" && book === "dk" && ticket?.dkSlipNote) {
     showToast(ticket.dkSlipNote);
     return;
@@ -367,7 +365,7 @@ function onClick(event: Event) {
   }
   if (act === "stats-section") {
     const key = action.dataset.key;
-    if (key === "all" || key === "heist" || key === "safe" || key === "edge" || key === "cappers" || key === "legday") state.statsSection = key;
+    if (key === "all" || key === "heist" || key === "safe" || key === "plus100" || key === "plus250" || key === "edge" || key === "cappers" || key === "legday") state.statsSection = key;
     paint(false);
     return;
   }
@@ -396,7 +394,7 @@ function onClick(event: Event) {
     const propKey = action.dataset.prop || "";
     const key = action.dataset.key;
     if (!propKey) return;
-    if (key === "all" || key === "heist" || key === "safe" || key === "edge" || key === "cappers" || key === "legday") {
+    if (key === "all" || key === "heist" || key === "safe" || key === "plus100" || key === "plus250" || key === "edge" || key === "cappers" || key === "legday") {
       state.propSection[propKey] = key;
       paint(false);
     }

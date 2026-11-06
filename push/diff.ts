@@ -80,8 +80,15 @@ export function collectPicks(raw: unknown): Map<string, string> {
   const out = new Map<string, string>();
   const heist = row(data.heist);
   addPicks(out, "heist", rows(heist?.legs));
-  const safe = row(data.safe100);
-  addPicks(out, "safe", rows(safe?.legs ?? safe?.plays));
+  for (const key of ["safe100", "safe250"] as const) {
+    const state = row(data[key]);
+    const sports = row(state?.sports) ?? {};
+    for (const [sport, value] of Object.entries(sports)) {
+      const ticket = row(value);
+      if (!ticket) continue;
+      addPicks(out, `${key}:${sport}:${str(ticket.id) || "1"}`, rows(ticket.legs));
+    }
+  }
   for (const ticket of rows(today.tickets)) {
     const name = norm(str(ticket.name)) || "ticket";
     const legs = rows(ticket.legs);
