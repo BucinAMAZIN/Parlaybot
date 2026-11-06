@@ -973,6 +973,50 @@ assert.match(page, /data-key="NASCAR"/);
 assert.match(page, /data-key="NCAAB"/);
 assert.match(page, /NCAA 🏀/);
 assert.match(page, /NCAA 🏈/);
+const special = adaptDesk(
+  {
+    today: { date: "2026-11-06", tickets: [], sports: {} },
+    first_blood: {
+      date: "2026-11-06",
+      sport: "NBA",
+      title: "First Blood · NBA Fri Nov 6",
+      legs: [{ player: "Shai Gilgeous-Alexander", pick: "Shai Gilgeous-Alexander first point scorer", team: "OKC", game: "OKC @ MEM", odds: "+450" }],
+    },
+    td_city: {
+      date: "2026-11-08",
+      title: "Lotto Ticket · NFL Week Nov 5–Nov 9 · Locked Thu 10:16 AM ET, final",
+      status: "Pending",
+      legs: [{ pick: "Kenneth Walker III (RB) anytime TD", team: "KC", game: "NYJ @ KC 1:00 PM ET Sun", game_date: "2026-11-08", odds: "+130", hr_sid: null, hr_link: null, dk_sid: null, dk_link: null }],
+    },
+  },
+  ncaab,
+);
+const lotto = special.tickets.find((item) => item.productKey === "lotto");
+const first = special.tickets.find((item) => item.productKey === "first");
+assert.equal(first?.plays[0]?.sport, "NBA");
+assert.equal(lotto?.plays[0]?.sport, "NFL");
+assert.equal(lotto?.plays[0]?.hrSid, undefined);
+assert.equal(lotto?.plays[0]?.hrLink, undefined);
+assert.equal(lotto?.plays[0]?.dkSid, undefined);
+const sportPage = (sport: "All" | "NBA" | "NFL" | "NHL") => renderPage({ ...blank(), sport }, special);
+const everySport = sportPage("All");
+const nbaOnly = sportPage("NBA");
+const nflOnlySports = sportPage("NFL");
+const nhlOnly = sportPage("NHL");
+assert.match(everySport, /Shai Gilgeous-Alexander/);
+assert.match(everySport, /Kenneth Walker III/);
+assert.match(nbaOnly, /data-key="first"/);
+assert.match(nbaOnly, /Shai Gilgeous-Alexander/);
+assert.doesNotMatch(nbaOnly, /data-key="lotto"/);
+assert.doesNotMatch(nbaOnly, /Kenneth Walker III/);
+assert.match(nflOnlySports, /data-key="lotto">Lotto Ticket/);
+assert.match(nflOnlySports, /Kenneth Walker III/);
+assert.doesNotMatch(nflOnlySports, /data-key="first"/);
+assert.doesNotMatch(nflOnlySports, /Shai Gilgeous-Alexander/);
+assert.doesNotMatch(nhlOnly, /data-key="first"/);
+assert.doesNotMatch(nhlOnly, /data-key="lotto"/);
+assert.doesNotMatch(nhlOnly, /Kenneth Walker III/);
+assert.doesNotMatch(nhlOnly, /Shai Gilgeous-Alexander/);
 const capperDesk = adaptDesk({ today: { date: "2026-11-06", tickets: [], sports: {} }, results_v2: { rows: [nickm, flyersMl] } }, ncaab);
 assert.equal(sportsFor(capperDesk, null).find((row) => row.sport === "NFL")?.count, 0);
 assert.equal(capperDesk.grades.find((row) => row.play === nickmPick)?.parts?.length, 0);

@@ -730,11 +730,14 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   const firstTicket = firstBloodTicket(isRow(data.first_blood) ? data.first_blood : null, iso, statuses);
   if (firstTicket) tickets.push(firstTicket);
   const td = isRow(data.td_city) ? data.td_city : {};
-  if (str(td.date) === iso && rowsOf(td.legs).length) {
-    const plays = withTags(takePlays(rowsOf(td.legs), "lotto", statuses, new Set()), "Lotto");
-    const card = ticket("lotto", "lotto", str(td.title) || "Lotto Ticket", str(td.label) || "Desk", plays, "fun");
+  const tdLegs = rowsOf(td.legs);
+  const tdSport = classifySport(str(td.sport) || str(td.title));
+  const tdCurrent = tdLegs.length > 0 && (!iso || str(td.date) >= iso || tdLegs.some((leg) => str(leg.game_date) >= iso || str(leg.date) >= iso));
+  if (tdCurrent && tdSport === "NFL") {
+    const plays = withTags(takePlays(tdLegs, "lotto", statuses, new Set(), "NFL"), "Lotto Ticket");
+    const card = ticket("lotto", "lotto", str(td.title) || "Lotto Ticket", str(td.label) || "Lotto Ticket", plays, "fun");
     if (card) tickets.push(card);
-  } else if (!rowsOf(td.legs).length && str(td.rolled_off || td.msg)) notices.push({ text: str(td.rolled_off || td.msg), section: "lotto", sport: null });
+  } else if (!tdLegs.length && str(td.rolled_off || td.msg)) notices.push({ text: str(td.rolled_off || td.msg), section: "lotto", sport: "NFL" });
   const altRaw = Array.isArray(data.alt_lines) ? data.alt_lines : isRow(data.alt_lines) ? data.alt_lines.rows ?? data.alt_lines.board ?? [] : [];
   const altToday = rowsOf(altRaw).filter((row) => !str(row.date) || str(row.date) === iso);
   if (altToday.length) {

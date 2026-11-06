@@ -71,6 +71,7 @@ const PRODUCTS: [string, string][] = [
   ["edge", "Edge"],
   ["legday", "Props"],
   ["first", "First Blood"],
+  ["lotto", "Lotto Ticket"],
   ["nascar", "NASCAR"],
   ["props", "Prop Scout"],
   ["cappers", "Cappers"],
@@ -254,12 +255,21 @@ function ticketFoot(ticket: Ticket, state: AppState, on: number, off: number, op
   return `<span class="na">No open legs</span>`;
 }
 
+/** First Blood is an NBA ticket. Lotto Ticket is an NFL ticket. */
+function productSport(key: string): "NBA" | "NFL" | null {
+  if (key === "first") return "NBA";
+  if (key === "lotto") return "NFL";
+  return null;
+}
+
 function productChips(board: Board, state: AppState): string {
   const buttons = PRODUCTS.map(([key, label]) => {
+    const home = productSport(key);
+    if (home && state.sport !== "All" && state.sport !== "Big 4" && state.sport !== home) return "";
     const total = countPlays(board, key, "All");
     const any = board.tickets.some((ticket) => ticket.productKey === key && (ticket.plays.length > 0 || !!ticket.emptyNote));
     const filtered = countPlays(board, key, state.sport);
-    const noted = board.notices.some((note) => note.section === key);
+    const noted = board.notices.some((note) => note.section === key && (!note.sport || state.sport === "All" || state.sport === "Big 4" || note.sport === state.sport));
     if (!total && !any && !noted) return "";
     const on = state.product === key ? "on" : "";
     const dim = filtered === 0 ? " dim" : "";
@@ -379,7 +389,7 @@ function today(state: AppState, board: Board): string {
         ? `<p class="stamprow"><b>THE HEIST</b> <span class="stamp">${esc(board.heistStamp)}</span></p>`
         : "";
       if (!mine.length && !notes.length && !stamp) return "";
-      const bareTitle: Record<string, string> = { first: "First Blood", lotto: "Lotto", cappers: "Cappers", props: "Prop Scout" };
+      const bareTitle: Record<string, string> = { first: "First Blood", lotto: "Lotto Ticket", cappers: "Cappers", props: "Prop Scout" };
       const label = mine.length ? "" : (bareTitle[section] ?? "");
       const head = label ? `<h2 class="grouph">${label}</h2>` : "";
       const noteHtml = notes.map((note) => `<p class="sub">${esc(note.text)}</p>`).join("");
@@ -674,7 +684,7 @@ function tagTone(tag: string): string {
   if (tag.startsWith("Props")) return "props";
   if (tag.startsWith("Heist")) return "heist";
   if (tag === "First Blood") return "blood";
-  if (tag === "Lotto") return "lotto";
+  if (tag === "Lotto" || tag === "Lotto Ticket") return "lotto";
   return "cap";
 }
 
