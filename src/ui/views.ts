@@ -2,7 +2,7 @@ import type { Board } from "../data/board.ts";
 import { findPlay } from "../data/board.ts";
 import { showsPreparedBoard } from "../data/desk.ts";
 import { LEAGUES } from "../data/standings.ts";
-import type { BookId, LiveGame, LiveLeg, Play, SeriesPoint, Ticket, TicketPart } from "../data/types.ts";
+import type { BookId, GradeMark, LiveGame, LiveLeg, Play, SeriesPoint, Ticket, TicketPart } from "../data/types.ts";
 import { formatSigned, esc } from "../lib/format.ts";
 import { fileBounds, historyScope, sliceHistory, unitChange, windowGrades, windowRings, windowWinRate, type RangeKey } from "../lib/history.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled, type ShareCard } from "../lib/shareCard.ts";
@@ -21,11 +21,11 @@ import {
   ringSvg,
 } from "./bits.ts";
 import { liveLegKey, liveWindowET, slateLabel, trackPlayOnBoard } from "../data/espn.ts";
-import { displayCat, sectionMatch, sportTitle } from "../data/gradeLabels.ts";
+import { displayCat, sectionMatch } from "../data/gradeLabels.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type FootballMotion, type GameCast } from "../data/gamecast.ts";
 import { courtHardware, footballField, nhlRink } from "./court.ts";
 import { noteVisible } from "../lib/cardFilter.ts";
-import { matchingPlays, statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
+import { statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
 import { BIG4_SPORTS, SPORT_ORDER, sportLabel } from "../lib/sport.ts";
 import type { AppState, SportFilter, ViewId } from "./state.ts";
 
@@ -264,7 +264,7 @@ function productChips(board: Board, state: AppState): string {
       }),
     )
     .join("");
-  return `<nav class="scroller" aria-label="Products">${buttons}</nav><nav class="scroller sport" aria-label="Sport">${sportButtons}</nav>`;
+  return `<nav class="scroller sport" aria-label="Sport">${sportButtons}</nav><nav class="scroller" aria-label="Products">${buttons}</nav>`;
 }
 
 function playOnGame(play: Play, game: LiveGame): boolean {
@@ -366,10 +366,10 @@ function today(state: AppState, board: Board): string {
       : "Showing plays live on DraftKings · DK price incl. fee (Florida DK Predictions). Legs are picked on Hard Rock.";
   const dkLine = board.dkPrices ? `<p class="stamp">${esc(board.dkPrices)}</p>` : "";
   const left = `${bookToggle(state.book)}${dkLine}${recapCard(board)}<div class="card"><h2>Profit</h2><div class="ranges" role="tablist" aria-label="Chart range">${rangeControl(state)}</div><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div><div class="priv">🔒 Only you can see this</div>${chartSvg(windowed.points)}<div class="rings">${rings}</div></div>`;
-  const lock = board.lockCheck && gameList.length ? `<span class="stamp">${esc(board.lockCheck)}</span>` : "";
-  const gameHead = gameList.length
-    ? `<div class="gameslot"><button type="button" class="gameshead" data-act="games-toggle" aria-expanded="${state.gamesOpen ? "true" : "false"}"><b>Today's Games</b><span class="sub">· ${gameList.length}</span>${lock}<span class="car">${state.gamesOpen ? "▴" : "▾"}</span></button>${state.gamesOpen ? gamesPanel(gameList, state) : ""}</div>`
-    : "";
+  const countLabel = gameList.length ? String(gameList.length) : "0 games";
+  const lock = board.lockCheck ? `<span class="stamp">${esc(board.lockCheck)}</span>` : "";
+  const gameBody = !state.gamesOpen ? "" : gameList.length ? gamesPanel(gameList, state) : `<p class="empty gamesempty">No games listed for this filter.</p>`;
+  const gameHead = `<div class="gameslot"><button type="button" class="gameshead" data-act="games-toggle" aria-expanded="${state.gamesOpen ? "true" : "false"}"><b>Today's Games</b><span class="sub">· ${countLabel}</span><span class="car">${state.gamesOpen ? "▴" : "▾"}</span>${lock}</button>${gameBody}</div>`;
   const prepared = state.product === "potd" || state.product === "parlay";
   const empty = !board.tickets.length
     ? "No data yet"
@@ -829,47 +829,23 @@ function nightBlock(state: AppState, board: Board): string {
   return `<section class="night"><button type="button" class="nighthead" data-act="night-toggle" aria-expanded="${open}" aria-label="Yesterday’s Results, ${esc(board.recap.when)}, ${esc(summary)}, ${esc(board.recap.units)}"><span class="nighttop"><b>Yesterday’s Results</b><span class="car">${open ? "▾" : "▸"}</span></span><span class="nightmeta">${esc(board.recap.when)} · ${esc(summary)} · <b class="${tone}">${esc(board.recap.units)}</b></span></button><p class="sub nightnote">Latest graded night in this file, ${esc(board.recap.when)}. The date filter below does not hide it.</p>${open ? `<div class="nightbody">${cards}${fb}${empty}</div>` : ""}</section>`;
 }
 
-function propList(state: AppState, board: Board, windowed: { from: string | null; to: string | null; starts: string | null }): string {
-  const pick = state.resultsPick;
-  if (!pick) return "";
-  const grades = windowGrades(board.grades, windowed.from, windowed.to).filter((grade) => sectionMatch(grade, state.statsSection));
-  const rows = matchingPlays(grades, pick.sport, pick.prop, pick.alt);
-  const wins = rows.filter((row) => row.win).length;
-  const units = rows.reduce((sum, row) => sum + row.units, 0);
-  const pct = rows.length ? Math.round((wins / rows.length) * 100) : 0;
-  const byDate = new Map<string, typeof rows>();
-  for (const row of rows) {
-    const list = byDate.get(row.date) ?? [];
-    list.push(row);
-    byDate.set(row.date, list);
-  }
-  const groups = [...byDate.keys()].sort().reverse().map((date) => {
-    const list = byDate.get(date) ?? [];
-    const dayWins = list.filter((row) => row.win).length;
-    const key = `${pick.sport}|${pick.prop}|${pick.alt ? "alt" : "reg"}|${date}`;
-    const open = state.openResultDates.has(key);
-    const items = list
-      .map((row, index) => {
-        const body = `<b>${esc(row.play || row.detail || row.prop)}</b><div class="sub">${esc(weekday(row.date))} · ${esc(displayCat(row.cat))}</div>${row.capper ? `<div class="via">via ${esc(row.capper)}</div>` : ""}`;
-        const outcome = `<span class="res ${row.win ? "W" : "L"}">${row.win ? "Won" : "Lost"}</span>`;
-        if (!row.ticket) return `<article class="hit">${outcome}<div>${body}</div></article>`;
-        const ticketKey = `grade|${key}|${index}`;
-        const ticketOpen = state.openTickets.has(ticketKey);
-        return `<article class="hit ticketleg"><button type="button" class="ticketbtn" data-act="ticket-legs" data-key="${esc(ticketKey)}" aria-expanded="${ticketOpen}"><span class="car">${ticketOpen ? "▾" : "▸"}</span><span>${body}</span>${outcome}</button>${ticketOpen ? partBlock(row.parts, board, row.date) : ""}</article>`;
-      })
-      .join("");
-    return `<section class="dategrp"><button type="button" class="datehead" data-act="result-date" data-key="${esc(key)}" aria-expanded="${open}"><b>${esc(weekday(date))}</b><span>${dayWins}-${list.length - dayWins}</span><span class="car">${open ? "▾" : "▸"}</span></button>${open ? items : ""}</section>`;
-  }).join("");
-  const title = `${sportTitle(pick.sport)} · ${pick.prop}${pick.alt ? " Alt" : ""}`;
-  const kind = pick.alt ? "Alt lines only. The same play in another product stays listed there too." : "Regular lines only. Alt lines stay on the Alt row, and the same play in another product stays listed there too.";
-  const body = groups || `<p class="empty">No graded plays for this prop in the dates you picked. All dates shows every graded day in this file.</p>`;
-  return `<button type="button" class="back" data-act="results-back">‹ Results</button><div class="hdr"><h1 style="font-size:1.75rem">${esc(title)}</h1><button type="button" class="stdchip" data-act="standings" data-from="results">Standings</button></div><div class="priv">🔒 Only you can see units and win rate</div><div class="ranges" role="tablist" aria-label="Date range in this file">${rangeControl(state)}</div><p class="sub">${rows.length} plays · ${wins}-${rows.length - wins} · ${esc(formatSigned(units, 2))}u · ${pct}%. ${esc(kind)} ${esc(scopeLine(state, board, windowed))}</p><nav class="scroller sport wrap" aria-label="Section">${statsSections(state)}</nav>${body}`;
+function gradeHits(state: AppState, board: Board, rows: GradeMark[], prefix: string): string {
+  return rows
+    .map((row, index) => {
+      const units = `${formatSigned(row.units, 2)}u`;
+      const body = `<b>${esc(row.play || row.detail || row.prop)}</b><div class="sub">${esc(weekday(row.date))} · ${esc(displayCat(row.cat))} · ${esc(units)}</div>${row.capper ? `<div class="via">via ${esc(row.capper)}</div>` : ""}`;
+      const outcome = `<span class="res ${row.win ? "W" : "L"}">${row.win ? "Won" : "Lost"}</span>`;
+      if (!row.ticket) return `<article class="hit">${outcome}<div>${body}</div></article>`;
+      const ticketKey = `grade|${prefix}|${index}`;
+      const ticketOpen = state.openTickets.has(ticketKey);
+      return `<article class="hit ticketleg"><button type="button" class="ticketbtn" data-act="ticket-legs" data-key="${esc(ticketKey)}" aria-expanded="${ticketOpen}"><span class="car">${ticketOpen ? "▾" : "▸"}</span><span>${body}</span>${outcome}</button>${ticketOpen ? partBlock(row.parts, board, row.date) : ""}</article>`;
+    })
+    .join("");
 }
 
 function results(state: AppState, board: Board): string {
   const windowed = chartWindow(board, state.profitRange, state.statsFrom, state.statsTo, state.statsSection);
   const head = `<div class="hdr"><h1 style="font-size:1.75rem">Results</h1><button type="button" class="stdchip" data-act="standings" data-from="results">Standings</button></div><div class="priv">🔒 Only you can see units and win rate</div>`;
-  if (state.resultsPick) return propList(state, board, windowed);
   if (!board.series.length && !board.grades.length && !board.clv && !board.results.length) return `${head}${nightBlock(state, board)}<p class="empty">No data yet</p>`;
   const four = windowed.rings.slice(0, 4).map((ring) => ringSvg(ring.pct, ring.label)).join("");
   return `${head}
@@ -880,7 +856,7 @@ ${statsCalendar(state, board, windowed.from, windowed.to)}
 <nav class="scroller sport wrap" aria-label="Section">${statsSections(state)}</nav>
 <div class="card"><h2>Profit</h2><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
 ${four ? `<div class="card"><div class="rings">${four}</div></div>` : ""}
-${statsSports(state, board, windowed.from, windowed.to)}
+${statsSports(state, board, windowed.from, windowed.to, (rows, prefix) => gradeHits(state, board, rows, prefix))}
 ${clvCard(board, windowed.from, windowed.to, state.statsSection)}`;
 }
 

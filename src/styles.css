@@ -103,8 +103,18 @@ html.day .ranges button.on{background:#17202b;color:#fff}
 .spn{flex:1;min-width:0;display:flex;flex-direction:column}
 .sp.ex{border-color:#76f53a}
 .props{margin-top:8px;border-top:1px solid #2a313c}
-.pr{padding:8px 0;border-bottom:1px solid #2a313c}
-button.pr{width:100%;display:block;background:transparent;border:0;border-bottom:1px solid #2a313c;color:inherit;font:inherit;text-align:left;min-height:44px}
+.propnest{min-width:0;border-bottom:1px solid #2a313c}
+.propnest.alt{margin-left:8px}
+.pr{padding:8px 0}
+button.pr{width:100%;display:block;background:transparent;border:0;color:inherit;font:inherit;text-align:left;min-height:44px}
+.propdrawer{min-width:0;padding:0 0 6px}
+.propdrawer .propsecs{margin:2px -8px 6px;padding:0 8px 2px}
+.propdrawer .datehead{padding:6px 0;min-height:40px}
+.propdrawer .datehead .car{margin-left:auto}
+.propdrawer .hit{min-width:0;padding:8px 0}
+.propdrawer .hit>div,.propdrawer .ticketbtn>span{min-width:0;flex:1}
+.propdrawer .hit b{overflow-wrap:anywhere}
+.propdrawer .part{padding-left:12px}
 .night{background:#161b22;border:1px solid #2d6b4a;border-radius:18px;margin:10px 0}
 .nighthead{width:100%;display:flex;flex-direction:column;align-items:stretch;gap:2px;min-height:44px;padding:12px;background:transparent;border:0;color:inherit;font:inherit;text-align:left}
 .nighttop{display:flex;align-items:center;width:100%}
@@ -121,14 +131,14 @@ button.pr{width:100%;display:block;background:transparent;border:0;border-bottom
 .prt b:first-child{flex:1}
 .splits{display:flex;gap:10px;font-size:.78rem;color:#a9b4c2;margin-top:2px;flex-wrap:wrap}
 .alt{color:#c9a227}
-.pr.altrow{margin-left:12px;padding-top:2px}
+.pr.altrow{padding-top:2px}
 .via{display:block;color:#8b97a8;font-size:.75rem;font-weight:600;margin-top:2px}
 html.day .via{color:#3a4656}
 .spk.pos{color:#76f53a}.spk.neg{color:#ff5c5c}
 html.day .calday.w{background:#bfe8c8}
 html.day .calday.l{background:#f5c3c6}
 html.day .calday.n{background:#e4e9f0;color:#3a4656}
-html.day .props,html.day .pr{border-color:#d5dce6}
+html.day .props,html.day .pr,html.day .propnest{border-color:#d5dce6}
 html.day .spk.pos{color:#146c2e}
 html.day .spk.neg{color:#c4232a}
 html.lg .calmode{width:100%;margin-left:0}
@@ -149,10 +159,12 @@ html.lg .ranges button{font-size:.85rem}
 .brand .logo{height:52px;width:auto;max-width:calc(100% - 56px);display:block}
 .upd{font-size:.75rem;line-height:1.25;color:#a9b4c2;font-weight:600;margin-top:1px}
 .upd.stale{color:#d4b24a}
-.gameshead{width:100%;display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 2px;border:0;background:transparent;color:inherit;font:inherit;text-align:left}
-.gameshead .stamp{display:inline;margin:0;white-space:nowrap}
-.gameshead .car{margin-left:auto}
+.gameshead{width:100%;display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;min-height:44px;padding:6px 2px;border:0;background:transparent;color:inherit;font:inherit;text-align:left}
+.gameshead b,.gameshead .sub{flex:none;white-space:nowrap}
+.gameshead .stamp{flex:1 0 100%;display:block;margin:0;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.gameshead .car{margin-left:auto;flex:none}
 .gameslot{margin:0 0 8px}
+.gamesempty{margin:0 2px 2px;padding:0 0 4px;font-size:.9rem}
 .gamesports{margin:0 -16px 8px}
 .gamegroup{margin:10px 2px 4px;font-size:.8125rem;font-weight:700;color:#a9b4c2}
 html.day .gamegroup{color:#3a4656}

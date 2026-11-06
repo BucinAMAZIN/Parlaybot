@@ -64,8 +64,10 @@ export type AppState = {
   statsDraft: string;
   /** Yesterday’s Results disclosure. Starts closed and is not saved. */
   nightOpen: boolean;
-  /** Open prop list. Null on the Results overview. Not saved. */
-  resultsPick: { sport: string; prop: string; alt: boolean } | null;
+  /** Open prop drawers inside By sport. Not saved. */
+  openProps: Set<string>;
+  /** Section chip inside one open prop drawer. Missing means All sections. Not saved. */
+  propSection: Record<string, AppState["statsSection"]>;
   /** Prop-history dates the phone has opened. Starts empty and is not saved. */
   openResultDates: Set<string>;
   /** Ticket rows opened for their recorded legs. Starts empty and is not saved. */
@@ -133,7 +135,8 @@ export function defaultState(): AppState {
     statsAnchor: "",
     statsDraft: "",
     nightOpen: false,
-    resultsPick: null,
+    openProps: new Set(),
+    propSection: {},
     openResultDates: new Set(),
     openTickets: new Set(),
     liveNight: null,
