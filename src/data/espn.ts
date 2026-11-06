@@ -489,7 +489,7 @@ function legFor(play: Play, event: EventRow, awayScore: number, homeScore: numbe
   const side = bet.kind === "total" ? null : betSide(bet.team, event);
   if (bet.kind !== "total" && !side) return null;
   const state = event.state === "post" ? "post" : event.state === "pre" ? "pre" : "in";
-  const grade = gradeTeamBet(bet, awayScore, homeScore, side, state);
+  const grade = gradeTeamBet(bet, awayScore, homeScore, side, state, event.league, elapsed(event));
   return {
     name: play.name,
     current: grade.current,

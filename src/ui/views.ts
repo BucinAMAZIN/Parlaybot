@@ -156,7 +156,8 @@ function renderTicket(ticket: Ticket, state: AppState, board: Board): string {
     : "";
   const skips = noteList(ticket.skips, "Not added to Heist");
   const excluded = noteList(ticket.excluded, "Not on Heist Alt");
-  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div>${warnings}${subset}</div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected, false, playTracker(board, state, ticket.id, play, book))).join("")}${offHtml}${voidHtml}${skips}${excluded}<div class="tfoot">${foot}</div></section>`;
+  const footHtml = foot ? `<div class="tfoot">${foot}</div>` : "";
+  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div>${warnings}${subset}</div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected, false, playTracker(board, state, ticket.id, play, book))).join("")}${offHtml}${voidHtml}${skips}${excluded}${footHtml}</section>`;
 }
 
 function playTracker(board: Board, state: AppState, ticketId: string, play: Play, book: BookId): string {
@@ -197,7 +198,12 @@ function noteList(rows: { capper: string; pick: string; reason: string }[] | und
   return `<details class="off"><summary>${esc(label)} (${rows.length}) ▸</summary><ul class="skiplist">${items}</ul></details>`;
 }
 
+function singlesCard(ticket: Ticket): boolean {
+  return ticket.id.startsWith("edge") || (ticket.plays.length > 0 && ticket.plays.every((play) => play.edgeSingle === true));
+}
+
 function ticketFoot(ticket: Ticket, state: AppState, on: number, off: number, openLegs: number): string {
+  if (singlesCard(ticket)) return "";
   const book = ticket.productKey === "first" ? "hr" : state.book;
   if (ticket.dkSlipNote && book === "dk") return `<p class="sub">${esc(ticket.dkSlipNote)}</p>`;
   if (ticket.slipLabel && book === "hr") {

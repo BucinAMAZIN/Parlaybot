@@ -48,21 +48,50 @@ function scoreText(team: number, opp: number): string {
   return `${word} ${team}–${opp}`;
 }
 
+function totalUnit(league: string): string {
+  if (league === "NHL") return "G";
+  if (league === "MLB") return "R";
+  return "PTS";
+}
+
+/** Same projection as a player prop: on, sweating, or ice cold. */
+function totalPace(sum: number, line: number, under: boolean, elapsed: number): LegPace {
+  if (under) {
+    if (sum > line) return "dead";
+    if (elapsed >= 0.08 && sum / elapsed > line * 1.15) return "behind";
+    return "on";
+  }
+  if (sum > line) return "hit";
+  if (elapsed < 0.08) return "on";
+  const projected = sum / elapsed;
+  if (projected >= line) return "on";
+  if (projected >= line * 0.7) return "behind";
+  return "cold";
+}
+
 /**
  * Grade a team bet from the live score.
- * In progress stays alive. The final score decides hit, dead, or push.
+ * Totals can cash or bust before the final. Moneyline and spread stay alive until then.
  */
-export function gradeTeamBet(bet: TeamBet, awayScore: number, homeScore: number, side: "away" | "home" | null, state: "pre" | "in" | "post"): TeamGrade {
+export function gradeTeamBet(
+  bet: TeamBet,
+  awayScore: number,
+  homeScore: number,
+  side: "away" | "home" | null,
+  state: "pre" | "in" | "post",
+  league = "NBA",
+  elapsed = 0,
+): TeamGrade {
   const source = state === "pre" ? "Not started · ESPN" : state === "post" ? "ESPN final" : "ESPN score";
   if (bet.kind === "total") {
     const sum = awayScore + homeScore;
     let pace: LegPace = "pre";
-    if (state === "in") pace = "on";
+    if (state === "in") pace = totalPace(sum, bet.line, bet.under, elapsed);
     if (state === "post") {
       if (sum === bet.line) pace = "on";
       else pace = bet.under ? (sum < bet.line ? "hit" : "dead") : sum > bet.line ? "hit" : "dead";
     }
-    return { pace, current: sum, line: bet.line, unit: "PTS", label: "", source };
+    return { pace, current: sum, line: bet.line, unit: totalUnit(league), label: "", source };
   }
   const teamScore = side === "home" ? homeScore : awayScore;
   const oppScore = side === "home" ? awayScore : homeScore;

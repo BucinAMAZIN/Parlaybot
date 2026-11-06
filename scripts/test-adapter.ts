@@ -976,5 +976,59 @@ assert.equal(/10 AM window/.test(edgePage), false);
 assert.equal(geekie?.why.why[0], "Pinnacle no-vig fair +180");
 assert.equal(geekie?.why.why[1], "Recent form 8 of 10");
 assert.equal(geekie?.why.why[2], "Game day note");
+assert.equal(/Game started \(blocked\)/.test(renderPlay(makar!, "hr", new Set())), false);
+const edgeCard = edgePage.slice(edgePage.indexOf('id="ticket-edge"'));
+assert.equal(/No open legs|Whole ticket|Open ticket/.test(edgeCard), false);
+edgeDesk.liveGames = [{
+  id: "vgk-det",
+  league: "NHL",
+  away: "VGK",
+  home: "DET",
+  awayName: "Vegas Golden Knights",
+  homeName: "Detroit Red Wings",
+  awayScore: 0,
+  homeScore: 0,
+  clock: "17:59 - 2nd",
+  pre: false,
+  final: false,
+  awaySide: { abbr: "VGK", record: "10-5-2", standing: "2nd Pac" },
+  homeSide: { abbr: "DET", record: "7-6-3", standing: "8th Atl" },
+  legs: [
+    {
+      name: "Vegas Golden Knights @ Detroit Red Wings Over 5.5",
+      current: 0,
+      line: 5.5,
+      unit: "G",
+      pace: "cold",
+      source: "ESPN score",
+      why: { ours: false, line: "fair", why: ["Pinnacle no-vig"], whyNot: [] },
+      tags: ["Edge", "@nickm_hockey"],
+      key: "total:o:5.5",
+    },
+    {
+      name: "Jack Eichel Under 2.5 Shots On Goal",
+      current: 3,
+      line: 2.5,
+      unit: "SOG",
+      pace: "dead",
+      source: "ESPN box score",
+      why: { ours: false, line: "", why: [], whyNot: [] },
+      tags: ["Props"],
+      key: "sog",
+    },
+  ],
+}];
+const liveHtml = renderPage({ ...blank(), view: "live" }, edgeDesk);
+const overAt = liveHtml.indexOf("Over 5.5");
+const overTag = liveHtml.indexOf("ltag edge", overAt);
+const overBar = liveHtml.indexOf("lv-bar", overAt);
+const overWhy = liveHtml.indexOf("whychip", overAt);
+assert.ok(overTag < overBar && overBar < overWhy);
+assert.equal(liveHtml.includes("lv-foot"), false);
+assert.match(liveHtml.slice(overAt, overAt + 700), /0\/5\.5 G/);
+const sogAt = liveHtml.indexOf("Jack Eichel");
+const sogTag = liveHtml.indexOf("ltag props", sogAt);
+const sogBar = liveHtml.indexOf("lv-bar", sogAt);
+assert.ok(sogTag < sogBar);
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

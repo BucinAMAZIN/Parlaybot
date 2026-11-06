@@ -129,7 +129,6 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   const chips: string[] = [];
   if (play.lock) chips.push(`<span class="chip ok">🔒 ${esc(play.lock)}</span>`);
   if (play.lateInjury) chips.push(`<span class="chip warn">⚠ Late injury</span>`);
-  if (play.blocked === "started") chips.push(`<span class="chip bad">⛔ Game started (blocked)</span>`);
   if (play.status) {
     const tone = play.status.tone === "bad" ? "bad" : play.status.tone === "warn" ? "warn" : "q";
     const when = play.status.reportedAt ? ` · ${esc(play.status.reportedAt)}` : "";
