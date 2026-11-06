@@ -393,7 +393,7 @@ function renderLiveLeg(leg: LiveLeg): string {
   const mood = reactionOf(leg);
   const emoji = mood.emoji ? `<span class="emr ${mood.cls}" aria-hidden="true">${mood.emoji}</span>` : "";
   const live = leg.pace !== "dead" && leg.pace !== "pre" ? " live" : "";
-  return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${esc(figure)}${emoji}</span></div><div class="lv-bar${live}"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace p-${leg.pace}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why, `why:${leg.key || leg.name}`)}</div></div>`;
+      return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${esc(figure)}${emoji}</span></div>${legTags(leg.tags)}<div class="lv-bar${live}"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace p-${leg.pace}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why, `why:${leg.key || leg.name}`)}</div></div>`;
 }
 
 function sideLine(side: LiveGame["awaySide"]): string {
@@ -561,27 +561,46 @@ function playRow(play: GameCast["plays"][number]): string {
   return `<div class="pbp">${mark}<div class="pm"><b>${esc(play.title)}</b><div class="sub">${esc(play.when)}</div><div>${esc(play.text)}</div></div><div class="ps">${esc(score)}${win}</div></div>`;
 }
 
+function tagTone(tag: string): string {
+  if (tag.startsWith("POTD")) return "potd";
+  if (tag.startsWith("+100 ALT")) return "alt100";
+  if (tag.startsWith("+100")) return "plus";
+  if (tag === "Edge") return "edge";
+  if (tag.startsWith("Props")) return "props";
+  if (tag.startsWith("Heist")) return "heist";
+  if (tag === "First Blood") return "blood";
+  if (tag === "Lotto") return "lotto";
+  return "cap";
+}
+
+function legTags(tags: string[] | undefined): string {
+  if (!tags?.length) return "";
+  return `<span class="ltags">${tags.map((tag) => `<span class="ltag ${tagTone(tag)}">${esc(tag)}</span>`).join("")}</span>`;
+}
+
 function boxBody(game: LiveGame): string {
   const yours = game.legs
     .map((leg) => {
       const pace = PACE[leg.pace];
-      const width = Math.max(0, Math.min(100, (leg.current / leg.line) * 100));
+      const width = Math.max(0, Math.min(100, leg.line ? (leg.current / leg.line) * 100 : 0));
       const face = pace.mood ? mascot(pace.mood, 34) : "";
-      return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${leg.current}/${leg.line} ${esc(leg.unit)}</span></div><div class="lv-bar"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div></div></div>`;
+      return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${leg.current}/${leg.line} ${esc(leg.unit)}</span></div>${legTags(leg.tags)}<div class="lv-bar"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div></div></div>`;
     })
     .join("");
   if (game.liveFeed?.real) {
     const box = game.liveFeed.box;
     if (!box.rows.length) return `<div class="sub"><b>Your players</b> · 🔒 Only you can see this</div>${yours}<p class="empty">Player box score is not posted on ESPN yet.</p>`;
-    const head = box.headers.map((header) => `<th>${esc(header)}</th>`).join("");
+    const head = box.headers.length ? `<tr>${box.headers.map((header) => `<th>${esc(header)}</th>`).join("")}</tr>` : "";
     const body = box.rows
       .map((row) =>
-        row.header && row.cells.length === 1
-          ? `<tr class="tmh"><td colspan="${Math.max(box.headers.length, 1)}">${esc(row.header)}</td></tr>`
-          : `<tr class="${row.mine ? "mine" : ""}"><td>${row.mine ? "★ " : ""}${esc(row.cells[0] ?? "")}</td>${row.cells.slice(1).map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`,
+        row.header && row.cells.length > 1
+          ? `<tr class="tmh">${row.cells.map((cell) => `<th>${esc(cell)}</th>`).join("")}</tr>`
+          : row.header
+            ? `<tr class="tmh"><td colspan="${Math.max(box.headers.length, row.cells.length, 1)}">${esc(row.header)}</td></tr>`
+            : `<tr class="${row.mine ? "mine" : ""}"><td>${row.mine ? "★ " : ""}${esc(row.cells[0] ?? "")}</td>${row.cells.slice(1).map((cell) => `<td>${esc(cell)}</td>`).join("")}</tr>`,
       )
       .join("");
-    return `<div class="sub"><b>Your players</b> · 🔒 Only you can see this</div>${yours}<table class="bx"><tr>${head}</tr>${body}</table>`;
+    return `<div class="sub"><b>Your players</b> · 🔒 Only you can see this</div>${yours}<table class="bx">${head}${body}</table>`;
   }
   return `${yours}<p class="empty">No data yet</p>`;
 }

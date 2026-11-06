@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { box, firstBloodLeg, formatRankValue, teamStatsFor, trackPlayOnBoard } from "../src/data/espn.ts";
+import { absorbLiveLeg, abbrsMatch, box, firstBloodLeg, formatRankValue, liveTitle, mergeTags, propOf, readStat, teamStatsFor, trackPlayOnBoard } from "../src/data/espn.ts";
+import { adaptDesk } from "../src/data/desk.ts";
 import { reactionOf } from "../src/ui/bits.ts";
 import { renderPlay } from "../src/ui/bits.ts";
 import type { LiveGame, LiveLeg, Play, WhyBlock } from "../src/data/types.ts";
@@ -131,5 +132,90 @@ const html = renderPlay(play("Justice Hill Over 4.5 Receptions"), "hr", new Set(
 const label = html.match(/<label[\s\S]*?<\/label>/)?.[0] ?? "";
 assert.match(html, /class="ptrack"/);
 assert.equal(label.includes("ptrack"), false);
+
+assert.equal(propOf("A. Johnson u5.5 tackles + assists", "NFL")?.key, "totalTackles");
+assert.equal(propOf("Jase Richardson Under 11.5 Pts + Reb", "NBA")?.key, "points+rebounds");
+assert.equal(propOf("Player Over 22.5 Pass Attempts", "NFL")?.key, "passingAttempts");
+assert.equal(propOf("Player Over 12.5 Rush Atts", "NFL")?.key, "rushingAttempts");
+assert.equal(propOf("Player Over 6.5 Rec Targets", "NFL")?.key, "receivingTargets");
+assert.equal(abbrsMatch("JAC", "JAX"), true);
+assert.equal(liveTitle("Under 74.5", "UTSA", "FAU"), "UTSA/FAU Under 74.5");
+const merged = absorbLiveLeg(
+  { name: "David Pastrnak Over 0.5 Assists", current: 0, line: 0.5, unit: "AST", pace: "on", source: "ESPN", why, tags: ["Props"], key: "a" },
+  { name: "David Pastrnak Over 0.5 Assists", current: 0, line: 0.5, unit: "AST", pace: "on", source: "ESPN", why, tags: ["Edge", "@nickm_hockey"], key: "a" },
+);
+assert.deepEqual(mergeTags(merged.tags ?? []), ["Edge", "Props", "@nickm_hockey"]);
+const heistTags = absorbLiveLeg(
+  { name: "Play", current: 0, line: 1, unit: "", pace: "on", source: "ESPN", why, tags: ["Heist ALT", "@alexcaruso"] },
+  { name: "Play", current: 0, line: 1, unit: "", pace: "on", source: "ESPN", why, tags: ["Heist"] },
+);
+assert.deepEqual(heistTags.tags, ["Heist", "Heist ALT", "@alexcaruso"]);
+const attempts = readStat(
+  { boxscore: { players: [{ statistics: [{ keys: ["completions/passingAttempts"], athletes: [{ athlete: { displayName: "Baker Mayfield" }, stats: ["18/27"] }] }] }] } },
+  "Baker Mayfield",
+  "passingAttempts",
+);
+assert.equal(attempts, 27);
+const nhlBox = box(
+  {
+    boxscore: {
+      players: [{
+        team: { abbreviation: "VGK" },
+        statistics: [
+          { name: "forwards", keys: ["goals", "assists", "shotsTotal", "timeOnIce"], athletes: [{ athlete: { displayName: "Jack Eichel" }, stats: ["1", "1", "4", "18:00"] }] },
+          { name: "defenses", keys: ["goals", "assists", "shotsTotal", "timeOnIce"], athletes: [{ athlete: { displayName: "Shea Theodore" }, stats: ["0", "1", "2", "20:00"] }] },
+          { name: "goalies", keys: ["saves", "shotsAgainst", "goalsAgainst", "savePct", "timeOnIce"], athletes: [{ athlete: { displayName: "Carter Hart" }, stats: ["20", "22", "2", ".909", "60:00"] }] },
+        ],
+      }],
+    },
+  },
+  ["Shea Theodore"],
+  "NHL",
+);
+assert.match(nhlBox.rows.map((row) => row.cells.join(" ")).join("|"), /G/);
+assert.equal(nhlBox.rows.some((row) => row.cells[0] === "Shea Theodore" && row.mine), true);
+assert.equal(nhlBox.rows.some((row) => String(row.header).includes("Goalies")), true);
+const nbaBox = box(
+  { boxscore: { players: [{ team: { abbreviation: "GSW" }, statistics: [{ name: "stats", keys: ["minutes", "points", "rebounds", "assists", "threePointFieldGoalsMade-threePointFieldGoalsAttempted"], athletes: [{ athlete: { displayName: "Stephen Curry" }, stats: ["32", "28", "5", "6", "6-12"] }] }] }] } },
+  ["Stephen Curry"],
+  "NBA",
+);
+assert.match(nbaBox.rows[0]?.cells.join(" ") ?? "", /REB/);
+assert.match(nbaBox.rows[0]?.cells.join(" ") ?? "", /AST/);
+const nflBox = box(
+  {
+    boxscore: {
+      players: [{
+        team: { abbreviation: "JAX" },
+        statistics: [
+          { name: "passing", keys: ["completions/passingAttempts", "passingYards", "passingTouchdowns", "interceptions"], athletes: [{ athlete: { displayName: "Trevor Lawrence" }, stats: ["18/27", "220", "2", "0"] }] },
+          { name: "rushing", keys: ["rushingAttempts", "rushingYards", "rushingTouchdowns", "longRushing"], athletes: [{ athlete: { displayName: "Travis Etienne" }, stats: ["12", "54", "1", "18"] }] },
+          { name: "receiving", keys: ["receptions", "receivingYards", "receivingTouchdowns", "receivingTargets"], athletes: [{ athlete: { displayName: "Christian Kirk" }, stats: ["5", "60", "0", "8"] }] },
+          { name: "defensive", keys: ["totalTackles", "soloTackles", "sacks", "passesDefended"], athletes: [{ athlete: { displayName: "Foyesade Oluokun" }, stats: ["8", "5", "1", "0"] }] },
+        ],
+      }],
+    },
+  },
+  ["Christian Kirk"],
+  "NFL",
+);
+assert.equal(nflBox.rows.filter((row) => row.header).length, 4);
+assert.equal(nflBox.rows.some((row) => row.cells[0] === "Christian Kirk" && row.mine), true);
+const safeBoard = adaptDesk(
+  {
+    today: { date: "2026-11-06", tickets: [{ name: "+100 ticket", pick: "2-leg +131 (1u) — Void (goalie re-check)", odds: "+131", legs: [{ pick: "Neal Pionk Over 1.5 Shots", sport: "NHL" }] }], sports: {} },
+    safe100: {
+      sports: { TODAY: { legs: [{ pick: "Alt Skater Over 0.5 Points", sport: "NHL" }] }, NHL: { legs: [{ pick: "Alt Goalie Under 2.5 Goals", sport: "NHL" }] } },
+      notes: { NBA: "No qualifying Alt Parlay today (NBA)." },
+    },
+    results_v2: { rows: [] },
+  },
+  { note: "", columns: [], groups: [] },
+);
+assert.equal(safeBoard.tickets.find((item) => item.productKey === "parlay")?.plays[0]?.tags?.[0], "+100 · Void");
+assert.equal(safeBoard.tickets.find((item) => item.productKey === "parlay")?.plays[0]?.blocked, "graded");
+assert.equal(safeBoard.tickets.some((item) => item.plays.some((play) => play.tags?.includes("+100 ALT"))), true);
+assert.equal(safeBoard.tickets.some((item) => item.plays.some((play) => play.tags?.includes("+100 ALT · NHL"))), true);
+assert.equal(safeBoard.notices.some((note) => /No qualifying Alt Parlay/.test(note.text)), true);
 
 console.log("live card tests ok");

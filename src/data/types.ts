@@ -86,6 +86,8 @@ export type Play = {
   dkName?: string;
   /** PENDING, LIVE, or FINAL from the file. */
   legState?: string;
+  /** Where this play was posted, such as Heist, Edge, or a capper handle. */
+  tags?: string[];
 };
 
 export type Ticket = {
@@ -176,6 +178,8 @@ export type LiveLeg = {
   label?: string;
   /** Canonical identity so the same bet from two products is one live leg. */
   key?: string;
+  /** Every product that posted this same line. */
+  tags?: string[];
 };
 
 export type LiveTicket = {

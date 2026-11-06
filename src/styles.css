@@ -287,6 +287,17 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 @keyframes emr-cold{0%,100%{transform:translateX(0)}50%{transform:translateX(1.5px)}}
 @keyframes emr-hook{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(18deg)}}
 @keyframes emr-miss{0%,100%{opacity:1}50%{opacity:.55}}
+.ltags{display:flex;flex-wrap:wrap;gap:4px;margin:4px 0}
+.ltag{border:1px solid #2c3644;border-radius:99px;padding:1px 7px;font-size:.68rem;font-weight:700;color:#c9d3df}
+.ltag.edge{color:#7aa7ff;border-color:#35507a}
+.ltag.plus{color:#76f53a;border-color:#2f6b22}
+.ltag.alt100{color:#ffcc66;border-color:#6b5420}
+.ltag.props{color:#d2b4ff;border-color:#56407a}
+.ltag.heist{color:#ff8c6a;border-color:#6b3a2a}
+.ltag.potd{color:#f0b429;border-color:#6b5420}
+.ltag.blood{color:#ff6b8a;border-color:#6b3040}
+.ltag.lotto{color:#8ee7ff;border-color:#245868}
+.ltag.cap{color:#c9d3df;border-color:#3a4452}
 .rk-good{color:#3fb950}
 .rk-mid{color:#f0b429}
 .rk-bad{color:#ff6b6b}
@@ -475,6 +486,15 @@ html.day .court-note{fill:#1d4e34}
 html.day .shot-ring{stroke:#17202b}
 html.day .ptrack{background:#f7f9fb;border-color:#d5dde6}
 html.day .ptrack-hint,html.day .rk-n{color:#5c6b7c}
+html.day .ltag{background:#fff;color:#243040}
+html.day .ltag.edge{color:#1d4f91}
+html.day .ltag.plus{color:#146c2e}
+html.day .ltag.alt100{color:#8a5a00}
+html.day .ltag.props{color:#5b3d8a}
+html.day .ltag.heist{color:#9a3412}
+html.day .ltag.potd{color:#8a5a00}
+html.day .ltag.blood{color:#9f1239}
+html.day .ltag.lotto{color:#0f5f73}
 html.day .rk-good{color:#146c2e}
 html.day .rk-mid{color:#8a5a00}
 html.day .rk-bad{color:#b42318}

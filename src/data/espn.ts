@@ -76,6 +76,8 @@ const ABBR_ALIAS: Record<string, string[]> = {
   WAS: ["WSH"],
   NY: ["NYK"],
   NYK: ["NY"],
+  JAC: ["JAX"],
+  JAX: ["JAC"],
   GS: ["GSW"],
   GSW: ["GS"],
   NO: ["NOP"],
@@ -181,16 +183,34 @@ function listComp(raw: Json): Json | null {
 function hit(hint: string, team: EventTeam): boolean {
   const text = hint.toLowerCase().replace(/[^a-z0-9 ]/g, " ");
   if (!text.trim()) return false;
-  return team.names.some((name) => name === text || text.split(" ").includes(name) || name.split(" ").every((part) => part.length > 2 && text.includes(part)));
+  const aliases = [team.abbr, ...(ABBR_ALIAS[team.abbr.toUpperCase()] ?? [])].map((name) => name.toLowerCase());
+  const names = [...team.names, ...aliases];
+  return names.some((name) => name === text || text.split(" ").includes(name) || name.split(" ").every((part) => part.length > 2 && text.includes(part)));
+}
+
+function aliasHit(abbr: string, other: string): boolean {
+  const left = abbr.toUpperCase();
+  const right = other.toUpperCase();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  return (ABBR_ALIAS[left] ?? []).includes(right) || (ABBR_ALIAS[right] ?? []).includes(left);
+}
+
+export function abbrsMatch(left: string, right: string): boolean {
+  return aliasHit(left, right);
+}
+
+function bothSides(away: string, home: string, eventAway: string, eventHome: string): boolean {
+  if (!away || !home) return false;
+  const awayOk = aliasHit(away, eventAway) || aliasHit(away, eventHome);
+  const homeOk = aliasHit(home, eventAway) || aliasHit(home, eventHome);
+  return awayOk && homeOk && !aliasHit(away, home);
 }
 
 function matches(play: Play, event: EventRow): boolean {
   const away = play.matchup?.away.abbr ?? "";
   const home = play.matchup?.home.abbr ?? "";
-  if (away && home) {
-    const abbrs = [event.away.abbr, event.home.abbr];
-    if (abbrs.includes(away) && abbrs.includes(home)) return true;
-  }
+  if (bothSides(away, home, event.away.abbr, event.home.abbr)) return true;
   const text = `${play.gameText ?? ""} ${play.detail} ${play.name}`;
   return hit(text, event.away) && hit(text, event.home);
 }
@@ -208,14 +228,28 @@ function elapsed(event: EventRow): number {
 
 const STATS: [RegExp, string, string][] = [
   [/shots on goal|\bsog\b/i, "shotsTotal", "SOG"],
-  [/three|3pm|3-pointer/i, "threePointFieldGoalsMade-threePointFieldGoalsAttempted", "3PM"],
-  [/rebounds?\s*\+\s*assists?|reb \+ ast|ast \+ reb/i, "rebounds+assists", "REB+AST"],
-  [/points?\s*\+\s*rebounds?\s*\+\s*assists?|\bpra\b/i, "points+rebounds+assists", "PRA"],
-  [/points?\s*\+\s*rebounds?/i, "points+rebounds", "PTS+REB"],
-  [/points?\s*\+\s*assists?|\bpa\b/i, "points+assists", "PTS+AST"],
+  [/tackles?\s*\+\s*assists?|total tackles?/i, "totalTackles", "TKL"],
+  [/solo tackles?/i, "soloTackles", "SOLO"],
+  [/sacks?/i, "sacks", "SACK"],
+  [/steals?\s*\+\s*blocks?|stocks?/i, "steals+blocks", "STL+BLK"],
+  [/(?:points?|\bpts\b)\s*\+\s*(?:rebounds?|\breb\b)\s*\+\s*(?:assists?|\bast\b)|\bpra\b/i, "points+rebounds+assists", "PRA"],
+  [/(?:points?|\bpts\b)\s*\+\s*(?:rebounds?|\breb\b)|\bpr\b/i, "points+rebounds", "PTS+REB"],
+  [/(?:points?|\bpts\b)\s*\+\s*(?:assists?|\bast\b)|\bpa\b/i, "points+assists", "PTS+AST"],
+  [/(?:rebounds?|\breb\b)\s*\+\s*(?:assists?|\bast\b)|\bra\b/i, "rebounds+assists", "REB+AST"],
+  [/pass(?:ing)? att(?:empts?|s)?/i, "passingAttempts", "PASS ATT"],
+  [/(?:pass(?:ing)? )?completions?/i, "completions", "COMP"],
+  [/pass(?:ing)? y(?:ards|ds)/i, "passingYards", "PASS YDS"],
+  [/pass(?:ing)? td|td pass(?:es)?/i, "passingTouchdowns", "PASS TD"],
+  [/interceptions?|\bint\b/i, "interceptions", "INT"],
+  [/rush(?:ing)? att(?:empts?|s)?|carries/i, "rushingAttempts", "RUSH ATT"],
+  [/rush(?:ing)? y(?:ards|ds)/i, "rushingYards", "RUSH YDS"],
+  [/(?:rec(?:eiving)? )?targets?/i, "receivingTargets", "TGTS"],
   [/rec(?:eiving)? y(?:ards|ds)/i, "receivingYards", "REC YDS"],
   [/receptions?\b/i, "receptions", "REC"],
-  [/rush(?:ing)? y(?:ards|ds)/i, "rushingYards", "RUSH YDS"],
+  [/anytime td|\batd\b/i, "rushingTouchdowns+receivingTouchdowns", "TD"],
+  [/three|3pm|3-pointer/i, "threePointFieldGoalsMade-threePointFieldGoalsAttempted", "3PM"],
+  [/steals?/i, "steals", "STL"],
+  [/turnovers?/i, "turnovers", "TO"],
   [/assists?/i, "assists", "AST"],
   [/rebounds?/i, "rebounds", "REB"],
   [/points?|\bpts\b/i, "points", "PTS"],
@@ -238,32 +272,55 @@ function lastName(name: string): string {
   return parts[parts.length - 1] ?? "";
 }
 
-function readStat(summary: Json, player: string, key: string): number | null {
+function statIndex(keys: unknown[], part: string): { index: number; keyName: string } | null {
+  for (let index = 0; index < keys.length; index += 1) {
+    const keyName = str(keys[index]);
+    if (keyName === part || keyName.split(/[/-]/).includes(part)) return { index, keyName };
+  }
+  return null;
+}
+
+function statPiece(keyName: string, part: string, cell: string): number | null {
+  const bits = keyName.split(/[/-]/);
+  if (bits.length > 1) {
+    const idx = bits.indexOf(part);
+    if (idx >= 0) return num(cell.split(/[/-]/)[idx]);
+  }
+  if (part.startsWith("threePoint")) return num(cell.split("-")[0]);
+  return num(cell.split("/")[0]);
+}
+
+function readOne(summary: Json, player: string, part: string): number | null {
   const teams = isObj(summary.boxscore) && Array.isArray(summary.boxscore.players) ? summary.boxscore.players : [];
+  for (const team of teams) {
+    if (!isObj(team) || !Array.isArray(team.statistics)) continue;
+    for (const group of team.statistics) {
+      if (!isObj(group) || !Array.isArray(group.keys) || !Array.isArray(group.athletes)) continue;
+      const found = statIndex(group.keys, part);
+      if (!found) continue;
+      for (const athlete of group.athletes) {
+        if (!isObj(athlete) || !isObj(athlete.athlete)) continue;
+        if (!samePlayer(player, str(athlete.athlete.displayName))) continue;
+        const cell = Array.isArray(athlete.stats) ? str(athlete.stats[found.index]) : "";
+        return statPiece(found.keyName, part, cell);
+      }
+    }
+  }
+  return null;
+}
+
+export function readStat(summary: Json, player: string, key: string): number | null {
+  if (key === "rushingTouchdowns+receivingTouchdowns") {
+    const rush = readOne(summary, player, "rushingTouchdowns");
+    const rec = readOne(summary, player, "receivingTouchdowns");
+    if (rush == null && rec == null) return null;
+    return (rush ?? 0) + (rec ?? 0);
+  }
   const keys = key.split("+");
   let total = 0;
   let found = false;
   for (const part of keys) {
-    let value: number | null = null;
-    for (const team of teams) {
-      if (!isObj(team) || !Array.isArray(team.statistics)) continue;
-      for (const group of team.statistics) {
-        if (!isObj(group) || !Array.isArray(group.keys) || !Array.isArray(group.athletes)) continue;
-        const index = group.keys.findIndex((item) => {
-          const text = str(item);
-          return text === part || text.startsWith(`${part}-`) || text.startsWith(`${part}/`);
-        });
-        if (index < 0) continue;
-        for (const athlete of group.athletes) {
-          if (!isObj(athlete) || !isObj(athlete.athlete)) continue;
-          if (!samePlayer(player, str(athlete.athlete.displayName))) continue;
-          const cell = Array.isArray(athlete.stats) ? str(athlete.stats[index]) : "";
-          const piece = part.startsWith("threePoint") ? cell.split("-")[0] : cell.split("/")[0];
-          const parsed = num(piece);
-          if (parsed != null) value = parsed;
-        }
-      }
-    }
+    const value = readOne(summary, player, part);
     if (value == null) return null;
     found = true;
     total += value;
@@ -271,7 +328,7 @@ function readStat(summary: Json, player: string, key: string): number | null {
   return found ? total : null;
 }
 
-function propOf(name: string, league: LiveGame["league"]): { player: string; line: number; under: boolean; plus: boolean; unit: string; key: string } | null {
+export function propOf(name: string, league: LiveGame["league"]): { player: string; line: number; under: boolean; plus: boolean; unit: string; key: string } | null {
   const parsed = propLine(name);
   if (!parsed) return null;
   if (league === "NHL" && /^(points?|pts)$/i.test(parsed.market)) {
@@ -367,13 +424,39 @@ function preferTitle(current: string, incoming: string): string {
   return left.length <= right.length ? left : right;
 }
 
-/** Keep one card per key, the short title, and a why note when either copy has one. */
+export function tagRank(tag: string): number {
+  if (/^POTD/i.test(tag)) return 0;
+  if (/^\+100 ALT/i.test(tag)) return 2;
+  if (/^\+100/i.test(tag)) return 1;
+  if (tag === "Edge") return 3;
+  if (tag === "Props ALT") return 5;
+  if (tag === "Props") return 4;
+  if (tag === "Heist ALT") return 7;
+  if (tag === "Heist") return 6;
+  if (tag === "First Blood") return 8;
+  if (tag === "Lotto") return 9;
+  return 10;
+}
+
+export function mergeTags(tags: Array<string | undefined>): string[] {
+  return [...new Set(tags.filter((tag): tag is string => !!tag))].sort((a, b) => tagRank(a) - tagRank(b) || a.localeCompare(b));
+}
+
+/** A bare total such as Under 74.5 is shown with the matchup. */
+export function liveTitle(name: string, away: string, home: string): string {
+  const title = cleanLiveTitle(name);
+  if (/^(over|under)\s+\d/i.test(title)) return `${away}/${home} ${title}`;
+  return title;
+}
+
+/** Keep one card per key, the short title, a why note, and every source tag. */
 export function absorbLiveLeg(prev: LiveLeg, next: LiveLeg): LiveLeg {
   return {
     ...prev,
     name: preferTitle(prev.name, next.name),
     why: realWhy(prev.why) ? prev.why : realWhy(next.why) ? next.why : prev.why,
     key: prev.key ?? next.key,
+    tags: mergeTags([...(prev.tags ?? []), ...(next.tags ?? [])]),
   };
 }
 
@@ -438,27 +521,131 @@ function pbp(summary: Json | undefined, away: string, home: string, league: Live
   });
 }
 
-export function box(summary: Json | undefined, names: string[]): LiveFeed["box"] {
+type BoxRow = LiveFeed["box"]["rows"][number];
+
+function groupNamed(groups: Json[], ...names: string[]): Json | undefined {
+  return groups.find((group) => names.includes(str(group.name).toLowerCase()) || names.includes(str(group.type).toLowerCase()));
+}
+
+function cellAt(group: Json, athlete: Json, key: string): string {
+  const keys = Array.isArray(group.keys) ? group.keys : [];
+  if (!Array.isArray(athlete.stats)) return "";
+  if (key.includes("/") || key.includes("-")) {
+    const index = keys.findIndex((item) => str(item) === key);
+    if (index >= 0) return str(athlete.stats[index]);
+  }
+  const found = statIndex(keys, key);
+  if (!found) return "";
+  const cell = str(athlete.stats[found.index]);
+  const piece = statPiece(found.keyName, key, cell);
+  return piece == null ? cell : String(piece);
+}
+
+function mineName(name: string, names: string[]): boolean {
+  return names.some((want) => lastName(want) && lastName(want) === lastName(name));
+}
+
+function pushAthletes(rows: BoxRow[], group: Json, athletes: unknown[], names: string[], columns: { key: string; label: string }[], title: string): void {
+  if (!athletes.length) return;
+  rows.push({ cells: [title, ...columns.map((column) => column.label)], mine: false, header: title });
+  for (const athlete of athletes.slice(0, 20)) {
+    if (!isObj(athlete)) continue;
+    const name = str(isObj(athlete.athlete) ? athlete.athlete.displayName : "");
+    const stats = columns.map((column) => {
+      if (column.key === "points-sum") {
+        const goals = num(cellAt(group, athlete, "goals")) ?? 0;
+        const assists = num(cellAt(group, athlete, "assists")) ?? 0;
+        return String(goals + assists);
+      }
+      return cellAt(group, athlete, column.key);
+    });
+    rows.push({ cells: [name, ...stats], mine: mineName(name, names), header: undefined });
+  }
+}
+
+export function box(summary: Json | undefined, names: string[], league = ""): LiveFeed["box"] {
   const teams = summary && isObj(summary.boxscore) && Array.isArray(summary.boxscore.players) ? summary.boxscore.players : [];
-  const rows: LiveFeed["box"]["rows"] = [];
-  let headers: string[] = [];
+  const rows: BoxRow[] = [];
   for (const team of teams) {
     if (!isObj(team)) continue;
-    const title = str(isObj(team.team) ? team.team.abbreviation : "");
+    const abbr = str(isObj(team.team) ? team.team.abbreviation : "");
     const groups = Array.isArray(team.statistics) ? team.statistics.filter(isObj) : [];
-    const group = groups.find((item) => Array.isArray(item.athletes) && item.athletes.length);
-    if (!group) continue;
-    const labels = (Array.isArray(group.labels) ? group.labels : Array.isArray(group.keys) ? group.keys : []).map((item) => str(item)).slice(0, 5);
-    if (!headers.length) headers = ["Player", ...labels];
-    rows.push({ cells: [title], mine: false, header: title });
-    for (const athlete of Array.isArray(group.athletes) ? group.athletes.slice(0, 20) : []) {
-      if (!isObj(athlete)) continue;
-      const name = str(isObj(athlete.athlete) ? athlete.athlete.displayName : "");
-      const stats = (Array.isArray(athlete.stats) ? athlete.stats : []).map((item) => str(item)).slice(0, labels.length);
-      rows.push({ cells: [name, ...stats], mine: names.some((want) => lastName(want) && lastName(want) === lastName(name)), header: undefined });
+    if (league === "NHL") {
+      const forwards = groupNamed(groups, "forwards");
+      const defense = groupNamed(groups, "defenses", "defense");
+      const goalies = groupNamed(groups, "goalies");
+      const skaterGroup = forwards ?? defense ?? groupNamed(groups, "skaters") ?? groups.find((group) => Array.isArray(group.athletes) && group.athletes.length);
+      const skaters = [...(forwards && Array.isArray(forwards.athletes) ? forwards.athletes : []), ...(defense && Array.isArray(defense.athletes) ? defense.athletes : [])];
+      const listed = skaters.length ? skaters : Array.isArray(skaterGroup?.athletes) ? skaterGroup.athletes : [];
+      if (skaterGroup && listed.length) {
+        pushAthletes(rows, skaterGroup, listed, names, [
+          { key: "goals", label: "G" },
+          { key: "assists", label: "A" },
+          { key: "points-sum", label: "PTS" },
+          { key: "shotsTotal", label: "SOG" },
+          { key: "timeOnIce", label: "TOI" },
+        ], abbr);
+      }
+      if (goalies && Array.isArray(goalies.athletes) && goalies.athletes.length) {
+        pushAthletes(rows, goalies, goalies.athletes, names, [
+          { key: "saves", label: "SV" },
+          { key: "shotsAgainst", label: "SA" },
+          { key: "goalsAgainst", label: "GA" },
+          { key: "savePct", label: "SV%" },
+          { key: "timeOnIce", label: "TOI" },
+        ], `${abbr} Goalies`);
+      }
+      continue;
     }
+    if (league === "NBA" || league === "NCAAB" || league === "WNBA") {
+      const group = groups.find((item) => Array.isArray(item.athletes) && item.athletes.length) ?? groups[0];
+      if (group && Array.isArray(group.athletes)) {
+        pushAthletes(rows, group, group.athletes, names, [
+          { key: "minutes", label: "MIN" },
+          { key: "points", label: "PTS" },
+          { key: "rebounds", label: "REB" },
+          { key: "assists", label: "AST" },
+          { key: "threePointFieldGoalsMade-threePointFieldGoalsAttempted", label: "3PT" },
+        ], abbr);
+      }
+      continue;
+    }
+    if (league === "NFL" || league === "NCAAF") {
+      const specs: [string, string, { key: string; label: string }[]][] = [
+        ["passing", "Passing", [{ key: "completions/passingAttempts", label: "C/ATT" }, { key: "passingYards", label: "YDS" }, { key: "passingTouchdowns", label: "TD" }, { key: "interceptions", label: "INT" }]],
+        ["rushing", "Rushing", [{ key: "rushingAttempts", label: "CAR" }, { key: "rushingYards", label: "YDS" }, { key: "rushingTouchdowns", label: "TD" }, { key: "longRushing", label: "LONG" }]],
+        ["receiving", "Receiving", [{ key: "receptions", label: "REC" }, { key: "receivingYards", label: "YDS" }, { key: "receivingTouchdowns", label: "TD" }, { key: "receivingTargets", label: "TGTS" }]],
+        ["defensive", "Defense", [{ key: "totalTackles", label: "TOT" }, { key: "soloTackles", label: "SOLO" }, { key: "sacks", label: "SACKS" }, { key: "passesDefended", label: "PD" }]],
+      ];
+      for (const [name, label, columns] of specs) {
+        const group = groupNamed(groups, name);
+        if (!group || !Array.isArray(group.athletes) || !group.athletes.length) continue;
+        const athletes = group.athletes.filter(isObj);
+        const tracked = names.some((want) => athletes.some((athlete) => isObj(athlete.athlete) && samePlayer(want, str(athlete.athlete.displayName))));
+        if (name === "defensive" && !tracked && !athletes.length) continue;
+        pushAthletes(rows, group, group.athletes, names, columns, `${abbr} · ${label}`);
+      }
+      continue;
+    }
+    if (league === "MLB") {
+      const specs: [string, string, { key: string; label: string }[]][] = [
+        ["batting", "Batting", [{ key: "atBats", label: "AB" }, { key: "runs", label: "R" }, { key: "hits", label: "H" }, { key: "RBIs", label: "RBI" }, { key: "homeRuns", label: "HR" }]],
+        ["pitching", "Pitching", [{ key: "innings", label: "IP" }, { key: "hits", label: "H" }, { key: "earnedRuns", label: "ER" }, { key: "walks", label: "BB" }, { key: "strikeouts", label: "K" }]],
+      ];
+      for (const [name, label, columns] of specs) {
+        const group = groupNamed(groups, name);
+        if (!group || !Array.isArray(group.athletes) || !group.athletes.length) continue;
+        pushAthletes(rows, group, group.athletes, names, columns, `${abbr} · ${label}`);
+      }
+      continue;
+    }
+    const group = groups.find((item) => Array.isArray(item.athletes) && item.athletes.length);
+    if (!group || !Array.isArray(group.athletes)) continue;
+    const labels = (Array.isArray(group.labels) ? group.labels : []).map((item) => str(item)).slice(0, 4);
+    const keys = (Array.isArray(group.keys) ? group.keys : []).map((item) => str(item)).slice(0, 4);
+    pushAthletes(rows, group, group.athletes, names, keys.map((key, index) => ({ key, label: labels[index] || key })), abbr);
   }
-  return { headers, rows };
+  return { headers: [], rows };
 }
 
 const SPORT_KEY: Record<string, string> = {
@@ -511,14 +698,6 @@ function rankIcon(key: string, side: string): string {
   if (side === "def" || DEF_KEYS.has(key)) return "🛡️";
   if (side === "off" || OFF_KEYS.has(key)) return "⚔️";
   return "";
-}
-
-function aliasHit(abbr: string, other: string): boolean {
-  const left = abbr.toUpperCase();
-  const right = other.toUpperCase();
-  if (!left || !right) return false;
-  if (left === right) return true;
-  return (ABBR_ALIAS[left] ?? []).includes(right) || (ABBR_ALIAS[right] ?? []).includes(left);
 }
 
 function looseName(want: string, have: string): boolean {
@@ -614,14 +793,22 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
     for (const title of titles) {
       const source = title === play.name ? play : { ...play, name: title };
       if (isFirstBloodPlay(source)) {
-        const special = firstBloodLeg(source.name, event.summary, event.state === "post" ? "post" : event.state === "pre" ? "pre" : "in", scoredAway, scoredHome);
-        if (special) buckets.set(special.key ?? title, special);
+        const phase = event.state === "post" ? "post" : event.state === "pre" ? "pre" : "in";
+        const special = firstBloodLeg(source.name, event.summary, phase, scoredAway, scoredHome);
+        const key = `first:${normBit(source.name)}`;
+        const waiting = phase === "pre" ? { name: source.name, current: 0, line: 1, unit: "", pace: "pre" as const, source: "Not started · ESPN", why: source.why, label: "Waiting on 1st score", key } : null;
+        const leg: LiveLeg | null = special ?? waiting;
+        if (leg) {
+          const next = { ...leg, key, tags: mergeTags([...(leg.tags ?? []), ...(source.tags ?? []), "First Blood"]) };
+          const prev = buckets.get(key);
+          buckets.set(key, prev ? absorbLiveLeg(prev, next) : next);
+        }
         continue;
       }
       const leg = legFor(source, event, scoredAway, scoredHome);
       if (!leg) continue;
       const key = liveLegKey(source.name, event.league, teams);
-      const next = { ...leg, key, name: cleanLiveTitle(source.name) };
+      const next = { ...leg, key, name: liveTitle(source.name, event.away.abbr, event.home.abbr), tags: mergeTags(source.tags ?? []) };
       const prev = buckets.get(key);
       buckets.set(key, prev ? absorbLiveLeg(prev, next) : next);
     }
@@ -655,7 +842,7 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
             period: item.periodKey,
           }))
         : pbp(event.summary, event.away.abbr, event.home.abbr, event.league),
-      box: box(event.summary, names),
+      box: box(event.summary, names, event.league),
       teamStats: ranks.rows,
       real: true,
       built: ranks.stamp || teamBuilt || undefined,
@@ -750,7 +937,7 @@ export function trackPlayOnBoard(play: Play, board: Board, book: BookId): { game
 function playMatchesLive(play: Play, game: LiveGame): boolean {
   const away = play.matchup?.away.abbr;
   const home = play.matchup?.home.abbr;
-  if (away && home && [game.away, game.home].includes(away) && [game.away, game.home].includes(home)) return true;
+  if (bothSides(away ?? "", home ?? "", game.away, game.home)) return true;
   const blob = `${play.gameText ?? ""} ${play.detail} ${play.name}`.toLowerCase();
   const names = [game.away, game.home, game.awayName, game.homeName].map((name) => name.toLowerCase()).filter((name) => name.length > 2);
   return names.filter((name) => blob.includes(name)).length >= 2;
@@ -817,16 +1004,19 @@ export async function attachLive(board: Board): Promise<void> {
   const events = fetched.flat();
   const plays = [...board.tickets.flatMap((ticket) => ticket.plays), ...board.cappers.flatMap((capper) => capper.plays)];
   const wanted = events.filter((event) => plays.some((play) => matches(play, event)));
-  await Promise.all(
-    wanted.slice(0, 24).map(async (event) => {
-      try {
-        const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${event.group}/${event.path}/summary?event=${event.id}`, { cache: "no-store" });
-        if (response.ok) event.summary = (await response.json()) as Json;
-      } catch {
-        event.summary = undefined;
-      }
-    }),
-  );
+  const capped = wanted.slice(0, 60);
+  for (let index = 0; index < capped.length; index += 8) {
+    await Promise.all(
+      capped.slice(index, index + 8).map(async (event) => {
+        try {
+          const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${event.group}/${event.path}/summary?event=${event.id}`, { cache: "no-store" });
+          if (response.ok) event.summary = (await response.json()) as Json;
+        } catch {
+          event.summary = undefined;
+        }
+      }),
+    );
+  }
   const games = sortLiveGames(wanted.map((event) => gameOf(event, plays.filter((play) => matches(play, event)), board.teamVs, board.teamBuilt, board.standings)));
   const mood = moodOf(games);
   board.liveGames = games;

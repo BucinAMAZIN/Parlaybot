@@ -317,6 +317,7 @@ function mainPlay(leg: Row, index: number, statuses: Map<string, PlayerStatus>, 
     dkLink: dk.link,
     slip: onSlip,
     legState: live.kind === "object" ? "LIVE" : undefined,
+    tags: ["Heist"],
   };
 }
 
@@ -369,6 +370,7 @@ function altPlay(
     dkLink: dk.link,
     slip: onSlip,
     legState,
+    tags: ["Heist ALT"],
   };
 }
 
