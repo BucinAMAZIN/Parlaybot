@@ -788,6 +788,7 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
   const scoredAway = Number.isFinite(awayScore) ? awayScore : event.away.score;
   const scoredHome = Number.isFinite(homeScore) ? homeScore : event.home.score;
   for (const play of plays) {
+    if (play.voidedPreGame) continue;
     const titles = [play.name];
     if (play.dkName && cleanLiveTitle(play.dkName) !== cleanLiveTitle(play.name)) titles.push(play.dkName);
     for (const title of titles) {

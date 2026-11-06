@@ -16,11 +16,11 @@ import { normProp, normSide, normSport, sectionMatch } from "../src/data/gradeLa
 import { classifySport, sportLabel } from "../src/lib/sport.ts";
 import { adaptClv } from "../src/data/adaptClv.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
-import { adaptDesk, showsPreparedBoard } from "../src/data/desk.ts";
+import { adaptDesk, gradeOf, showsPreparedBoard } from "../src/data/desk.ts";
 import { builtLabel, clockEt, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../src/lib/stamps.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled } from "../src/lib/shareCard.ts";
 import { results, rings, sampleTickets } from "../src/data/sampleBoard.ts";
-import { renderPlay, winRateBand } from "../src/ui/bits.ts";
+import { bookButton, listedOn, renderPlay, winRateBand } from "../src/ui/bits.ts";
 
 const raw = JSON.parse(readFileSync(new URL("../fixtures/edge-picks-sample.json", import.meta.url), "utf8"));
 const adapted = adaptEdgePicks(raw);
@@ -925,5 +925,56 @@ const heistSummary = renderPage({ ...blank(), view: "results", statsSection: "he
 const capperSummary = renderPage({ ...blank(), view: "results", statsSection: "cappers" }, paired);
 assert.notEqual(profit(heistSummary), profit(todaySummary));
 assert.notEqual(profit(capperSummary), profit(todaySummary));
+
+assert.equal(gradeOf({ result: "Void: rule change, pre-game (edgefilter1105)" }), "V");
+assert.equal(gradeOf({ result: "Win by 2" }), "W");
+assert.equal(gradeOf({ result: "Loss late" }), "L");
+const edgeDesk = adaptDesk({
+  updated: "2026-11-06 10:00 AM ET",
+  today: {
+    tickets: [
+      { name: "Safe +100 / Alt Parlay", pick: "builds at the 10 AM window, not at 7 AM." },
+      { name: "+100 ticket", legs: [{ pick: "Jack Quinn Over 1.5 SOG", odds: "+120", hr_sid: "123", sport: "NHL" }], desc: "2-leg" },
+    ],
+  },
+  edge: {
+    picks: [
+      { sport: "NBA", pick: "Morgan Geekie Over 0.5 Assists", result: "Void: rule change, pre-game (edgefilter1105)", lock_why: "graded: Void: rule change, pre-game (edgefilter1105)", locked: true, hr_state: "open", hr: "+150", edge_single: true, edge: 0.07, fair: "+180", sog_agree: false, why_src: "Pinnacle no-vig fair +180", grade_why: "Recent form 8 of 10", gameday: ["Game day note"] },
+      { sport: "NHL", pick: "Cale Makar Over 2.5 Shots on Goal", locked: true, lock_why: "game started", bk_started: true, hr_state: "open", hr: "-110", edge_single: true, edge: 0.05, hr_now: "-130", sog_agree: true, sog_l10: 3.4 },
+      { sport: "NCAAF", kind: "total", pick: "Under 74.5", game: "UTSA Roadrunners @ Florida Atlantic Owls", ctx: { away: "UTSA", home: "FAU" }, hr_state: "absent", hr_why: "Hard Rock does not list this line", hr: "-120", edge_single: true, edge: 0.041 },
+      { sport: "NBA", pick: "Jalen Duren Over 9.5 Rebounds", hr_state: "suspended", hr: "-115", edge_single: true, big_edge_assist: false },
+    ],
+  },
+});
+const edgeTicket = edgeDesk.tickets.find((ticket) => ticket.productKey === "edge");
+const byName = (needle: string) => edgeTicket?.plays.find((play) => play.name.includes(needle));
+const geekie = byName("Geekie");
+const makar = byName("Makar");
+const total = byName("Under 74.5");
+const duren = byName("Duren");
+assert.equal(geekie?.blocked, "graded");
+assert.equal(geekie?.voidedPreGame, true);
+assert.equal(geekie?.markers?.some((mark) => mark.label.includes("Assist")), false);
+assert.equal(makar?.blocked, "started");
+assert.equal(makar?.lockWhy, "game started");
+assert.equal(makar?.markers?.some((mark) => mark.label.startsWith("Now ")), true);
+assert.equal(makar?.markers?.some((mark) => mark.label.includes("SOG L10")), true);
+assert.equal(total?.name, "UTSA @ FAU · Under 74.5");
+assert.equal(total?.hrAbsent, true);
+assert.equal(listedOn(geekie!, "hr"), true);
+assert.equal(listedOn(makar!, "hr"), true);
+assert.equal(listedOn(total!, "hr"), false);
+assert.equal(listedOn(duren!, "hr"), true);
+assert.match(bookButton(makar!, "hr"), /Live · locked at/);
+assert.match(bookButton(duren!, "hr"), /On Hard Rock · suspended/);
+assert.match(bookButton(total!, "hr"), /Not on HR/);
+assert.equal(renderPlay(geekie!, "hr", new Set()).includes("checkbox"), false);
+assert.match(renderPlay(geekie!, "hr", new Set()), /Voided pre-game · rule change/);
+const edgePage = renderPage(blank(), edgeDesk);
+assert.match(edgePage, /voided pre-game \(rule change\), tap to view/);
+assert.equal(/10 AM window/.test(edgePage), false);
+assert.equal(geekie?.why.why[0], "Pinnacle no-vig fair +180");
+assert.equal(geekie?.why.why[1], "Recent form 8 of 10");
+assert.equal(geekie?.why.why[2], "Game day note");
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

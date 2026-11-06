@@ -27,7 +27,12 @@ export type WhyBlock = {
   whyNot: string[];
 };
 
-export type Marker = { kind: "star" | "green" | "sog" | "assist"; label: string };
+export type Marker = {
+  kind?: "star" | "green" | "sog" | "assist";
+  label: string;
+  icon?: string;
+  tone?: "good" | "warn" | "neutral";
+};
 
 export type TeamSide = { abbr: string; record: string; standing: string };
 
@@ -88,6 +93,14 @@ export type Play = {
   legState?: string;
   /** Where this play was posted, such as Heist, Edge, or a capper handle. */
   tags?: string[];
+  /** Voided by a pre-game rule change. It is not a live miss. */
+  voidedPreGame?: boolean;
+  lockWhy?: string;
+  hrState?: string;
+  hrAbsent?: boolean;
+  dkAbsent?: boolean;
+  /** Edge singles stay one play. No multi-select checkbox. */
+  edgeSingle?: boolean;
 };
 
 export type Ticket = {

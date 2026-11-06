@@ -54,11 +54,31 @@ export function linkMismatch(play: Play, book: BookId): boolean {
   return hardRockLegLink(toLinkPlay(play)).status === "mismatch";
 }
 
-/** Main list: a real selection id, or a blocked play that still has this book's price. */
+/** Main list. Locked and graded plays stay visible. Hard Rock folds only a confirmed absence. */
 export function listedOn(play: Play, book: BookId): boolean {
-  if (book === "hr" && (linkMismatch(play, book) || play.hrUnverified)) return true;
-  if (play.blocked && priceOn(play, book)) return true;
+  if (play.blocked) return true;
+  if (book === "hr") {
+    if (linkMismatch(play, book) || play.hrUnverified) return true;
+    return play.hrAbsent !== true;
+  }
+  if (play.edgeSingle) return play.dkAbsent !== true;
   return canOpen(play, book);
+}
+
+export function bookButton(play: Play, book: BookId, off = false): string {
+  const offered = priceOn(play, book);
+  const hold = !off && (book === "hr" ? play.hrHold : play.dkHold);
+  if (hold) return `<span class="na">${esc(hold)}</span>`;
+  if (play.voidedPreGame) return `<span class="nobook">Voided pre-game · rule change</span>`;
+  if (!off && canOpen(play, book)) return `<button type="button" class="btn ${book}" data-act="open" data-scope="leg" data-id="${esc(play.id)}" data-book="${book}">Open in ${bookName(book)}</button>`;
+  if (!off && book === "hr" && (linkMismatch(play, book) || play.hrUnverified)) return `<span class="na">${esc(play.hrUnverified || "Hard Rock link unavailable. The stored selection opens a different game or prop.")}</span>`;
+  if (play.blocked === "started") return `<span class="nobook">🔒 Live · locked at ${offered ?? "open"}</span>`;
+  if (book === "hr" && play.hrAbsent !== true && (play.hrState === "open" || play.hrState === "suspended" || offered != null)) {
+    return `<span class="nobook">${play.hrState === "suspended" ? "On Hard Rock · suspended" : `On Hard Rock${offered ? ` ${offered}` : ""}`}</span>`;
+  }
+  if (book === "hr" && play.hrAbsent) return `<span class="na">Not on HR</span>`;
+  if (book === "dk" && play.dkAbsent) return `<span class="na">Not on DK</span>`;
+  return `<span class="na">Not on ${bookCode(book)}</span>`;
 }
 
 export function renderWhy(block: WhyBlock, keep = ""): string {
@@ -86,7 +106,7 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   const offered = priceOn(play, book);
   const odds = off ? play.hr ?? play.dk ?? "—" : offered ?? "—";
   const blocked = !off && play.blocked;
-  const check = !off && !blocked && canOpen(play, book);
+  const check = !off && !blocked && play.edgeSingle !== true && canOpen(play, book);
   const checked = check && selected.has(play.id) ? "checked" : "";
   const fee = book === "dk" && !off && offered ? `<div class="feeline">DK price incl. fee</div>` : "";
   const ctx = play.matchup
@@ -101,7 +121,10 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
       ? `<div class="bd">${altTag}</div>`
       : "";
   const marks = play.markers?.length
-    ? `<div class="mks">${play.markers.map((mark) => `<span class="mk ${mark.kind === "assist" ? "warn" : mark.kind}">${esc(mark.label)}</span>`).join("")}</div>`
+    ? `<div class="mks">${play.markers.map((mark) => {
+        const tone = mark.tone === "warn" || mark.kind === "assist" ? "warn" : mark.tone === "good" ? "green" : mark.kind ?? "";
+        return `<span class="mk ${tone}">${mark.icon ? `${mark.icon} ` : ""}${esc(mark.label)}</span>`;
+      }).join("")}</div>`
     : "";
   const chips: string[] = [];
   if (play.lock) chips.push(`<span class="chip ok">🔒 ${esc(play.lock)}</span>`);
@@ -120,15 +143,8 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   const posted = play.posted ? `<div class="sub">${esc(play.posted)}</div>` : "";
   const live = play.liveNote ? `<div class="sub">${esc(play.liveNote)}</div>` : "";
   const flag = play.flagNote ? `<div class="warnline">${esc(play.flagNote)}</div>` : "";
-  const hold = !off && (book === "hr" ? play.hrHold : play.dkHold);
   const title = book === "dk" && play.dkName ? play.dkName : play.name;
-  let button: string;
-  if (hold) button = `<span class="na">${esc(hold)}</span>`;
-  else if (!off && book === "hr" && (linkMismatch(play, book) || play.hrUnverified)) button = `<span class="na">${esc(play.hrUnverified || "Hard Rock link unavailable. The stored selection opens a different game or prop.")}</span>`;
-  else if (off || (!blocked && !canOpen(play, book))) button = `<span class="na">Not on ${bookCode(book)}</span>`;
-  else if (play.blocked === "started") button = `<span class="na">Blocked: game started</span>`;
-  else if (play.blocked === "graded") button = `<span class="na">Graded · game over</span>`;
-  else button = `<button type="button" class="btn ${book}" data-act="open" data-scope="leg" data-id="${esc(play.id)}" data-book="${book}">Open in ${bookName(book)}</button>`;
+  const button = bookButton(play, book, off);
   const box = check
     ? `<label class="chk"><input type="checkbox" data-id="${esc(play.id)}" ${checked} aria-label="Select ${esc(title)}"></label>`
     : "";

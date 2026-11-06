@@ -112,12 +112,22 @@ function bullets(value: unknown, fallback: string): string[] {
 }
 
 function whyBlock(row: Row): WhyBlock {
+  const lead = [str(row.why_src), str(row.grade_why), str(row.green_why)].filter(Boolean);
   const fromList = Array.isArray(row.gameday) ? bullets(row.gameday, "").filter(Boolean) : [];
   const fromWhy = str(row.why) ? bullets(row.why, "").filter(Boolean) : [];
-  const whyLines = fromList.length ? fromList : fromWhy;
+  const whyLines = [...lead, ...(fromList.length ? fromList : fromWhy)];
   const whyNot = str(row.why_not) ? bullets(row.why_not, "").filter(Boolean) : [];
   const line = (whyLines[0] || str(row.pick) || "Desk play").slice(0, 110);
   return { ours: false, line, why: whyLines.length ? whyLines : ["No why text in the desk file."], whyNot };
+}
+
+export function gradeOf(row: Row): "W" | "L" | "V" | "P" | null {
+  const res = str(row.result || row.res || row.status);
+  if (/^win\b/i.test(res)) return "W";
+  if (/^loss\b/i.test(res)) return "L";
+  if (/^void\b/i.test(res)) return "V";
+  if (/^push\b/i.test(res)) return "P";
+  return null;
 }
 
 function playerOf(pick: string): string {
@@ -127,10 +137,15 @@ function playerOf(pick: string): string {
 }
 
 function blockedOf(row: Row): Play["blocked"] {
-  const res = str(row.result || row.res || row.status).toLowerCase();
-  if (["w", "l", "v", "p", "win", "loss", "won", "lost", "push", "void"].includes(res)) return "graded";
-  if (row.started === true || row.final === true) return "started";
+  const res = str(row.result || row.res || row.status);
+  const why = str(row.lock_why);
+  if (gradeOf(row) || /graded:\s*void/i.test(why) || ["w", "l", "v", "p", "won", "lost"].includes(res.toLowerCase())) return "graded";
+  if (row.locked === true || row.bk_started === true || row.started === true || row.final === true) return "started";
   return undefined;
+}
+
+function voidedPreGame(row: Row): boolean {
+  return /rule change|pre-game/i.test(`${str(row.result || row.res || row.status)} ${str(row.lock_why)}`);
 }
 
 function pickText(row: Row): string {
@@ -159,8 +174,11 @@ function sportOfRow(row: Row, hint = ""): Sport {
 }
 
 function playFrom(row: Row, id: string, statuses: Map<string, PlayerStatus>, hint = ""): Play | null {
-  const pick = pickText(row);
+  let pick = pickText(row);
   if (isPlaceholder(pick)) return null;
+  const awayCode = str(isRow(row.ctx) ? row.ctx.away : "");
+  const homeCode = str(isRow(row.ctx) ? row.ctx.home : "");
+  if ((row.kind === "total" || /^(over|under)\s+\d/i.test(pick)) && awayCode && homeCode && !pick.includes("@")) pick = `${awayCode} @ ${homeCode} · ${pick}`;
   const dk = isRow(row.dk) ? row.dk : null;
   const dkOff = dk?.na === true || row.dk_absent === true;
   const hrOff = str(row.hr_state) === "absent";
@@ -175,10 +193,19 @@ function playFrom(row: Row, id: string, statuses: Map<string, PlayerStatus>, hin
   const rankOf = num(rank?.of);
   const edge = num(row.edge);
   const markers: Play["markers"] = [];
-  if (edge != null && edge >= 0.06 && edge <= 0.08) markers.push({ kind: "star", label: "Star" });
-  if (row.green_circle === true) markers.push({ kind: "green", label: "Green" });
-  if (/shots on goal|\bsog\b/i.test(pick)) markers.push({ kind: "sog", label: "SOG" });
-  else if (/assist/i.test(pick)) markers.push({ kind: "assist", label: "Assist" });
+  if (edge != null) {
+    const fair = str(row.fair);
+    const grade = str(row.grade);
+    markers.push({ icon: "📈", label: `${grade ? `${grade} · ` : ""}+${(edge * 100).toFixed(1)}% edge${fair ? ` (fair ${fair})` : ""}`, tone: edge >= 0.06 ? "good" : "neutral" });
+  }
+  if (edge != null && edge >= 0.06 && edge < 0.08) markers.push({ icon: "⭐", label: "6–8% sweet spot", tone: "good" });
+  const nowPrice = str(row.hr_now || row.now);
+  if (nowPrice && nowPrice !== str(row.hr)) markers.push({ icon: "⚡", label: `Now ${nowPrice}`, tone: row.hr_edge_gone === true ? "warn" : "neutral" });
+  if (row.hr_edge_gone === true) markers.push({ icon: "⚠", label: "Edge gone (<4%)", tone: "warn" });
+  if (row.green_circle === true) markers.push({ icon: "🟢", label: "Good matchup", tone: "good" });
+  if (row.green_goalie && str(row.green_goalie_status) === "confirmed") markers.push({ icon: "🥅", label: `${str(row.green_goalie)} confirmed`, tone: "good" });
+  if (row.sog_agree === true) markers.push({ icon: "🎯", label: row.sog_l10 != null ? `SOG L10 ${str(row.sog_l10)}` : "SOG agrees", tone: "good" });
+  if (row.big_edge_assist === true) markers.push({ icon: "⚠", label: "12%+ Assist", tone: "warn" });
   const game = str(row.game) || str(ctx?.game);
   const start = str(row.start_et) || str(row.start) || str(row.kick);
   const sport = sportOfRow(row, hint);
@@ -194,6 +221,12 @@ function playFrom(row: Row, id: string, statuses: Map<string, PlayerStatus>, hin
     dk: dkOff ? null : oddsOf(dk?.odds, row.dk_live, row.dk_odds),
     markers: markers.length ? markers : undefined,
     blocked: blockedOf(row),
+    voidedPreGame: voidedPreGame(row) || undefined,
+    lockWhy: str(row.lock_why) || undefined,
+    hrState: str(row.hr_state).toLowerCase() || undefined,
+    hrAbsent: row.hr_absent === true || str(row.hr_state).toLowerCase() === "absent" || /does not list|line not offered on hard rock/i.test(str(row.hr_why)) || undefined,
+    dkAbsent: row.dk_absent === true || (isRow(row.dk) && row.dk.na === true) || undefined,
+    edgeSingle: row.edge_single === true || undefined,
     status,
     gameText: game,
     matchup:
@@ -647,7 +680,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
       const plays = takePlays(legsOrSelf(item), "safe-ticket", statuses, new Set());
       const card = ticket("safe", "safe", name, str(item.desc) || "Desk", plays, "main", oddsOf(item.odds) ?? undefined, builtLabel(item) ?? builtLabel(safe));
       if (card) tickets.push(card);
-      else if (str(item.pick)) notices.push({ text: `${name}: ${str(item.pick)}`, section: "parlay", sport: null });
+      else if (str(item.pick) && !(/builds at the 10 AM|not at 7 AM/i.test(str(item.pick)) && rowsOf(today.tickets).some((ticket) => /\+100|parlay/i.test(str(ticket.name)) && !/safe/i.test(str(ticket.name)) && rowsOf(ticket.legs).length))) notices.push({ text: `${name}: ${str(item.pick)}`, section: "parlay", sport: null });
       continue;
     }
     const rawPlays = takePlays(legsOrSelf(item), `t-${norm(name).replace(/ /g, "-")}`, statuses, new Set());

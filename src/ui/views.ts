@@ -132,11 +132,16 @@ function bookToggle(book: AppState["book"]): string {
 
 function renderTicket(ticket: Ticket, state: AppState, board: Board): string {
   const book = ticket.productKey === "first" ? "hr" : state.book;
-  const on = ticket.showAll ? ticket.plays : ticket.plays.filter((play) => listedOn(play, book));
-  const off = ticket.showAll ? [] : ticket.plays.filter((play) => !listedOn(play, book));
+  const visible = ticket.showAll ? ticket.plays : ticket.plays.filter((play) => listedOn(play, book));
+  const on = visible.filter((play) => !play.voidedPreGame);
+  const voided = visible.filter((play) => play.voidedPreGame);
+  const off = ticket.showAll ? [] : ticket.plays.filter((play) => !listedOn(play, book) && !play.voidedPreGame);
   const who = bookCode(book);
   const offHtml = off.length
     ? `<details class="off" data-keep="off:${esc(ticket.id)}"><summary>${off.length} play${off.length === 1 ? "" : "s"} not on ${who}, tap to view ▾</summary>${off.map((play) => renderPlay(play, book, state.selected, true, playTracker(board, state, ticket.id, play, book))).join("")}</details>`
+    : "";
+  const voidHtml = voided.length
+    ? `<details class="off" data-keep="void:${esc(ticket.id)}"><summary>${voided.length} voided pre-game (rule change), tap to view</summary>${voided.map((play) => renderPlay(play, book, state.selected, true, playTracker(board, state, ticket.id, play, book))).join("")}</details>`
     : "";
   const openLegs = on.filter((play) => canOpen(play, book) && play.slip !== false);
   const foot = ticketFoot(ticket, state, on.length, off.length, openLegs.length);
@@ -151,7 +156,7 @@ function renderTicket(ticket: Ticket, state: AppState, board: Board): string {
     : "";
   const skips = noteList(ticket.skips, "Not added to Heist");
   const excluded = noteList(ticket.excluded, "Not on Heist Alt");
-  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div>${warnings}${subset}</div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected, false, playTracker(board, state, ticket.id, play, book))).join("")}${offHtml}${skips}${excluded}<div class="tfoot">${foot}</div></section>`;
+  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div>${warnings}${subset}</div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected, false, playTracker(board, state, ticket.id, play, book))).join("")}${offHtml}${voidHtml}${skips}${excluded}<div class="tfoot">${foot}</div></section>`;
 }
 
 function playTracker(board: Board, state: AppState, ticketId: string, play: Play, book: BookId): string {
