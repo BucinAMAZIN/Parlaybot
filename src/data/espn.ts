@@ -1,7 +1,7 @@
 import type { Board } from "./board.ts";
 import type { BookId, LegPace, LiveFeed, LiveGame, LiveLeg, LiveTicket, Mood, Play, TeamStat, Ticket, WhyBlock } from "./types.ts";
 import { propLine } from "../lib/propLine.ts";
-import { gcHum, isFreeThrow, parseCast } from "./gamecast.ts";
+import { footballPlayRows, gcHum, isFreeThrow, parseCast } from "./gamecast.ts";
 import { gradeTeamBet, sortLiveGames, teamBet } from "./liveCard.ts";
 
 /**
@@ -504,8 +504,9 @@ function legFor(play: Play, event: EventRow, awayScore: number, homeScore: numbe
 
 function pbp(summary: Json | undefined, away: string, home: string, league: LiveGame["league"] = "NBA"): LiveFeed["pbp"] {
   if (!summary) return [];
+  const driven = league === "NFL" || league === "NCAAF" ? footballPlayRows(summary) : [];
   const raw = summary.plays;
-  const items = Array.isArray(raw) ? raw : isObj(raw) && Array.isArray(raw.items) ? raw.items : [];
+  const items = driven.length ? driven : Array.isArray(raw) ? raw : isObj(raw) && Array.isArray(raw.items) ? raw.items : [];
   return items.slice(-12).flatMap((item) => {
     if (!isObj(item)) return [];
     const text = str(item.text) || str(item.description) || str(item.shortText);
@@ -614,8 +615,9 @@ export function box(summary: Json | undefined, names: string[], league = ""): Li
       const specs: [string, string, { key: string; label: string }[]][] = [
         ["passing", "Passing", [{ key: "completions/passingAttempts", label: "C/ATT" }, { key: "passingYards", label: "YDS" }, { key: "passingTouchdowns", label: "TD" }, { key: "interceptions", label: "INT" }]],
         ["rushing", "Rushing", [{ key: "rushingAttempts", label: "CAR" }, { key: "rushingYards", label: "YDS" }, { key: "rushingTouchdowns", label: "TD" }, { key: "longRushing", label: "LONG" }]],
-        ["receiving", "Receiving", [{ key: "receptions", label: "REC" }, { key: "receivingYards", label: "YDS" }, { key: "receivingTouchdowns", label: "TD" }, { key: "receivingTargets", label: "TGTS" }]],
-        ["defensive", "Defense", [{ key: "totalTackles", label: "TOT" }, { key: "soloTackles", label: "SOLO" }, { key: "sacks", label: "SACKS" }, { key: "passesDefended", label: "PD" }]],
+        ["receiving", "Receiving", [{ key: "receptions", label: "REC" }, { key: "receivingYards", label: "YDS" }, { key: "receivingTouchdowns", label: "TD" }, { key: "longReception", label: "LONG" }]],
+        ["defensive", "Defensive", [{ key: "totalTackles", label: "TOT" }, { key: "soloTackles", label: "SOLO" }, { key: "sacks", label: "SACKS" }, { key: "passesDefended", label: "PD" }]],
+        ["kicking", "Kicking", [{ key: "fieldGoalsMade/fieldGoalAttempts", label: "FG" }, { key: "extraPointsMade/extraPointAttempts", label: "XP" }, { key: "longFieldGoalMade", label: "LONG" }]],
       ];
       for (const [name, label, columns] of specs) {
         const group = groupNamed(groups, name);

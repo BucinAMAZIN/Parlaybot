@@ -25,7 +25,18 @@ export function asset(path: string): string {
 }
 
 export function mascot(mood: Mood, size: number): string {
-  return `<span class="mascot ${mood}" style="width:${size}px;height:${size}px;--still:url(${asset(`mascot/e-${mood}-0.png`)})" role="img" aria-label="${MOOD_LABEL[mood]}"></span>`;
+  const still = asset(`mascot/e-${mood}-0.png`);
+  return `<span class="mascot ${mood}" style="width:${size}px;height:${size}px;background-image:url(${still});--still:url(${still})" role="img" aria-label="${MOOD_LABEL[mood]}"></span>`;
+}
+
+/** The part of an alt line that changed, so the headline is not printed again. */
+export function altAfter(before: string, after: string): string {
+  const left = before.trim().split(/\s+/);
+  const right = after.trim().split(/\s+/);
+  let index = 0;
+  while (index < left.length && index < right.length && left[index]?.toLowerCase() === right[index]?.toLowerCase()) index += 1;
+  const tail = right.slice(index).join(" ").trim();
+  return tail || after.trim();
 }
 
 export function bookName(book: BookId): string {
@@ -115,8 +126,9 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   const rank = play.matchup?.rankChip ? `<div class="chips"><span class="chip mr">📊 ${esc(play.matchup.rankChip)}</span></div>` : "";
   const moved = book === "dk" ? play.altDk : play.alt;
   const altTag = play.altTag ? `<span class="tag">Alt line</span>` : "";
+  const altShown = moved ? altAfter(moved.before, moved.after) : "";
   const alt = moved
-    ? `<div class="bd">${altTag}<s>${esc(moved.before)}</s><span class="arrow">→</span><b>${esc(moved.after)}</b></div>`
+    ? `<div class="bd">${altTag}<s>${esc(moved.before)}</s><span class="arrow">→</span>${altShown && altShown !== moved.before ? `<b>${esc(altShown)}</b>` : ""}</div>`
     : altTag
       ? `<div class="bd">${altTag}</div>`
       : "";
@@ -148,7 +160,7 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
     ? `<label class="chk"><input type="checkbox" data-id="${esc(play.id)}" ${checked} aria-label="Select ${esc(title)}"></label>`
     : "";
   const why = play.showWhy === false ? "" : renderWhy(play.why, `why:${play.id}`);
-  return `<div class="play">${box}<div class="pbody"><div class="prow"><b>${esc(title)}</b><span class="odds">${esc(odds)}</span></div><div class="sub">${esc(play.detail)}</div>${posted}${live}${fee}${ctx}${rank}${alt}${flag}${marks}${chipRow}${grade}${why}<div class="btns">${button}</div></div>${track}</div>`;
+  return `<div class="play">${box}<div class="pbody"><div class="prow"><b>${esc(title)}</b><span class="odds">${esc(odds)}</span></div><div class="sub">${esc(play.detail)}</div>${posted}${live}${fee}${ctx}${rank}${alt}${flag}${marks}${chipRow}${grade}${why}</div><div class="btns">${button}</div>${track}</div>`;
 }
 
 /** >=55 green, 50–54.9 yellow, 40–49.9 orange, under 40 red. */

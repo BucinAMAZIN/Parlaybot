@@ -11,7 +11,8 @@ import {
   winLine,
 } from "../src/data/gamecast.ts";
 import { gradeTeamBet, sortLiveGames, teamBet } from "../src/data/liveCard.ts";
-import { courtHardware, nhlRink, threePointPath } from "../src/ui/court.ts";
+import { courtHardware, footballField, nhlRink, threePointPath } from "../src/ui/court.ts";
+import { footballTitle } from "../src/data/gamecast.ts";
 import { buildNumber, newerBuild } from "../src/lib/buildWatch.ts";
 import { absorbLiveLeg, cleanLiveTitle, findLiveLeg, liveLegKey, overallRecord, standingLabel } from "../src/data/espn.ts";
 import type { LiveGame, LiveLeg, WhyBlock } from "../src/data/types.ts";
@@ -105,6 +106,66 @@ const quiet = parseCast({
   plays: [],
 }, "NFL");
 assert.equal(quiet?.football, null);
+
+const utsa = parseCast({
+  header: { competitions: [{ status: { type: { state: "in", shortDetail: "14:55 - 2nd" } }, competitors: [
+    { homeAway: "away", score: "0", team: { id: "2636", abbreviation: "UTSA", color: "0c2340", logos: [{ href: "https://example.test/utsa.png" }] } },
+    { homeAway: "home", score: "7", team: { id: "2226", abbreviation: "FAU", color: "003366" } },
+  ] }] },
+  winprobability: [{ playId: "rush-1", homeWinPercentage: 0.5919 }],
+  drives: {
+    previous: [{ id: "drive-1", team: { id: "2636" }, plays: [{ id: "old", type: { text: "Rush" }, text: "(1:00) earlier rush", statYardage: 2, period: { number: 1 }, clock: { displayValue: "1:00" }, start: { down: 1, distance: 10, yardsToEndzone: 75, downDistanceText: "1st & 10 at UTSA 25", team: { id: "2636" } }, end: { down: 2, distance: 8, yardsToEndzone: 73, team: { id: "2636" } } }] }],
+    current: {
+      id: "drive-1",
+      description: "5 plays, 39 yards, 1:20",
+      offensivePlays: 5,
+      yards: 39,
+      timeElapsed: { displayValue: "1:20" },
+      team: { id: "2636" },
+      start: { yardLine: 75, text: "UTSA 25" },
+      plays: [
+        { id: "end-q", type: { text: "End Period" }, text: "End of 1st quarter.", period: { number: 1 }, clock: { displayValue: "0:00" } },
+        { id: "rush-1", type: { text: "Rush" }, text: "(14:55) No Huddle #1 W.Henderson III rush left for 28 yards gain to the FAU36, 1ST DOWN", statYardage: 28, scoringPlay: false, period: { number: 2 }, clock: { displayValue: "14:55" }, awayScore: "0", homeScore: "7", start: { down: 2, distance: 10, yardsToEndzone: 64, downDistanceText: "2nd & 10 at UTSA 36", team: { id: "2636" } }, end: { down: 1, distance: 10, yardsToEndzone: 36, downDistanceText: "1st & 10 at FAU 36", team: { id: "2636" } } },
+      ],
+    },
+  },
+}, "NCAAF");
+assert.equal(utsa?.plays.length, 2);
+assert.equal(utsa?.plays[0]?.title, "Rush +28 yds");
+assert.equal(utsa?.plays[0]?.badge, "1ST DOWN");
+assert.equal(utsa?.plays[0]?.spot, "2nd & 10 · UTSA 36");
+assert.equal(utsa?.plays[0]?.when, "Q2 · 14:55");
+assert.equal(/\(14:55\)/.test(utsa?.plays[0]?.text ?? ""), false);
+assert.match(utsa?.plays[0]?.win ?? "", /FAU, 59\.2/);
+assert.equal(utsa?.football?.yard, 64);
+assert.equal(utsa?.football?.first, 74);
+assert.equal(utsa?.football?.driveStart, 25);
+assert.match(utsa?.football?.down ?? "", /UTSA ball · 1st & 10/);
+assert.match(utsa?.football?.drive ?? "", /5 plays, 39 yds · 1:20/);
+assert.equal(utsa?.callout, "RUSH +28 YDS");
+assert.deepEqual(utsa?.periods, ["Q1", "Q2", "Q3", "Q4"]);
+const field = footballField(utsa?.football ?? { yard: 64, down: "", drive: "", redZone: false, first: 74, awayAbbr: "UTSA", homeAbbr: "FAU", awayColor: "#0c2340", homeColor: "#003366" });
+assert.match(field, /UTSA/);
+assert.match(field, /FAU/);
+assert.match(field, /#38bdf8/);
+assert.match(field, /#facc15/);
+assert.equal(footballTitle("Pass Incompletion", "pass incomplete", 0, false).title, "Incomplete Pass");
+assert.equal(footballTitle("Passing Touchdown", "touchdown", 12, true).title, "TOUCHDOWN");
+
+const pat = parseCast({
+  header: { competitions: [{ status: { type: { state: "in", shortDetail: "0:12 - 2nd" } }, competitors: [
+    { homeAway: "away", score: "6", team: { id: "1", abbreviation: "BAL", color: "241773" } },
+    { homeAway: "home", score: "7", team: { id: "2", abbreviation: "JAX", color: "006778" } },
+  ] }] },
+  drives: { current: { id: "pat", team: { id: "2" }, plays: [
+    { id: "td", type: { text: "Passing Touchdown" }, text: "(0:18) touchdown", scoringPlay: true, statYardage: 8, period: { number: 2 }, clock: { displayValue: "0:18" }, start: { down: 1, distance: 8, yardsToEndzone: 8, team: { id: "2" } }, end: { down: -1, yardsToEndzone: 35, downDistanceText: "& Goal at JAX 35", team: { id: "2" } } },
+    { id: "admin", type: { text: "Timeout" }, text: "Official Timeout", period: { number: 2 }, clock: { displayValue: "0:12" } },
+  ] } },
+}, "NFL");
+assert.match(pat?.football?.down ?? "", /Kickoff \/ PAT at JAX 35/);
+assert.equal(pat?.football?.yard, 35);
+assert.match(pat?.callout ?? "", /TIMEOUT · TOUCHDOWN/);
+assert.equal(pat?.plays[0]?.title, "Official Timeout");
 
 const games = [
   { id: "late", pre: true, final: false, start: "2026-11-05T22:00:00Z", league: "NBA" },

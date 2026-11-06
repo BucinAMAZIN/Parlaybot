@@ -23,7 +23,7 @@ import {
 import { liveLegKey, trackPlayOnBoard } from "../data/espn.ts";
 import { displayCat, sectionMatch, sportTitle } from "../data/gradeLabels.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type GameCast } from "../data/gamecast.ts";
-import { courtHardware, nhlRink } from "./court.ts";
+import { courtHardware, footballField, nhlRink } from "./court.ts";
 import { noteVisible } from "../lib/cardFilter.ts";
 import { matchingPlays, statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
 import { BIG4_SPORTS, SPORT_ORDER, sportLabel } from "../lib/sport.ts";
@@ -474,7 +474,11 @@ function feedBody(game: LiveGame, state: AppState, track = ""): string {
         : cast.kind === "baseball"
           ? diamondBlock(cast)
           : "";
-  return `${visual}${playList(game.id, cast, state.feedFull.has(track || game.id), track)}`;
+  const names = game.legs
+    .map((leg) => leg.name.replace(/\s+(?:over|under|[ou])\b.*$/i, "").trim())
+    .filter((name) => name.split(" ").length >= 2);
+  const quarters = cast.kind === "football" ? pillRow(game.id, "Quarter", filter.period, ["All", ...cast.periods, "Scoring"], "period", track) : "";
+  return `${visual}${quarters}${playList(game.id, cast, state.feedFull.has(track || game.id), track, filter.period, names)}`;
 }
 
 function pillRow(gameId: string, label: string, current: string, keys: string[], field: "team" | "period", track = ""): string {
@@ -511,13 +515,8 @@ function shotMark(shot: CourtShot, latest: boolean): string {
 function fieldBlock(cast: GameCast): string {
   const spot = cast.football;
   if (!spot) return `<p class="empty">Field position isn't in this ESPN summary.</p>`;
-  const x = 10 + spot.yard;
-  const first = spot.first == null ? "" : `<line class="first-line" x1="${(10 + spot.first).toFixed(1)}" y1="2" x2="${(10 + spot.first).toFixed(1)}" y2="34"/>`;
-  const red = spot.redZone ? `<rect class="redzone" x="90" y="0" width="20" height="36"/>` : "";
-  const yards = [10, 20, 30, 40, 50, 60, 70, 80, 90]
-    .map((yard) => `<line class="yard" x1="${10 + yard}" y1="0" x2="${10 + yard}" y2="36"/>`)
-    .join("");
-  return `<svg class="field" viewBox="0 0 120 36" role="img" aria-label="Field position">${red}<rect class="grass" x="10" y="0" width="100" height="36"/><rect class="endzone" x="0" y="0" width="10" height="36"/><rect class="endzone" x="110" y="0" width="10" height="36"/>${yards}<line class="los" x1="${x.toFixed(1)}" y1="1" x2="${x.toFixed(1)}" y2="35"/>${first}<circle class="ball" cx="${x.toFixed(1)}" cy="18" r="1.6"/></svg><p class="legendline"><b>${esc(spot.down || "Line of scrimmage")}</b><span>${esc(spot.drive)}</span></p>`;
+  const zone = spot.redZone ? `<span class="rz">RED ZONE</span>` : "";
+  return `<div class="courtwrap">${footballField(spot)}</div><div class="fieldstrip"><div><b>${esc(spot.down || "Line of scrimmage")}</b> ${zone}</div><span>${esc(spot.drive)}</span></div>`;
 }
 
 function rinkMark(mark: GameCast["rink"][number], latest: boolean): string {
@@ -546,18 +545,30 @@ function diamondBlock(cast: GameCast): string {
   return `<div class="diamondwrap"><svg class="diamond" viewBox="0 0 80 70" role="img" aria-label="Bases">${base(spot.bases[1], 36, 8)}${base(spot.bases[2], 16, 28)}${base(spot.bases[0], 56, 28)}<rect class="base on" x="36" y="50" width="7" height="7" transform="rotate(45 39.5 53.5)"/></svg><p class="legendline"><b>${esc(spot.balls)}-${esc(spot.strikes)}</b><span>${esc(spot.outs)} out</span>${spot.pitcher ? `<span>P ${esc(spot.pitcher)}</span>` : ""}${spot.batter ? `<span>AB ${esc(spot.batter)}</span>` : ""}</p></div>`;
 }
 
-function playList(gameId: string, cast: GameCast, full: boolean, track = ""): string {
-  const rows = cast.plays;
-  if (!rows.length) return `<p class="empty">${cast.pre ? "Fills in once the game starts" : "No play-by-play in this ESPN summary."}</p>`;
+function playList(gameId: string, cast: GameCast, full: boolean, track = "", period = "All", names: string[] = []): string {
+  const rows = cast.plays.filter((play) => {
+    if (period === "All") return true;
+    if (period === "Scoring") return play.scoring === true;
+    return play.periodKey === period;
+  });
+  if (!rows.length) return `<p class="empty">${cast.pre ? "Fills in once the game starts" : cast.plays.length ? "No plays in this quarter." : "No play-by-play in this ESPN summary."}</p>`;
   const shown = full ? rows : rows.slice(0, 10);
-  const list = shown.map(playRow).join("");
+  const list = shown.map((play) => playRow(play, names)).join("");
   const more = rows.length > 10
     ? `<button type="button" class="linkrow" ${track ? `data-act="play-full" data-track="${esc(track)}"` : `data-act="feed-full" data-game="${esc(gameId)}"`}>${full ? "Latest plays" : `Full play-by-play (${rows.length})`}</button>`
     : "";
   return `${list}${more}`;
 }
 
-function playRow(play: GameCast["plays"][number]): string {
+function mentionsName(text: string, names: string[]): boolean {
+  const hay = text.toLowerCase();
+  return names.some((name) => {
+    const last = name.split(" ").at(-1)?.toLowerCase() ?? "";
+    return last.length > 2 && hay.includes(last);
+  });
+}
+
+function playRow(play: GameCast["plays"][number], names: string[] = []): string {
   const mark = play.logo
     ? `<img class="lg" src="${esc(play.logo)}" alt="" width="24" height="24">`
     : play.abbr
@@ -565,7 +576,11 @@ function playRow(play: GameCast["plays"][number]): string {
       : `<span class="lg neutral">•</span>`;
   const score = play.awayScore || play.homeScore ? `${play.awayScore}  ${play.homeScore}` : "";
   const win = play.win ? `<div class="sub">${esc(play.win)}</div>` : "";
-  return `<div class="pbp">${mark}<div class="pm"><b>${esc(play.title)}</b><div class="sub">${esc(play.when)}</div><div>${esc(play.text)}</div></div><div class="ps">${esc(score)}${win}</div></div>`;
+  const badge = play.badge ? `<span class="fd">${esc(play.badge)}</span>` : "";
+  const spot = play.spot ? `<div class="sub">${esc(play.spot)}</div>` : "";
+  const mine = mentionsName(`${play.text} ${play.title}`, names) ? " mine" : "";
+  const scoring = play.scoring ? " score" : "";
+  return `<div class="pbp${scoring}${mine}">${mark}<div class="pm"><b>${esc(play.title)}</b>${badge}${spot}<div>${esc(play.text)}</div></div><div class="ps${play.scoring ? " hot" : ""}"><div class="sub">${esc(play.when)}</div><b>${esc(score)}</b>${win}</div></div>`;
 }
 
 function tagTone(tag: string): string {

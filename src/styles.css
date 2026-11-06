@@ -20,9 +20,10 @@ h1,h2,h3{margin:0;font-size:1.375rem;line-height:1.25}
 .ticket header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;flex-wrap:wrap}
 .ticket header h3{font-size:1.375rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .play{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;row-gap:8px;align-items:start;padding:14px 0;border-top:1px solid #232a34}
-.play>.pbody{grid-column:1 / -1;min-width:0}
+.play>.pbody{grid-column:1 / -1;min-width:0;order:1}
 .play>.chk+.pbody{grid-column:2}
-.play>.ptrack{grid-column:1 / -1;width:100%;min-width:0;margin:0}
+.play>.btns{grid-column:1 / -1;order:2}
+.play>.ptrack{grid-column:1 / -1;width:100%;min-width:0;margin:0;order:3}
 .chk{display:flex;align-items:flex-start;padding-top:2px;min-width:44px;min-height:44px;justify-content:center}
 .chk input{width:26px;height:26px;accent-color:#7b3fe4}
 body.book-dk .chk input{accent-color:#2ea85a}
@@ -347,6 +348,12 @@ details.why .ours{font-size:.6875rem;background:#2a2140;color:#c9b6ff;border-rad
 .pbp .lg.neutral{background:#1d2430;border:1px solid #2c3542;color:#8b97a8;font-size:.9rem}
 .pbp .pm{flex:1;min-width:0;overflow-wrap:anywhere}
 .pbp .ps{flex:none;text-align:right;color:#c9d3df;font-variant-numeric:tabular-nums}
+.pbp.score{background:#142016}
+.pbp.mine{box-shadow:inset 3px 0 0 #f0b429}
+.pbp .ps.hot b{color:#76f53a}
+.fd{display:inline-block;margin-left:6px;border:1px solid #6b5420;border-radius:99px;padding:1px 6px;color:#facc15;font-size:.68rem;font-weight:800;letter-spacing:.03em}
+.fieldstrip{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;font-size:.78rem;margin:6px 2px 8px}
+.rz{margin-left:6px;color:#ffb4b4;font-weight:800;letter-spacing:.04em;font-size:.68rem}
 .casthead{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:10px 8px;border-radius:14px;margin:0 0 8px;max-width:100%;min-width:0;overflow:hidden;background:linear-gradient(90deg, color-mix(in srgb, var(--wash-a) 42%, transparent), transparent 46%, transparent 54%, color-mix(in srgb, var(--wash-h) 42%, transparent))}
 .castside{display:flex;align-items:center;gap:6px;min-width:0}
 .castside b{overflow-wrap:anywhere}

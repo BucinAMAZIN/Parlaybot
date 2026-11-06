@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { absorbLiveLeg, abbrsMatch, box, firstBloodLeg, formatRankValue, liveTitle, mergeTags, propOf, readStat, teamStatsFor, trackPlayOnBoard } from "../src/data/espn.ts";
 import { adaptDesk } from "../src/data/desk.ts";
-import { PACE, mascot, renderPlay } from "../src/ui/bits.ts";
+import { PACE, altAfter, mascot, renderPlay } from "../src/ui/bits.ts";
 import type { LiveGame, LiveLeg, Play, WhyBlock } from "../src/data/types.ts";
 
 const why: WhyBlock = { ours: false, line: "", why: [], whyNot: [] };
@@ -20,6 +20,9 @@ assert.match(mascot("fire", 36), /class="mascot fire"/);
 assert.match(mascot("sweat", 36), /class="mascot sweat"/);
 assert.match(mascot("ice", 36), /class="mascot ice"/);
 assert.match(mascot("hook", 36), /class="mascot hook"/);
+assert.match(mascot("sweat", 36), /background-image:url\(/);
+assert.equal(/😓|🔥|💰|🥵|🥶/.test(mascot("sweat", 36) + mascot("fire", 36) + mascot("cash", 36) + mascot("ice", 36) + mascot("hook", 36)), false);
+assert.equal(altAfter("UTSA Roadrunners -7", "UTSA Roadrunners -1.5"), "-1.5");
 
 const athletes = Array.from({ length: 12 }, (_, index) => ({
   athlete: { displayName: `Skater ${index + 1}` },
@@ -132,11 +135,23 @@ assert.notEqual(formatRankValue("ortg", 1.0398), "1.0");
 
 const html = renderPlay(play("Justice Hill Over 4.5 Receptions"), "hr", new Set(), false, `<div class="ptrack">bar</div>`);
 const label = html.match(/<label[\s\S]*?<\/label>/)?.[0] ?? "";
-const pbodyEnd = html.indexOf(`</div><div class="ptrack">`);
+const pbodyEnd = html.indexOf(`</div><div class="btns">`);
 const pbody = html.slice(html.indexOf(`<div class="pbody">`), pbodyEnd);
-assert.match(html, /<div class="btns">[\s\S]*<\/div><\/div><div class="ptrack">bar<\/div><\/div>$/);
+assert.match(html, /<\/div><div class="btns">[\s\S]*<\/div><div class="ptrack">bar<\/div><\/div>$/);
+assert.ok(html.indexOf('class="btns"') < html.indexOf('class="ptrack"'));
 assert.equal(pbody.includes("ptrack"), false);
+assert.equal(pbody.includes("btns"), false);
 assert.equal(label.includes("ptrack"), false);
+const altHtml = renderPlay(
+  play("UTSA Roadrunners -1.5", { alt: { before: "UTSA Roadrunners -7", after: "UTSA Roadrunners -1.5" }, altTag: true, hrHold: "Unverified HR link — held" }),
+  "hr",
+  new Set(),
+  false,
+  `<div class="ptrack">live</div>`,
+);
+assert.equal(altHtml.split("UTSA Roadrunners -1.5").length - 1, 1);
+assert.match(altHtml, /<s>UTSA Roadrunners -7<\/s><span class="arrow">→<\/span><b>-1\.5<\/b>/);
+assert.ok(altHtml.indexOf("Unverified HR link") < altHtml.indexOf('class="ptrack"'));
 
 assert.equal(propOf("A. Johnson u5.5 tackles + assists", "NFL")?.key, "totalTackles");
 assert.equal(propOf("Jase Richardson Under 11.5 Pts + Reb", "NBA")?.key, "points+rebounds");

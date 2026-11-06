@@ -26,6 +26,10 @@ export type CastPlay = {
   awayScore: string;
   homeScore: string;
   win: string;
+  /** Down and spot before this snap, such as `2nd & 10 · UTSA 36`. */
+  spot?: string;
+  badge?: string;
+  scoring?: boolean;
 };
 
 export type CourtShot = {
@@ -51,11 +55,25 @@ export type RinkMark = {
 };
 
 export type FootballSpot = {
+  /** Ball on the 0–100 field. 0 is the away goal line, 100 is the home goal line. */
   yard: number;
   down: string;
   drive: string;
   redZone: boolean;
   first: number | null;
+  possession?: string;
+  possessionColor?: string;
+  /** Home has the ball and is driving toward 0. */
+  homePossession?: boolean;
+  /** Where this drive began, on the same 0–100 field. */
+  driveStart?: number | null;
+  /** Previous snap, for the gain/loss connector. */
+  prevYard?: number | null;
+  awayAbbr?: string;
+  homeAbbr?: string;
+  awayColor?: string;
+  homeColor?: string;
+  yardsToEndzone?: number | null;
 };
 
 export type BaseballSpot = {
@@ -321,6 +339,11 @@ export function periodKey(periodNumber: number, periodText: string, league: stri
     if (periodNumber >= 1 && periodNumber <= 3) return `P${periodNumber}`;
     return periodNumber > 3 ? "OT" : "";
   }
+  if (league === "NFL" || league === "NCAAF") {
+    if (/overtime|\bot\b/.test(text) || periodNumber > 4) return "OT";
+    if (periodNumber >= 1 && periodNumber <= 4) return `Q${periodNumber}`;
+    return "";
+  }
   return "";
 }
 
@@ -338,6 +361,7 @@ function periodsFor(league: string, used: Set<string>): string[] {
   if (league === "NCAAB") return used.has("OT") ? ["1H", "2H", "OT"] : ["1H", "2H"];
   if (league === "NBA" || league === "WNBA") return used.has("OT") ? ["Q1", "Q2", "Q3", "Q4", "OT"] : ["Q1", "Q2", "Q3", "Q4"];
   if (league === "NHL") return used.has("OT") ? ["P1", "P2", "P3", "OT"] : ["P1", "P2", "P3"];
+  if (league === "NFL" || league === "NCAAF") return used.has("OT") ? ["Q1", "Q2", "Q3", "Q4", "OT"] : ["Q1", "Q2", "Q3", "Q4"];
   return [];
 }
 
@@ -345,6 +369,96 @@ function logoOf(team: Row): string {
   const logos = list(team.logos);
   const first = logos.find(isRow);
   return str(first?.href) || str(team.logo);
+}
+
+function paint(color: string, fallback: string): string {
+  const raw = color.replace("#", "").trim();
+  return /^[0-9a-f]{6}$/i.test(raw) ? `#${raw}` : fallback;
+}
+
+export function footballTitle(typeText: string, playText: string, yards: number | null, scoring: boolean): { title: string; badge: string } {
+  const type = typeText.toLowerCase();
+  const text = playText.toLowerCase();
+  const yardsLabel = yards != null && yards !== 0 ? `${yards > 0 ? "+" : ""}${yards} yds` : "";
+  const badge = /1st down/i.test(playText) ? "1ST DOWN" : "";
+  if (scoring && /touchdown/.test(`${type} ${text}`)) return { title: "TOUCHDOWN", badge };
+  if (/field goal/.test(type) || /field goal/.test(text)) return { title: "Field Goal", badge };
+  if (/interception/.test(type) || /\bintercept/.test(text)) return { title: "Interception", badge };
+  if (/fumble/.test(type) || /\bfumble/.test(text)) return { title: "Fumble", badge };
+  if (/sack/.test(type)) return { title: yardsLabel ? `Sack ${yardsLabel}` : "Sack", badge };
+  if (/incompletion|incomplete/.test(type) || /\bincomplete\b/.test(text)) return { title: "Incomplete Pass", badge };
+  if (/punt return/.test(type)) return { title: yardsLabel ? `Punt Return ${yardsLabel}` : "Punt Return", badge };
+  if (/^punt\b/.test(type)) return { title: "Punt", badge };
+  if (/kickoff/.test(type)) return { title: "Kickoff", badge };
+  if (/penalty/.test(type) || /\bpenalty\b/.test(text)) return { title: "Penalty", badge };
+  if (/pass/.test(type)) return { title: yardsLabel ? `Pass ${yardsLabel}` : "Pass", badge };
+  if (/rush/.test(type)) return { title: yardsLabel ? `Rush ${yardsLabel}` : "Rush", badge };
+  if (/end period|end of/.test(type) || /end of/.test(text)) return { title: "End Period", badge: "" };
+  if (/timeout/.test(type) || /timeout/.test(text)) return { title: /official/.test(text) ? "Official Timeout" : "Timeout", badge: "" };
+  const human = humanizeType(typeText) || derivePlayTitle(playText);
+  return { title: human && !/^play$/i.test(human) ? human : "Update", badge };
+}
+
+export function footballAdmin(typeText: string, playText: string): boolean {
+  return /end period|end of|timeout/i.test(`${typeText} ${playText}`);
+}
+
+function clockPrefix(text: string): string {
+  return text.replace(/^\(\d{1,2}:\d{2}\)\s*/, "").trim();
+}
+
+function downSpot(row: Row): string {
+  const down = num(row.down);
+  const text = str(row.downDistanceText);
+  if (down != null && down < 1) {
+    const at = text.replace(/^.*\bat\s+/i, "").trim() || str(row.possessionText);
+    return at ? `Kickoff / PAT at ${at}` : "Kickoff / PAT";
+  }
+  if (text) return text.replace(/\s+at\s+/i, " · ");
+  const short = str(row.shortDownDistanceText);
+  const spot = str(row.possessionText);
+  return [short, spot].filter(Boolean).join(" · ");
+}
+
+/** Flatten ESPN drives. `current` replaces a repeated last previous drive. */
+export function footballPlayRows(summary: Row): Row[] {
+  const drives = isRow(summary.drives) ? summary.drives : {};
+  const order: string[] = [];
+  const byDrive = new Map<string, Row>();
+  const add = (drive: Row) => {
+    const id = str(drive.id) || `d${order.length}`;
+    if (!byDrive.has(id)) order.push(id);
+    byDrive.set(id, drive);
+  };
+  for (const drive of list(drives.previous).filter(isRow)) add(drive);
+  if (isRow(drives.current)) add(drives.current);
+  const plays: Row[] = [];
+  const seen = new Set<string>();
+  for (const id of order) {
+    const drive = byDrive.get(id);
+    if (!drive) continue;
+    const driveTeam = isRow(drive.team) ? drive.team : {};
+    for (const play of list(drive.plays).filter(isRow)) {
+      const pid = str(play.id);
+      if (pid && seen.has(pid)) continue;
+      if (pid) seen.add(pid);
+      const start = isRow(play.start) ? play.start : {};
+      const end = isRow(play.end) ? play.end : {};
+      const team = isRow(start.team) ? start.team : isRow(end.team) ? end.team : driveTeam;
+      plays.push({ ...play, team });
+    }
+  }
+  if (plays.length) return plays;
+  return list(summary.plays).filter(isRow);
+}
+
+function clampYard(value: number): number {
+  return Math.max(0, Math.min(100, value));
+}
+
+function ballOnField(yardsToEndzone: number, homeOffense: boolean): number {
+  const yards = clampYard(yardsToEndzone);
+  return homeOffense ? yards : 100 - yards;
 }
 
 export function parseCast(summary: unknown, league: string): GameCast | null {
@@ -386,7 +500,7 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
   }
   const wpLast = list(summary.winprobability).filter(isRow).at(-1);
   const wpFallback = wpLast ? num(wpLast.homeWinPercentage) : null;
-  const rawPlays = list(summary.plays).filter(isRow);
+  const rawPlays = kind === "football" ? footballPlayRows(summary) : list(summary.plays).filter(isRow);
   const used = new Set<string>();
   const shots: CourtShot[] = [];
   const rink: RinkMark[] = [];
@@ -406,7 +520,9 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
     const key = periodKey(periodNumber, periodText, league);
     if (key) used.add(key);
     const clockText = str(isRow(row.clock) ? row.clock.displayValue : row.clock);
-    const when = [clockText, periodLabel(periodNumber, periodText)].filter(Boolean).join(" - ");
+    const when = kind === "football" && key
+      ? [key, clockText].filter(Boolean).join(" · ")
+      : [clockText, periodLabel(periodNumber, periodText)].filter(Boolean).join(" - ");
     const typeAbbr = str(typeRow.abbreviation);
     const freeThrow = isFreeThrow(typeText, text);
     const shooting = row.shootingPlay === true;
@@ -436,18 +552,24 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
         });
       }
     }
+    const yards = num(row.statYardage);
+    const football = kind === "football" ? footballTitle(typeText, text, yards, made) : null;
+    const startSpot = isRow(row.start) ? row.start : {};
     const play: CastPlay = {
       id: str(row.id),
       abbr,
       logo: side?.logo || "",
       color: side?.color || "",
-      title: gcHum(kind === "hockey" ? hockeyType : typeText, text, shooting, made, freeThrow, kind),
-      text,
+      title: football?.title || gcHum(kind === "hockey" ? hockeyType : typeText, text, shooting, made, freeThrow, kind),
+      text: kind === "football" ? clockPrefix(text) : text,
       when,
       periodKey: key,
       awayScore: str(row.awayScore),
       homeScore: str(row.homeScore),
-      win: "",
+      win: kind === "football" && str(row.id) && wpByPlay.has(str(row.id)) ? winLine(wpByPlay.get(str(row.id)) ?? 0, away.abbr, home.abbr) : "",
+      spot: kind === "football" ? downSpot(startSpot) : undefined,
+      badge: football?.badge || undefined,
+      scoring: kind === "football" ? made : undefined,
     };
     plays.push(play);
     lastMeta = { type: kind === "hockey" ? hockeyType : typeText, text, abbr: markSide?.abbr || abbr, shooting, made, freeThrow };
@@ -457,7 +579,7 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
     const pct = (newest.id ? wpByPlay.get(newest.id) : undefined) ?? wpFallback;
     if (pct != null) newest.win = winLine(pct, away.abbr, home.abbr);
   }
-  const callout = state === "pre" ? "" : calloutOf(clock, lastMeta, kind);
+  const callout = state === "pre" ? "" : kind === "football" ? footballCallout(rawPlays) : calloutOf(clock, lastMeta, kind);
   return {
     away: { id: away.id, abbr: away.abbr, name: away.name, score: away.score, color: away.color, logo: away.logo, home: false },
     home: { id: home.id, abbr: home.abbr, name: home.name, score: home.score, color: home.color, logo: home.logo, home: true },
@@ -472,25 +594,110 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
     periods: periodsFor(league, used),
     shots,
     rink,
-    football: kind === "football" ? footballOf(summary, byId) : null,
+    football: kind === "football" ? footballOf(summary, away, home) : null,
     baseball: kind === "baseball" ? baseballOf(summary) : null,
   };
 }
 
-function footballOf(summary: Row, byId: Map<string, { abbr: string }>): FootballSpot | null {
-  const sit = isRow(summary.situation) ? summary.situation : {};
+function playTypeText(row: Row): string {
+  const typeRow = isRow(row.type) ? row.type : {};
+  return str(typeRow.text) || (typeof row.type === "string" ? row.type : "");
+}
+
+function footballCallout(rows: Row[]): string {
+  const labeled = rows.map((row) => {
+    const text = str(row.text) || str(row.description);
+    const typeText = playTypeText(row);
+    const title = footballTitle(typeText, text, num(row.statYardage), row.scoringPlay === true).title;
+    return { typeText, text, title, admin: footballAdmin(typeText, text) };
+  });
+  const last = labeled.at(-1);
+  if (!last?.title) return "LIVE";
+  if (!last.admin) return last.title.toUpperCase();
+  const snap = [...labeled].reverse().find((row) => !row.admin && row.title);
+  const status = /end period|end of/i.test(`${last.typeText} ${last.text}`) ? "END PERIOD" : "TIMEOUT";
+  return snap ? `${status} · ${snap.title.toUpperCase()}` : status;
+}
+
+function footballOf(summary: Row, away: { id: string; abbr: string; color: string; rawColor?: string }, home: { id: string; abbr: string; color: string; rawColor?: string }): FootballSpot | null {
+  const header = isRow(summary.header) ? summary.header : {};
+  const comp = list(header.competitions).find(isRow) ?? {};
+  const sit = isRow(summary.situation) ? summary.situation : isRow(comp.situation) ? comp.situation : {};
   const drives = isRow(summary.drives) ? summary.drives : {};
   const current = isRow(drives.current) ? drives.current : {};
-  const yard = num(sit.yardLine);
-  const down = str(sit.shortDownDistanceText) || [str(sit.down) && `${str(sit.down)}`, str(sit.distance) && `& ${str(sit.distance)}`].filter(Boolean).join(" ");
-  const drive = str(current.description) || str(current.shortDisplayResult) || str(sit.possessionText) || str(current.displayResult);
-  const distance = num(sit.distance);
-  if (yard == null && !down && !drive) return null;
-  const spot = yard == null ? 50 : Math.max(0, Math.min(100, yard));
-  const first = yard != null && distance != null ? Math.max(0, Math.min(100, yard + distance)) : null;
-  const redZone = sit.isRedZone === true;
-  const possession = byId.get(str(sit.possession))?.abbr || "";
-  return { yard: spot, down: [possession, down].filter(Boolean).join(" "), drive, redZone, first };
+  const rows = footballPlayRows(summary);
+  let spotPlay: Row | null = null;
+  let prevPlay: Row | null = null;
+  for (let index = rows.length - 1; index >= 0; index -= 1) {
+    const row = rows[index];
+    if (!row) continue;
+    const text = str(row.text) || str(row.description);
+    if (footballAdmin(playTypeText(row), text)) continue;
+    if (!spotPlay) spotPlay = row;
+    else {
+      prevPlay = row;
+      break;
+    }
+  }
+  const end = spotPlay && isRow(spotPlay.end) ? spotPlay.end : {};
+  const start = spotPlay && isRow(spotPlay.start) ? spotPlay.start : {};
+  const yardsToEndzone = num(end.yardsToEndzone) ?? num(start.yardsToEndzone) ?? num(sit.yardsToEndzone);
+  const possId = str(isRow(end.team) ? end.team.id : "") || str(isRow(start.team) ? start.team.id : "") || str(sit.possession) || str(isRow(current.team) ? current.team.id : "");
+  const homePoss = !!possId && possId === home.id;
+  const awayPoss = !!possId && possId === away.id;
+  const downNumber = num(end.down) ?? num(start.down) ?? num(sit.down);
+  const distance = num(end.distance) ?? num(start.distance) ?? num(sit.distance);
+  const legacy = num(sit.yardLine);
+  let yard = 50;
+  let first: number | null = null;
+  if (yardsToEndzone != null && (homePoss || awayPoss)) {
+    yard = ballOnField(yardsToEndzone, homePoss);
+    first = downNumber != null && downNumber >= 1 && distance != null && distance > 0 ? (homePoss ? Math.max(0, yard - distance) : Math.min(100, yard + distance)) : null;
+  } else if (legacy != null) {
+    yard = clampYard(legacy);
+    const gap = num(sit.distance);
+    first = gap != null ? clampYard(legacy + gap) : null;
+  }
+  const place = downSpot(Object.keys(end).length ? end : start);
+  const possAbbr = homePoss ? home.abbr : awayPoss ? away.abbr : str(sit.possessionText).split(" ")[0] || "";
+  const down = place ? `${possAbbr ? `${possAbbr} ball · ` : ""}${place}` : [possAbbr, str(sit.shortDownDistanceText)].filter(Boolean).join(" ");
+  const playsN = num(current.offensivePlays);
+  const yardsN = num(current.yards);
+  const elapsed = str(isRow(current.timeElapsed) ? current.timeElapsed.displayValue : current.timeElapsed);
+  const drive = playsN != null && yardsN != null
+    ? `${playsN} play${playsN === 1 ? "" : "s"}, ${yardsN} yds${elapsed ? ` · ${elapsed}` : ""}`
+    : str(current.description) || str(current.shortDisplayResult) || str(sit.possessionText) || str(current.displayResult);
+  if (yardsToEndzone == null && legacy == null && !down && !drive) return null;
+  let driveStart: number | null = null;
+  if ((homePoss || awayPoss) && str(isRow(current.team) ? current.team.id : "") === possId && isRow(current.start)) {
+    const startYards = num(current.start.yardsToEndzone) ?? num(current.start.yardLine);
+    if (startYards != null) driveStart = ballOnField(startYards, homePoss);
+  }
+  let prevYard: number | null = null;
+  if (prevPlay && (homePoss || awayPoss)) {
+    const prevEnd = isRow(prevPlay.end) ? prevPlay.end : {};
+    const prevYards = num(prevEnd.yardsToEndzone);
+    const prevTeam = str(isRow(prevEnd.team) ? prevEnd.team.id : "");
+    if (prevYards != null && prevTeam === possId) prevYard = ballOnField(prevYards, homePoss);
+  }
+  const redZone = sit.isRedZone === true || (yardsToEndzone != null && yardsToEndzone > 0 && yardsToEndzone <= 20);
+  return {
+    yard,
+    down,
+    drive,
+    redZone,
+    first,
+    possession: possAbbr,
+    possessionColor: homePoss ? home.color : away.color,
+    homePossession: homePoss,
+    driveStart,
+    prevYard,
+    awayAbbr: away.abbr,
+    homeAbbr: home.abbr,
+    awayColor: paint(away.rawColor ?? "", away.color),
+    homeColor: paint(home.rawColor ?? "", home.color),
+    yardsToEndzone,
+  };
 }
 
 function baseballOf(summary: Row): BaseballSpot | null {
