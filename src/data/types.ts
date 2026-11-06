@@ -148,6 +148,18 @@ export type TicketPart = {
   result: string;
   score: string;
   game: string;
+  /** Present only when the feed sent leg_id. */
+  legId?: string;
+  /** Present only when the feed sent selection. */
+  selection?: string;
+  /** Posted line, only when the feed sent a number. */
+  line?: string;
+  /** Present only when the feed sent reason. */
+  reason?: string;
+  /** Present only when the feed sent source or result_source. */
+  source?: string;
+  /** Present only when the feed sent source_url. */
+  sourceUrl?: string;
 };
 
 export type SettledLeg = {
@@ -276,6 +288,12 @@ export type GradeMark = {
   ticketKey?: string;
   /** Recorded constituent legs. Empty when this is a ticket and the file has none. */
   parts?: TicketPart[];
+  /** Posted American odds, only when the result row has them. */
+  odds?: string;
+  /** Desk stat text. A masked leg list is not a per-leg grade. */
+  stat?: string;
+  /** False when the row has no units field. */
+  unitsKnown?: boolean;
 };
 
 export type CapperGroup = "heist" | "an";
