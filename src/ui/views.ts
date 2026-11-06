@@ -25,6 +25,7 @@ import { displayCat, sectionMatch } from "../data/gradeLabels.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type FootballMotion, type GameCast } from "../data/gamecast.ts";
 import { courtHardware, footballField, nhlRink } from "./court.ts";
 import { noteVisible } from "../lib/cardFilter.ts";
+import { altPreviewTickets, altRecordLayout, findAltPreviewPlay, findAltPreviewTicket } from "./altLayout.ts";
 import { statsCalendar, statsSections, statsSports } from "./statsScreen.ts";
 import { BIG4_SPORTS, SPORT_ORDER, sportLabel } from "../lib/sport.ts";
 import type { AppState, SportFilter, ViewId } from "./state.ts";
@@ -323,7 +324,13 @@ function chartWindow(board: Board, range: RangeKey, customFrom = "", customTo = 
   return { points: windowed.points, headline, note, rings: windowRings(grades, section), ringsNote, from: windowed.from, to: windowed.to, starts: windowed.starts };
 }
 
+function altLayoutPage(state: AppState, board: Board): string {
+  const cards = altPreviewTickets().map((ticket) => renderTicket(ticket, state, board)).join("");
+  return `<div class="layoutpreview"><p class="previewban">Layout preview. Sample legs are not today’s board and are not a feed. Wiring waits for the schema. There is no +500 ticket.</p>${bookToggle(state.book)}<h2 class="grouph">Today cards</h2><p class="sub">Same play row, verified book buttons, availability notes, and multi-select as the live cards.</p>${cards}${altRecordLayout(board)}</div>`;
+}
+
 export function renderPage(state: AppState, board: Board): string {
+  if (state.view === "alt-layout") return shell("alt-layout", altLayoutPage(state, board), board);
   if (state.view === "today") return shell("today", today(state, board), board);
   if (state.view === "live") return shell("live", live(state, board), board);
   if (state.view === "results" || state.view === "stats") return shell("results", results(state, board), board);
@@ -1013,7 +1020,7 @@ ${board.uiBuild ? `<p class="stamp about">${esc(board.uiBuild)}</p>` : ""}
   }
   if (state.sheet.kind === "rules") {
     const sheet = state.sheet;
-    const ticket = board.tickets.find((item) => item.id === sheet.ticketId);
+    const ticket = board.tickets.find((item) => item.id === sheet.ticketId) ?? (state.view === "alt-layout" ? findAltPreviewTicket(sheet.ticketId) : undefined);
     const rules = ticket?.rules ?? ["No rules sheet for this product."];
     return `<div class="sheetback" data-act="close"><div class="sheet"><div class="grab"></div><h2>${esc(ticket?.title ?? "Rules")}</h2><ul>${rules.map((rule) => `<li>${esc(rule)}</li>`).join("")}</ul><div class="tfoot"><button type="button" class="btn share" data-act="close">Close</button></div></div></div>`;
   }
@@ -1040,7 +1047,7 @@ function pushRow(title: string, sub: string, on: boolean, kind: string): string 
 
 export function renderSelbar(state: AppState, board: Board): string {
   const plays = [...state.selected]
-    .map((id) => findPlay(board, id))
+    .map((id) => findPlay(board, id) ?? (state.view === "alt-layout" ? findAltPreviewPlay(id) : undefined))
     .filter((play): play is Play => !!play && canOpen(play, state.book));
   if (!plays.length) return `<div class="selbar" id="sel" hidden></div>`;
   const label = state.book === "hr" ? `Load ${plays.length} in Hard Rock` : `Open ${plays.length} selected in DraftKings`;

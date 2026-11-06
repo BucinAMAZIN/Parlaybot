@@ -9,6 +9,7 @@ import { renderPage, sportsFor, visibleTickets } from "../src/ui/views.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
 import { fileBounds, historyScope, sliceHistory } from "../src/lib/history.ts";
 import { matchingPlays } from "../src/ui/statsScreen.ts";
+import { altPreviewTickets } from "../src/ui/altLayout.ts";
 import { knownView, viewFromHash, type AppState } from "../src/ui/state.ts";
 import { dedupePlays, playKey } from "../src/data/dedupePlays.ts";
 import { isTicketRow, ticketParts } from "../src/data/ticketLegs.ts";
@@ -752,7 +753,24 @@ const blank = (): AppState => ({
   profitRange: "14d", openDates: new Set(), conference: "", statsFrom: "", statsTo: "", statsCalOpen: false, statsMode: "range", statsSection: "all",
   statsSport: "", statsAnchor: "", statsDraft: "", nightOpen: false, openProps: new Set(), propSection: {}, openResultDates: new Set(), openTickets: new Set(),
 });
+assert.equal(knownView("#alt-layout"), "alt-layout");
+assert.equal(viewFromHash("#alt-layout"), "alt-layout");
+const preview = renderPage({ ...blank(), view: "alt-layout" }, heistBoard);
+assert.match(preview, /Layout preview/);
+assert.match(preview, /Alt \+100/);
+assert.match(preview, /Alt \+250/);
+assert.match(preview, /Retired Nov 6, 2026/);
+assert.match(preview, /Record not wired/);
+assert.match(preview, /not the Alt \+100 record/);
+assert.match(preview, /PREVIEW SAMPLE/);
+assert.match(preview, /Open in Hard Rock/);
+assert.match(preview, /no \+500 ticket/i);
+assert.equal(/<h3>[^<]*\+500/.test(preview), false);
+assert.equal(preview.includes("12-4"), false);
+assert.equal(altPreviewTickets().some((ticket) => ticket.plays.some((play) => play.source !== "sample")), false);
 const page = renderPage(blank(), heistBoard);
+assert.equal(page.includes("Layout preview"), false);
+assert.equal(page.includes("Alt +250"), false);
 assert.equal(page.indexOf('id="ticket-heist"') < page.indexOf('id="ticket-heist-alt"'), true);
 assert.match(page, /Heist Alt/);
 assert.match(page, /Whole Heist in Hard Rock \(5 of 8 verified legs\)/);

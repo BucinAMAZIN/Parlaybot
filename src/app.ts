@@ -14,6 +14,7 @@ import { shareCardIsPrivate } from "./lib/shareCard.ts";
 import { canvasBlob, drawShareCard } from "./lib/shareImage.ts";
 import { canOpen, linkMismatch, toLinkPlay } from "./ui/bits.ts";
 import { propOpenKey } from "./ui/statsScreen.ts";
+import { findAltPreviewPlay, findAltPreviewTicket } from "./ui/altLayout.ts";
 import { cardForShare, liveSlice, render, sportsFor } from "./ui/views.ts";
 import { disablePush, readPushDelivery, resyncPush, subscribePush } from "./lib/pushClient.ts";
 import { defaultState, knownView, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
@@ -43,8 +44,12 @@ loadPrefs(state);
 
 let toastTimer = 0;
 
+function locatePlay(id: string): Play | undefined {
+  return findPlay(board, id) ?? (state.view === "alt-layout" ? findAltPreviewPlay(id) : undefined);
+}
+
 function pickedPlays(): Play[] {
-  return [...state.selected].map((id) => findPlay(board, id)).filter((play): play is Play => !!play);
+  return [...state.selected].map((id) => locatePlay(id)).filter((play): play is Play => !!play);
 }
 
 function bookFor(plays: Play[]): "hr" | "dk" {
@@ -110,15 +115,16 @@ function toLink(play: Play): LinkPlay {
 function openScope(scope: string, id: string, forced?: "hr" | "dk") {
   let plays: Play[] = [];
   if (scope === "leg") {
-    const play = findPlay(board, id);
+    const play = locatePlay(id);
     if (play) plays = [play];
   } else if (scope === "ticket") {
-    plays = (board.tickets.find((ticket) => ticket.id === id)?.plays ?? []).filter((play) => play.slip !== false);
+    const ticketPlays = board.tickets.find((ticket) => ticket.id === id)?.plays ?? (state.view === "alt-layout" ? findAltPreviewTicket(id)?.plays : undefined) ?? [];
+    plays = ticketPlays.filter((play) => play.slip !== false);
   } else {
     plays = pickedPlays();
   }
   const book = forced ?? (scope === "leg" || scope === "ticket" ? state.book : bookFor(plays));
-  const ticket = scope === "ticket" ? board.tickets.find((item) => item.id === id) : undefined;
+  const ticket = scope === "ticket" ? board.tickets.find((item) => item.id === id) ?? (state.view === "alt-layout" ? findAltPreviewTicket(id) : undefined) : undefined;
   if (scope === "ticket" && book === "dk" && ticket?.dkSlipNote) {
     showToast(ticket.dkSlipNote);
     return;
@@ -203,7 +209,7 @@ function onClick(event: Event) {
   if (act === "book") {
     state.book = action.dataset.book === "dk" ? "dk" : "hr";
     for (const id of [...state.selected]) {
-      const play = findPlay(board, id);
+      const play = locatePlay(id);
       if (!play || !canOpen(play, state.book)) state.selected.delete(id);
     }
     savePrefs(state);
@@ -774,7 +780,7 @@ async function refreshDesk() {
     }
     board = next;
     for (const id of [...state.selected]) {
-      if (!findPlay(board, id)) state.selected.delete(id);
+      if (!locatePlay(id)) state.selected.delete(id);
     }
     paint(false);
   } catch {
