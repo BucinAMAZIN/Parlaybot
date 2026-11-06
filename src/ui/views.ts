@@ -326,7 +326,7 @@ function chartWindow(board: Board, range: RangeKey, customFrom = "", customTo = 
 
 function altLayoutPage(state: AppState, board: Board): string {
   const cards = altPreviewTickets().map((ticket) => renderTicket(ticket, state, board)).join("");
-  return `<div class="layoutpreview"><p class="previewban">Layout preview. Sample legs are not today’s board and are not a feed. Wiring waits for the schema. There is no +500 ticket.</p>${bookToggle(state.book)}<h2 class="grouph">Today cards</h2><p class="sub">Same play row, verified book buttons, availability notes, and multi-select as the live cards.</p>${cards}${altRecordLayout(board)}</div>`;
+  return `<div class="layoutpreview"><p class="previewban">Layout preview. The tickets are named +100 and +250. They are not Official Parlay +100. Alt-line plays are allowed, not required. Sample legs are not today’s board and are not a feed. Wiring waits for the schema. There is no +500 ticket.</p>${bookToggle(state.book)}<h2 class="grouph">Today cards</h2><p class="sub">Same play row, verified book buttons, availability notes, and multi-select as the live cards.</p>${cards}${altRecordLayout(board)}</div>`;
 }
 
 export function renderPage(state: AppState, board: Board): string {

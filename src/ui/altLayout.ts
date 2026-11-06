@@ -11,15 +11,15 @@ import { DK_MULTI_NOTE, hardRockSlipLink } from "../lib/links.ts";
  */
 export const ALT_TICKET_SPECS = [
   {
-    id: "alt-100",
-    title: "Alt +100",
+    id: "plus-100",
+    title: "+100",
     target: "+100 to +150",
     legs: "2–3 legs",
     buildNote: "",
   },
   {
-    id: "alt-250",
-    title: "Alt +250",
+    id: "plus-250",
+    title: "+250",
     target: "+200 to +325",
     legs: "2–4 legs",
     buildNote: "Two legs are tried first.",
@@ -57,24 +57,24 @@ function withSlip(ticket: Ticket): Ticket {
 
 /** Preview cards only. Not added to the desk board or Today. */
 export function altPreviewTickets(): Ticket[] {
-  const both = (id: string, hrSid: string, dkSid: string, name: string): Play =>
+  const both = (id: string, hrSid: string, dkSid: string, name: string, altLine: boolean): Play =>
     samplePlay({
       id,
       name,
-      detail: "PREVIEW SAMPLE · not a posted play",
+      detail: altLine ? "PREVIEW SAMPLE · alt line allowed, not required" : "PREVIEW SAMPLE · straight leg, alt line not required",
       sport: "NHL",
       hr: "−280",
       dk: "−275",
       hrSid,
       dkSid,
       dkLink: dkLink(dkSid),
-      alt: { before: "Over 2.5 shots +110", after: "Over 1.5 shots −280" },
-      altTag: true,
+      alt: altLine ? { before: "Over 2.5 shots +110", after: "Over 1.5 shots −280" } : undefined,
+      altTag: altLine,
       books: { hr: true, dk: true },
       status: { label: "Active", reportedAt: "Sample", tone: "quiet" },
     });
   const hrOnly = samplePlay({
-    id: "preview-alt100-b",
+    id: "preview-plus100-b",
     name: "Sample leg B",
     detail: "PREVIEW SAMPLE · on Hard Rock, not on DraftKings",
     sport: "NBA",
@@ -86,7 +86,7 @@ export function altPreviewTickets(): Ticket[] {
     status: { label: "Questionable", reportedAt: "Sample", tone: "warn" },
   });
   const unverified = samplePlay({
-    id: "preview-alt100-c",
+    id: "preview-plus100-c",
     name: "Sample leg C",
     detail: "PREVIEW SAMPLE · availability note, not a verified slip leg",
     sport: "NHL",
@@ -99,42 +99,44 @@ export function altPreviewTickets(): Ticket[] {
     slip: false,
   });
   const plus100 = withSlip({
-    id: "preview-alt-100",
-    productKey: "preview-alt-100",
-    title: "Alt +100",
-    meta: "PREVIEW SAMPLE · target +100 to +150 · 2–3 legs",
+    id: "preview-plus-100",
+    productKey: "preview-plus-100",
+    title: "+100",
+    meta: "PREVIEW SAMPLE · target +100 to +150 · 2–3 legs · not Official Parlay +100",
     badge: "fixture",
     share: false,
     group: "official",
-    stamp: "Sample legs for layout only. Not today's board.",
-    warnings: ["No +500 ticket. This card is not wired to the feed."],
+    stamp: "Sample legs for layout only. Not today's board. Not Official Parlay +100.",
+    warnings: ["Alt-line plays are allowed, not required.", "No +500 ticket. This card is not wired to the feed."],
     rules: [
-      "Layout preview for Alt +100.",
+      "Layout preview for the ticket named +100.",
+      "This is not Official Parlay +100.",
       "Target price is +100 to +150.",
-      "The ticket holds 2–3 legs.",
+      "The ticket holds 2–3 legs. An alt line is allowed, not required.",
       "Sample legs are not posted plays. Eligibility stays on the backend.",
     ],
-    plays: [both("preview-alt100-a", HR_A, "0QAPREVIEWSAMPLE100A", "Sample leg A"), hrOnly, unverified],
+    plays: [both("preview-plus100-a", HR_A, "0QAPREVIEWSAMPLE100A", "Sample leg A", true), hrOnly, unverified],
   });
   const plus250 = withSlip({
-    id: "preview-alt-250",
-    productKey: "preview-alt-250",
-    title: "Alt +250",
-    meta: "PREVIEW SAMPLE · target +200 to +325 · 2–4 legs",
+    id: "preview-plus-250",
+    productKey: "preview-plus-250",
+    title: "+250",
+    meta: "PREVIEW SAMPLE · target +200 to +325 · 2–4 legs · not Official Parlay +100",
     badge: "fixture",
     share: false,
     group: "official",
-    stamp: "Sample legs for layout only. Not today's board.",
-    warnings: ["Two legs are tried first. Legs 3 and 4 are not filled in with sample picks.", "No +500 ticket. This card is not wired to the feed."],
+    stamp: "Sample legs for layout only. Not today's board. Not Official Parlay +100.",
+    warnings: ["Two legs are tried first. Legs 3 and 4 are not filled in with sample picks.", "Alt-line plays are allowed, not required.", "No +500 ticket. This card is not wired to the feed."],
     rules: [
-      "Layout preview for Alt +250.",
+      "Layout preview for the ticket named +250.",
+      "This is not Official Parlay +100.",
       "Target price is +200 to +325.",
-      "The ticket holds 2–4 legs. Two legs are tried first.",
+      "The ticket holds 2–4 legs. Two legs are tried first. An alt line is allowed, not required.",
       "Sample legs are not posted plays. Eligibility stays on the backend.",
     ],
     plays: [
-      both("preview-alt250-a", HR_C, "0QAPREVIEWSAMPLE250A", "Sample leg A"),
-      both("preview-alt250-b", HR_D, "0QAPREVIEWSAMPLE250B", "Sample leg B"),
+      both("preview-plus250-a", HR_C, "0QAPREVIEWSAMPLE250A", "Sample leg A", false),
+      both("preview-plus250-b", HR_D, "0QAPREVIEWSAMPLE250B", "Sample leg B", true),
     ],
   });
   return [plus100, plus250];
@@ -172,7 +174,7 @@ function safeHistory(board: Board): string {
   return recordShell(
     "Safe +100",
     "retired",
-    `<p class="stamp">Retired ${esc(SAFE_RETIRED_ON)}</p><p class="sub">This history stays on Safe +100. It is not the Alt +100 record and it is not the Alt +250 record.</p>${list}${more}`,
+    `<p class="stamp">Retired ${esc(SAFE_RETIRED_ON)}</p><p class="sub">This history stays on Safe +100. It is not the +100 record and it is not the +250 record.</p>${list}${more}`,
   );
 }
 
@@ -181,10 +183,10 @@ function waitingRecord(spec: (typeof ALT_TICKET_SPECS)[number]): string {
   return recordShell(
     spec.title,
     "recordwait",
-    `<p class="stamp">Record not wired</p><div class="altband"><span>${esc(spec.target)}</span><span>${esc(spec.legs)}</span></div><p class="sub">Waiting for the feed schema.${esc(note)} Safe +100 grades are not copied here. No record is filled in.</p><p class="empty">No graded ticket yet.</p>`,
+    `<p class="stamp">Record not wired</p><p class="sub">Not Official Parlay +100.</p><div class="altband"><span>${esc(spec.target)}</span><span>${esc(spec.legs)}</span></div><p class="sub">Waiting for the feed schema.${esc(note)} Safe +100 grades are not copied here. No record is filled in.</p><p class="empty">No graded ticket yet.</p>`,
   );
 }
 
 export function altRecordLayout(board: Board): string {
-  return `<h2 class="grouph">Records</h2><p class="sub">Three separate records. Safe +100 stays visible after it retires. The new tickets do not inherit that record.</p>${safeHistory(board)}${ALT_TICKET_SPECS.map(waitingRecord).join("")}`;
+  return `<h2 class="grouph">Records</h2><p class="sub">Three separate records. Safe +100 stays visible after it retires. +100 and +250 do not inherit that record, and neither ticket is Official Parlay +100.</p>${safeHistory(board)}${ALT_TICKET_SPECS.map(waitingRecord).join("")}`;
 }
