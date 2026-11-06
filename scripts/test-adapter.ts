@@ -534,14 +534,38 @@ const heistSingle = { date: "2026-11-04", cat: "The Heist", pick: "Trae Young 9+
 assert.deepEqual(ticketParts(heistTicket, [heistTicket, heistSingle]), []);
 assert.equal(ticketParts({ date: "2026-10-18", cat: "Cappers", pick: "NFL 2-leg parlay: A + B", leg: false }, [])?.length, 0);
 const nickmPick = "6-leg parlay: Columbus Blue Jackets ML vs Dallas Stars + Philadelphia Flyers ML vs New York Rangers + Detroit Red Wings ML vs Vegas Golden Knights + Anaheim Ducks ML vs Edmonton Oilers + Pittsburgh Penguins ML vs Boston Bruins + New Jersey Devils ML vs St. Louis Blues";
-const nickm = { date: "2026-11-05", cat: "Cappers", sport: "NHL", prop: "@nickm_hockey · NHL parlay", fam: "Parlay", pick: nickmPick, res: "L", leg: false, odds: "+7355", uu: -1, stat: "L (legs …/…/…/…/L/…)" };
+const nickm = { date: "2026-11-05", cat: "Cappers", sport: "NHL", prop: "@nickm_hockey · NHL parlay", fam: "Parlay", pick: nickmPick, res: "L", leg: false, odds: "+7355", uu: -1, stat: "", tid: "", legs: [] };
+const maskedPick = "2-leg parlay: Team A ML + Team B ML";
+const masked = { date: "2026-11-04", cat: "Cappers", sport: "NFL", prop: "@legacy · NFL parlay", fam: "Parlay", pick: maskedPick, res: "L", leg: false, odds: "+250", uu: -1, stat: "L (legs …/…/…/…/L/…)" };
 const flyersMl = { date: "2026-11-05", cat: "The Heist", sport: "NHL", prop: "Moneyline", fam: "ML", pick: "Philadelphia Flyers ML", res: "L", leg: false, stat: "L (PHI 2-3 NYR)" };
 assert.equal(ticketParts(nickm, [nickm, flyersMl])?.length, 0);
 assert.equal(listedLegNames(nickmPick).length, 6);
 assert.equal(listedLegNames(nickmPick)[1], "Philadelphia Flyers ML vs New York Rangers");
 assert.equal(legResultLabel("").text, "Leg result unavailable");
 assert.equal(legResultLabel("…").text, "Leg result unavailable");
+assert.equal(legResultLabel("L (legs …/…/…/…/L/…)").text, "Leg result unavailable");
+assert.equal(legResultLabel("W").text, "Won");
 assert.equal(legResultLabel("L").text, "Lost");
+assert.equal(legResultLabel("V").text, "Void");
+assert.equal(legResultLabel("P").text, "Push");
+assert.equal(legResultLabel("Pending").text, "Pending");
+const gradedLegs = ticketParts(
+  { date: "2026-11-05", cat: "Parlay +100", pick: "2-leg", leg: false, tid: "2026-11-05|parlay|NHL|1" },
+  [
+    { date: "2026-11-05", cat: "Parlay +100", pick: "Columbus Blue Jackets ML", leg: true, tid: "2026-11-05|parlay|NHL|1", prop: "ML", odds: "-120", result: "W", stat: "CBJ 4-2 DAL", gm: "CBJ @ DAL" },
+    { date: "2026-11-05", cat: "Parlay +100", pick: "Philadelphia Flyers ML", leg: true, tid: "2026-11-05|parlay|NHL|1", fam: "ML", res: "L", note: "PHI 2-3 NYR", game: "PHI @ NYR" },
+    { date: "2026-11-05", cat: "Parlay +100", pick: "Detroit Red Wings ML", leg: true, tid: "2026-11-05|parlay|NHL|1", hit: "push" },
+  ],
+);
+assert.equal(gradedLegs?.length, 3);
+assert.equal(gradedLegs?.[0].result, "W");
+assert.equal(gradedLegs?.[0].score, "CBJ 4-2 DAL");
+assert.equal(gradedLegs?.[0].game, "CBJ @ DAL");
+assert.match(gradedLegs?.[0].market ?? "", /ML · -120/);
+assert.equal(gradedLegs?.[1].result, "L");
+assert.equal(gradedLegs?.[1].score, "PHI 2-3 NYR");
+assert.equal(gradedLegs?.[1].game, "PHI @ NYR");
+assert.equal(gradedLegs?.[2].result, "push");
 assert.equal(normSport("NCAAM"), "NCAAB");
 assert.equal(sportLabel("NCAAB"), "NCAA 🏀");
 assert.equal(sportLabel("NCAAF"), "NCAA 🏈");
@@ -794,7 +818,46 @@ assert.doesNotMatch(ticketButton[0], /Dallas Stars/);
 assert.equal((capperPage.match(/Leg result unavailable/g) ?? []).length, 6);
 assert.match(capperPage, /Philadelphia Flyers ML vs New York Rangers/);
 assert.doesNotMatch(capperPage, /Pending/);
-assert.match(capperPage, /It is not a per-leg result/);
+assert.doesNotMatch(capperPage, /It is not a per-leg result/);
+assert.equal((capperPage.match(/<span class="res miss">Leg result unavailable<\/span>/g) ?? []).length, 6);
+const structured = {
+  date: "2026-11-05", cat: "Parlay +100", sport: "NHL", fam: "Parlay", prop: "NHL parlay +100", pick: "2-leg", res: "L", odds: "+119", uu: -1, leg: false,
+  tid: "2026-11-05|parlay|NHL|1",
+  legs: [
+    { pick: "Columbus Blue Jackets ML", result: "W", stat: "CBJ 4-2 DAL", prop: "ML", odds: "-120" },
+    { pick: "Philadelphia Flyers ML", res: "L", note: "PHI 2-3 NYR", fam: "ML" },
+    { pick: "Detroit Red Wings ML", hit: "" },
+  ],
+};
+const structuredDesk = adaptDesk({ today: { date: "2026-11-06", tickets: [], sports: {} }, results_v2: { rows: [structured] } }, ncaab);
+assert.deepEqual(structuredDesk.grades[0]?.parts?.map((part) => part.result), ["W", "L", ""]);
+const structuredPage = renderPage({
+  ...blank(),
+  view: "results",
+  statsSport: "NHL",
+  openProps: new Set(["NHL|Parlay|reg"]),
+  openResultDates: new Set(["NHL|Parlay|reg|2026-11-05"]),
+  openTickets: new Set(["grade|NHL|Parlay|reg|2026-11-05|0"]),
+}, structuredDesk);
+assert.match(structuredPage, /class="res W">Won</);
+assert.match(structuredPage, /class="res L">Lost</);
+assert.match(structuredPage, /CBJ 4-2 DAL/);
+assert.match(structuredPage, /PHI 2-3 NYR/);
+assert.equal((structuredPage.match(/Leg result unavailable/g) ?? []).length, 1);
+const maskedDesk = adaptDesk({ today: { date: "2026-11-06", tickets: [], sports: {} }, results_v2: { rows: [masked] } }, ncaab);
+assert.equal(maskedDesk.grades[0]?.parts?.length, 0);
+assert.equal(maskedDesk.grades[0]?.stat, "L (legs …/…/…/…/L/…)");
+const maskedPage = renderPage({
+  ...blank(),
+  view: "results",
+  statsSport: "NFL",
+  openProps: new Set(["NFL|Parlay|reg"]),
+  openResultDates: new Set(["NFL|Parlay|reg|2026-11-04"]),
+  openTickets: new Set(["grade|NFL|Parlay|reg|2026-11-04|0"]),
+}, maskedDesk);
+assert.equal((maskedPage.match(/<span class="res miss">Leg result unavailable<\/span>/g) ?? []).length, 2);
+assert.match(maskedPage, /The file note is “L \(legs …\/…\/…\/…\/L\/…\)”\. It is not a per-leg result/);
+assert.equal((maskedPage.match(/class="res L">Lost/g) ?? []).length, 1);
 const nflOnly = renderPage({ ...blank(), view: "results", statsSport: "NFL" }, capperDesk);
 assert.match(nflOnly, /No graded plays for 🏈 NFL in this section/);
 assert.doesNotMatch(nflOnly, /data-key="NFL"[\s\S]{0,80}0-0/);
