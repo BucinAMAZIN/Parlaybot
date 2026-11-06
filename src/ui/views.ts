@@ -773,8 +773,10 @@ function partBlock(parts: TicketPart[] | undefined, board: Board, date: string):
     .map((part) => {
       const where = [part.market, part.game || recordedTeam(board, date, part.name)].filter(Boolean).join(" · ");
       const score = part.score ? `<div class="sub">${esc(part.score)}</div>` : "";
+      const reason = part.reason ? `<div class="sub">${esc(part.reason)}</div>` : "";
+      const source = part.source ? `<div class="sub">${esc(part.source)}</div>` : "";
       const label = legResultLabel(part.result);
-      return `<div class="part"><div><b>${esc(part.name)}</b>${where ? `<div class="sub">${esc(where)}</div>` : ""}${score}</div><span class="res ${label.tone}">${esc(label.text)}</span></div>`;
+      return `<div class="part"><div><b>${esc(part.name)}</b>${where ? `<div class="sub">${esc(where)}</div>` : ""}${score}${reason}${source}</div><span class="res ${label.tone}">${esc(label.text)}</span></div>`;
     })
     .join("");
 }

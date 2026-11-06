@@ -146,6 +146,18 @@ export type TicketPart = {
   result: string;
   score: string;
   game: string;
+  /** Present only when the feed sent leg_id. */
+  legId?: string;
+  /** Present only when the feed sent selection. */
+  selection?: string;
+  /** Posted line, only when the feed sent a number. */
+  line?: string;
+  /** Present only when the feed sent reason. */
+  reason?: string;
+  /** Present only when the feed sent source or result_source. */
+  source?: string;
+  /** Present only when the feed sent source_url. */
+  sourceUrl?: string;
 };
 
 export type SettledLeg = {
