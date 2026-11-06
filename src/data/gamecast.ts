@@ -30,6 +30,8 @@ export type CastPlay = {
   spot?: string;
   badge?: string;
   scoring?: boolean;
+  /** Snap path for this row, so a tap can replay it on the field. */
+  motion?: FootballMotion;
 };
 
 export type CourtShot = {
@@ -54,6 +56,21 @@ export type RinkMark = {
   color: string;
 };
 
+export type FootballMotionKind = "rush" | "pass" | "incomplete" | "sack" | "kick" | "penalty";
+
+/** One snap on the 0–100 field. 0 is the away goal line, 100 is the home goal line. */
+export type FootballMotion = {
+  playId: string;
+  kind: FootballMotionKind;
+  fromYard: number;
+  toYard: number;
+  /** Incomplete target when the play text names one. Null means the mark stays at the line of scrimmage. */
+  targetYard: number | null;
+  yards: number | null;
+  label: string;
+  scoring: boolean;
+};
+
 export type FootballSpot = {
   /** Ball on the 0–100 field. 0 is the away goal line, 100 is the home goal line. */
   yard: number;
@@ -74,6 +91,15 @@ export type FootballSpot = {
   awayColor?: string;
   homeColor?: string;
   yardsToEndzone?: number | null;
+  /** Latest non-admin snap. A timeout does not replace it. */
+  motion?: FootballMotion;
+};
+
+/** Scoreboard situation passed in from ESPN when the summary leaves it blank. */
+export type ScoreSituation = {
+  possessionId?: string;
+  awayTimeouts?: number | null;
+  homeTimeouts?: number | null;
 };
 
 export type BaseballSpot = {
@@ -102,6 +128,11 @@ export type GameCast = {
   rink: RinkMark[];
   football: FootballSpot | null;
   baseball: BaseballSpot | null;
+  /** Who has the ball. Null before kickoff and after the final. */
+  possessionSide: "away" | "home" | null;
+  /** Timeouts left in regulation, 0–3. Null outside football or when ESPN omits them. */
+  awayTimeouts: number | null;
+  homeTimeouts: number | null;
 };
 
 type Row = Record<string, unknown>;
@@ -400,7 +431,134 @@ export function footballTitle(typeText: string, playText: string, yards: number 
 }
 
 export function footballAdmin(typeText: string, playText: string): boolean {
-  return /end period|end of|timeout/i.test(`${typeText} ${playText}`);
+  return /end period|end of|timeout|two-minute warning|two minute warning/i.test(`${typeText} ${playText}`);
+}
+
+const YARD_ALIAS: Record<string, string[]> = {
+  BLT: ["BAL"],
+  BAL: ["BLT"],
+  JAC: ["JAX"],
+  JAX: ["JAC"],
+  WSH: ["WAS"],
+  WAS: ["WSH"],
+  LAR: ["LA"],
+  LA: ["LAR"],
+};
+
+/** ESPN yard codes: full abbr, a 3-letter prefix such as UTS for UTSA, or BLT for BAL. */
+export function yardCodeMatches(code: string, abbr: string): boolean {
+  const left = code.toUpperCase();
+  const right = abbr.toUpperCase();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.length >= 3 && right.startsWith(left)) return true;
+  if (right.length >= 3 && left.startsWith(right)) return true;
+  return (YARD_ALIAS[left] ?? []).includes(right);
+}
+
+/** `thrown to UTS42` / `thrown to FAU16` / `thrown to the FAU 16`. Null when the code is not one of the two teams. */
+export function incompleteTarget(text: string, awayAbbr: string, homeAbbr: string): number | null {
+  const match = text.match(/thrown to (?:the )?([A-Z]{2,5})\s*(\d{1,2})\b/);
+  if (!match) return null;
+  const code = match[1] ?? "";
+  const line = Number(match[2]);
+  if (!Number.isFinite(line)) return null;
+  const away = yardCodeMatches(code, awayAbbr);
+  const home = yardCodeMatches(code, homeAbbr);
+  if (away === home) return null;
+  const yard = away ? line : 100 - line;
+  return Math.max(0, Math.min(100, yard));
+}
+
+function motionKind(typeText: string, playText: string): FootballMotionKind | null {
+  const type = typeText.toLowerCase();
+  const blob = `${typeText} ${playText}`.toLowerCase();
+  if (/pass incompletion/.test(type) || /\bincomplete\b/.test(blob)) return "incomplete";
+  if (/\bsack\b/.test(type)) return "sack";
+  if (/\bpenalty\b/.test(type) || /\bpenalty\b/.test(blob)) return "penalty";
+  if (/field goal|punt return|kickoff return|^punt\b|kickoff/.test(type)) return "kick";
+  if (/pass reception|passing touchdown|pass interception|interception/.test(type) || /\bintercept/.test(blob)) return "pass";
+  if (/rush|scramble|sneak|\bkneel/.test(type) || /scramble|sneak|\bkneel/.test(blob)) return "rush";
+  if (/\bpass\b/.test(type)) return "pass";
+  return null;
+}
+
+function signedYards(value: number): string {
+  const abs = Math.abs(value);
+  const body = Number.isInteger(abs) ? String(abs) : String(Math.round(abs * 10) / 10);
+  if (value > 0) return `+${body}`;
+  if (value < 0) return `-${body}`;
+  return "+0";
+}
+
+function motionLabel(kind: FootballMotionKind, yards: number | null, scoring: boolean, typeText: string, playText: string): string {
+  if (kind === "incomplete") return "INC";
+  const blob = `${typeText} ${playText}`;
+  if (scoring && /touchdown/i.test(blob)) return yards == null ? "TD" : `TD ${signedYards(yards)} YDS`;
+  if (kind === "sack") return yards == null ? "SACK" : `SACK ${signedYards(yards)} YDS`;
+  if (/field goal good/i.test(typeText) || (/field goal/i.test(blob) && scoring)) {
+    return yards == null ? "FG" : `FG ${Math.abs(yards)} YDS`;
+  }
+  const word = kind === "rush" ? "RUN" : kind === "pass" ? "PASS" : kind === "kick" ? "KICK" : "PEN";
+  if (yards == null) return word;
+  return `${word} ${signedYards(yards)} YDS`;
+}
+
+/**
+ * Ground push, pass lob, or kick arc for one snap.
+ * Null for timeouts, end of period, the two-minute warning, and rows with no spot.
+ */
+export function footballMotion(
+  row: Record<string, unknown>,
+  teams: { homeId: string; awayAbbr: string; homeAbbr: string },
+): FootballMotion | null {
+  const text = str(row.text) || str(row.description);
+  const typeText = playTypeText(row);
+  if (!text || footballAdmin(typeText, text)) return null;
+  const kind = motionKind(typeText, text);
+  if (!kind) return null;
+  const start = isRow(row.start) ? row.start : {};
+  const end = isRow(row.end) ? row.end : {};
+  const startTeamId = str(isRow(start.team) ? start.team.id : "");
+  const endTeamId = str(isRow(end.team) ? end.team.id : "");
+  const startYte = num(start.yardsToEndzone);
+  if (startYte == null) return null;
+  const startHome = !!startTeamId && startTeamId === teams.homeId;
+  const endHome = endTeamId ? endTeamId === teams.homeId : startHome;
+  const fromYard = clampYard(startHome ? startYte : 100 - startYte);
+  const endYte = num(end.yardsToEndzone);
+  let toYard = endYte == null ? fromYard : clampYard(endHome ? endYte : 100 - endYte);
+  const blob = `${typeText} ${text}`;
+  const touchdown = row.scoringPlay === true && /touchdown/i.test(blob);
+  const fieldGoal = /field goal good/i.test(typeText) || (row.scoringPlay === true && /field goal/i.test(blob));
+  if (touchdown) {
+    if (startTeamId && endTeamId && startTeamId !== endTeamId) toYard = endHome ? 0 : 100;
+    else toYard = startHome ? 0 : 100;
+  } else if (fieldGoal) toYard = startHome ? 0 : 100;
+  const stat = num(row.statYardage);
+  const delta = startHome ? fromYard - toYard : toYard - fromYard;
+  const yards = kind === "incomplete" ? 0 : stat != null ? stat : endYte != null || touchdown || fieldGoal ? delta : null;
+  const targetYard = kind === "incomplete" ? incompleteTarget(text, teams.awayAbbr, teams.homeAbbr) : null;
+  return {
+    playId: str(row.id),
+    kind,
+    fromYard,
+    toYard: kind === "incomplete" ? fromYard : toYard,
+    targetYard,
+    yards,
+    label: motionLabel(kind, yards, touchdown || fieldGoal, typeText, text),
+    scoring: touchdown || fieldGoal,
+  };
+}
+
+function clampCount(value: number | null): number | null {
+  if (value == null) return null;
+  return Math.max(0, Math.min(3, Math.round(value)));
+}
+
+function timeoutsUsed(comp: Row, home: boolean): number | null {
+  const row = list(comp.competitors).filter(isRow).find((side) => (str(side.homeAway) === "home") === home);
+  return num(row?.timeoutsUsed);
 }
 
 function clockPrefix(text: string): string {
@@ -461,7 +619,7 @@ function ballOnField(yardsToEndzone: number, homeOffense: boolean): number {
   return homeOffense ? yards : 100 - yards;
 }
 
-export function parseCast(summary: unknown, league: string): GameCast | null {
+export function parseCast(summary: unknown, league: string, situation?: ScoreSituation | null): GameCast | null {
   if (!isRow(summary)) return null;
   const header = isRow(summary.header) ? summary.header : {};
   const comp = list(header.competitions).find(isRow) ?? {};
@@ -555,6 +713,7 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
     const yards = num(row.statYardage);
     const football = kind === "football" ? footballTitle(typeText, text, yards, made) : null;
     const startSpot = isRow(row.start) ? row.start : {};
+    const motion = kind === "football" ? footballMotion(row, { homeId: home.id, awayAbbr: away.abbr, homeAbbr: home.abbr }) : null;
     const play: CastPlay = {
       id: str(row.id),
       abbr,
@@ -570,6 +729,7 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
       spot: kind === "football" ? downSpot(startSpot) : undefined,
       badge: football?.badge || undefined,
       scoring: kind === "football" ? made : undefined,
+      motion: motion ?? undefined,
     };
     plays.push(play);
     lastMeta = { type: kind === "hockey" ? hockeyType : typeText, text, abbr: markSide?.abbr || abbr, shooting, made, freeThrow };
@@ -580,6 +740,20 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
     if (pct != null) newest.win = winLine(pct, away.abbr, home.abbr);
   }
   const callout = state === "pre" ? "" : kind === "football" ? footballCallout(rawPlays) : calloutOf(clock, lastMeta, kind);
+  const football = kind === "football" ? footballOf(summary, away, home) : null;
+  const preGame = state === "pre" || state === "";
+  const finalGame = state === "post";
+  const awayLeft = clampCount(situation?.awayTimeouts ?? null) ?? (kind === "football" ? clampCount(timeoutsUsed(comp, false) == null ? null : 3 - (timeoutsUsed(comp, false) ?? 0)) : null);
+  const homeLeft = clampCount(situation?.homeTimeouts ?? null) ?? (kind === "football" ? clampCount(timeoutsUsed(comp, true) == null ? null : 3 - (timeoutsUsed(comp, true) ?? 0)) : null);
+  let possessionSide: GameCast["possessionSide"] = null;
+  if (kind === "football" && !preGame && !finalGame) {
+    const possId = situation?.possessionId || "";
+    if (possId && possId === home.id) possessionSide = "home";
+    else if (possId && possId === away.id) possessionSide = "away";
+    else if (football?.homePossession === true) possessionSide = "home";
+    else if (football?.possession && football.possession === away.abbr) possessionSide = "away";
+    else if (football?.possession && football.possession === home.abbr) possessionSide = "home";
+  }
   return {
     away: { id: away.id, abbr: away.abbr, name: away.name, score: away.score, color: away.color, logo: away.logo, home: false },
     home: { id: home.id, abbr: home.abbr, name: home.name, score: home.score, color: home.color, logo: home.logo, home: true },
@@ -594,8 +768,11 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
     periods: periodsFor(league, used),
     shots,
     rink,
-    football: kind === "football" ? footballOf(summary, away, home) : null,
+    football,
     baseball: kind === "baseball" ? baseballOf(summary) : null,
+    possessionSide,
+    awayTimeouts: kind === "football" ? awayLeft : null,
+    homeTimeouts: kind === "football" ? homeLeft : null,
   };
 }
 
@@ -615,7 +792,8 @@ function footballCallout(rows: Row[]): string {
   if (!last?.title) return "LIVE";
   if (!last.admin) return last.title.toUpperCase();
   const snap = [...labeled].reverse().find((row) => !row.admin && row.title);
-  const status = /end period|end of/i.test(`${last.typeText} ${last.text}`) ? "END PERIOD" : "TIMEOUT";
+  const blob = `${last.typeText} ${last.text}`;
+  const status = /end period|end of/i.test(blob) ? "END PERIOD" : /two-minute warning|two minute warning/i.test(blob) ? "TWO-MINUTE WARNING" : "TIMEOUT";
   return snap ? `${status} · ${snap.title.toUpperCase()}` : status;
 }
 
@@ -697,6 +875,7 @@ function footballOf(summary: Row, away: { id: string; abbr: string; color: strin
     awayColor: paint(away.rawColor ?? "", away.color),
     homeColor: paint(home.rawColor ?? "", home.color),
     yardsToEndzone,
+    motion: spotPlay ? footballMotion(spotPlay, { homeId: home.id, awayAbbr: away.abbr, homeAbbr: home.abbr }) ?? undefined : undefined,
   };
 }
 

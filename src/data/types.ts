@@ -220,6 +220,11 @@ export type LiveGame = {
   homeSide: TeamSide;
   legs: LiveLeg[];
   liveFeed?: LiveFeed;
+  /** Ball side while the game is in progress. */
+  possessionSide?: "away" | "home" | null;
+  /** Timeouts left, 0–3, on a live NFL or NCAAF game. */
+  awayTimeouts?: number | null;
+  homeTimeouts?: number | null;
 };
 
 export type TeamStat = {

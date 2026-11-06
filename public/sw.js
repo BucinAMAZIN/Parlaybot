@@ -1,4 +1,11 @@
-/* ParlayBOT push worker. Payloads are short titles only. */
+/* ParlayBOT push worker. Every push shows a notification. Taps stay inside this app. */
+function alertRoute(tag) {
+  const text = typeof tag === "string" ? tag : "";
+  if (/^(rz|td)/i.test(text)) return "#live";
+  if (/^(final|ticket|spr|ut)/i.test(text)) return "#results";
+  return "#today";
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try {
@@ -6,10 +13,11 @@ self.addEventListener("push", (event) => {
   } catch {
     data = {};
   }
-  const title = typeof data.title === "string" ? data.title.slice(0, 80) : "ParlayBOT";
+  const rawTitle = typeof data.title === "string" && data.title.trim() ? data.title : "ParlayBOT";
+  const title = rawTitle.replace(/Parlay Desk/g, "ParlayBOT").slice(0, 80);
   const body = typeof data.body === "string" ? data.body.slice(0, 160) : "";
-  const hash = typeof data.url === "string" && /^#[a-z]+$/.test(data.url) ? data.url : "#today";
   const tag = typeof data.tag === "string" ? data.tag.slice(0, 64) : "parlaybot";
+  const hash = alertRoute(tag);
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
@@ -22,7 +30,9 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const hash = event.notification.data && event.notification.data.hash ? event.notification.data.hash : "#today";
+  const tag = event.notification.tag || "";
+  const stored = event.notification.data && event.notification.data.hash;
+  const hash = /^(rz|td|final|ticket|spr|ut)/i.test(tag) ? alertRoute(tag) : typeof stored === "string" && /^#[a-z]+$/.test(stored) ? stored : alertRoute(tag);
   const dest = new URL(hash, self.registration.scope).href;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {

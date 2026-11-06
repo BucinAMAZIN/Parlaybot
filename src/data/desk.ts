@@ -811,6 +811,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     clv,
     fbNote: str(isRow(data.fb_legs) ? data.fb_legs.note : ""),
     fbLegs: fbLegRows(data.fb_legs),
+    nightLive: null,
   };
 }
 
@@ -857,6 +858,209 @@ function firstBloodPlay(leg: Row, index: number, statuses: Map<string, PlayerSta
     hrLink: str(leg.hr_link) || undefined,
     tags: ["First Blood"],
   };
+}
+
+export const SLATE_CACHE_KEY = "parlaybot-slate-cache-v1";
+
+export type SlateSnap = {
+  slateDate: string;
+  tickets: Ticket[];
+  cappers: Capper[];
+  teamVs: unknown;
+  teamBuilt: string | null;
+};
+
+type SlateStore = { getItem(key: string): string | null; setItem(key: string, value: string): void };
+
+/** Keep the two newest slates that actually have plays. */
+export function rememberSlate(entries: SlateSnap[], entry: SlateSnap): SlateSnap[] {
+  const plays = entry.tickets.some((ticket) => ticket.plays.length) || entry.cappers.some((capper) => capper.plays.length);
+  if (!entry.slateDate || !plays) return entries;
+  const next = [entry, ...entries.filter((item) => item.slateDate !== entry.slateDate)];
+  return next.sort((a, b) => b.slateDate.localeCompare(a.slateDate)).slice(0, 2);
+}
+
+function isSnap(value: unknown): value is SlateSnap {
+  if (!isRow(value) || typeof value.slateDate !== "string" || !Array.isArray(value.tickets)) return false;
+  return true;
+}
+
+export function readSlateCache(storage: SlateStore | null): SlateSnap[] {
+  if (!storage) return [];
+  try {
+    const raw = JSON.parse(storage.getItem(SLATE_CACHE_KEY) || "[]") as unknown;
+    return Array.isArray(raw) ? raw.filter(isSnap) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeSlateCache(storage: SlateStore | null, entries: SlateSnap[]): void {
+  if (!storage) return;
+  try {
+    storage.setItem(SLATE_CACHE_KEY, JSON.stringify(entries.slice(0, 2)));
+  } catch {
+    /* private mode */
+  }
+}
+
+/** Map a results row onto the card tags. */
+export function replayTag(row: { grp?: unknown; cat?: unknown; prop?: unknown; sub?: unknown; pick?: unknown; alt?: unknown }): string {
+  const cat = str(row.cat);
+  const prop = str(row.prop);
+  const blob = `${str(row.grp)} ${cat} ${prop} ${str(row.sub)}`.toLowerCase();
+  const handle = prop.match(/@([a-z0-9_]+)/i);
+  if (/first blood/i.test(cat) || /first blood/i.test(blob)) return "First Blood";
+  if (/heist/i.test(blob) && (row.alt === true || /alt/i.test(`${cat} ${prop} ${str(row.sub)}`))) return "Heist ALT";
+  if (/heist/i.test(blob)) return "Heist";
+  if (/leg\s*day/i.test(cat) && (row.alt === true || /\balt\b/i.test(prop))) return "Props ALT";
+  if (/leg\s*day/i.test(cat)) return "Props";
+  if (/^edge$/i.test(cat) || str(row.grp) === "E") return "Edge";
+  if (/potd/i.test(cat)) return "POTD";
+  if (/\+100|parlay/i.test(cat)) return "+100";
+  if (handle) return `@${handle[1]}`;
+  if (/^cappers$/i.test(cat) || str(row.grp) === "C") return "@capper";
+  return cat || "Play";
+}
+
+function summaryRow(row: Row): boolean {
+  if (Array.isArray(row.legs) && row.legs.length > 0) return true;
+  return /\d+\s*-?\s*leg\b/i.test(str(row.pick));
+}
+
+function expanded(row: Row): Row[] {
+  if (Array.isArray(row.legs) && row.legs.length) {
+    return rowsOf(row.legs).map((leg) => ({
+      ...leg,
+      cat: str(leg.cat) || str(row.cat),
+      grp: leg.grp ?? row.grp,
+      sport: str(leg.sport) || str(row.sport),
+      alt: leg.alt ?? row.alt,
+    }));
+  }
+  const sub = str(row.sub);
+  if (!sub.includes(" + ")) return [];
+  return sub.split(/\s+\+\s+/).filter(Boolean).map((part) => ({ ...row, pick: part.trim(), sub: "", leg: true }));
+}
+
+function codesIn(text: string): { away: string; home: string } | null {
+  const match = text.match(/\b([A-Z]{2,5})\s*(?:@|vs\.?)\s*([A-Z]{2,5})\b/);
+  if (!match?.[1] || !match[2]) return null;
+  return { away: match[1], home: match[2] };
+}
+
+function resultPlay(row: Row, index: number): Play | null {
+  const name = str(row.pick) || str(row.player);
+  if (!name || isPlaceholder(name) || /\d+\s*-?\s*leg\b/i.test(name)) return null;
+  const sport = classifySport(str(row.sport));
+  const codes = codesIn(name);
+  const whyLine = str(row.why);
+  const tag = replayTag(row);
+  return {
+    id: `replay-${index}`,
+    name,
+    detail: [sport === "Other" ? str(row.sport) || "Other" : sportLabel(sport), str(row.prop)].filter(Boolean).join(" · "),
+    sport,
+    hr: oddsOf(row.odds),
+    dk: null,
+    why: { ours: false, line: whyLine.slice(0, 110), why: whyLine ? [whyLine] : [], whyNot: [] },
+    showWhy: whyLine ? undefined : false,
+    source: "desk",
+    tags: [tag],
+    gameText: name,
+    matchup: codes
+      ? { away: { abbr: codes.away, record: "—", standing: "—" }, home: { abbr: codes.home, record: "—", standing: "—" } }
+      : undefined,
+  };
+}
+
+function datedPlays(data: Row, date: string): Play[] {
+  const out: Play[] = [];
+  const take = (rows: Row[], tag: string, prefix: string) => {
+    rows.forEach((row, index) => {
+      const play = playFrom(row, `${prefix}-${index}`, new Map());
+      if (!play) return;
+      const alt = row.alt === true && tag === "Heist" ? "Heist ALT" : row.alt === true && tag === "Props" ? "Props ALT" : tag;
+      out.push({ ...play, tags: [...new Set([...(play.tags ?? []), alt])] });
+    });
+  };
+  const heist = isRow(data.heist) ? data.heist : null;
+  if (heist && str(heist.date) === date) take(rowsOf(heist.legs), "Heist", "heist");
+  const edge = isRow(data.edge) ? data.edge : null;
+  if (edge && str(edge.date) === date) take(rowsOf(edge.picks), "Edge", "edge");
+  const legday = isRow(data.legday) ? data.legday : null;
+  if (legday && str(legday.date) === date) take(rowsOf(legday.board), "Props", "props");
+  const first = isRow(data.first_blood) ? data.first_blood : null;
+  if (first && str(first.date) === date) take(rowsOf(first.legs), "First Blood", "fb");
+  for (const capper of rowsOf(data.cappers)) {
+    if (str(capper.date) !== date) continue;
+    const name = str(capper.name);
+    const handle = name.startsWith("@") ? name : `@${name.replace(/\s+/g, "")}`;
+    take(rowsOf(capper.today), handle || "@capper", `cap-${norm(handle)}`);
+  }
+  return out;
+}
+
+function resultPlays(data: Row, date: string): Play[] {
+  const rows = rowsOf(isRow(data.results_v2) ? data.results_v2.rows : null).filter((row) => str(row.date) === date);
+  const out: Play[] = [];
+  rows.forEach((row, index) => {
+    if (summaryRow(row)) {
+      expanded(row).forEach((leg, legIndex) => {
+        const play = resultPlay(leg, index * 100 + legIndex);
+        if (play) out.push(play);
+      });
+      return;
+    }
+    const play = resultPlay(row, index);
+    if (play) out.push(play);
+  });
+  return out;
+}
+
+/** Cold-device copy of yesterday: sections still dated that day, plus results_v2 legs. */
+export function replayYesterday(raw: unknown, date: string): { tickets: Ticket[]; cappers: Capper[] } {
+  const data = isRow(raw) ? raw : {};
+  const seen = new Set<string>();
+  const plays: Play[] = [];
+  for (const play of [...datedPlays(data, date), ...resultPlays(data, date)]) {
+    const key = norm(play.name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    plays.push(play);
+  }
+  const capperMap = new Map<string, Play[]>();
+  const buckets = new Map<string, Play[]>();
+  for (const play of plays) {
+    const tag = play.tags?.[0] || "Play";
+    if (tag.startsWith("@")) {
+      const list = capperMap.get(tag) ?? [];
+      list.push(play);
+      capperMap.set(tag, list);
+      continue;
+    }
+    const list = buckets.get(tag) ?? [];
+    list.push(play);
+    buckets.set(tag, list);
+  }
+  const tickets: Ticket[] = [...buckets.entries()].map(([tag, list]) => ({
+    id: `replay-${norm(tag).replace(/ /g, "-") || "play"}`,
+    productKey: "replay",
+    title: tag,
+    meta: date,
+    plays: list,
+    share: false,
+    rules: ["Rebuilt from last night's desk file."],
+    group: "main" as const,
+  }));
+  const cappers: Capper[] = [...capperMap.entries()].map(([name, list]) => ({
+    id: norm(name).replace(/ /g, "-") || "capper",
+    name,
+    group: "heist" as const,
+    record: "",
+    plays: list,
+  }));
+  return { tickets, cappers };
 }
 
 function fbLegRows(raw: unknown): { date: string; player: string; team: string; odds: string; hit: string; note: string }[] {

@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { diffFeed, payloadIsPrivate, type Baseline } from "../push/diff.ts";
+import { DEFAULT_NTFY_TOPIC_URL, DEFAULT_PUSH_PUBLIC_KEY, alertRoute, ntfySubBody, ntfyUnsubBody, PUSH_PUBLIC_KEY, NTFY_TOPIC_URL } from "../src/lib/pushClient.ts";
 import { allowRate, parseSubscription } from "../push/http.ts";
 import { handleRequest, handleSchedule } from "../push/worker.ts";
 
@@ -156,5 +158,29 @@ const pending = await handleRequest(new Request("https://push.example/subscribe"
 }), { SUBS: memoryStore() });
 assert.equal(pending.status, 503);
 assert.equal((await pending.json()).delivery, "unavailable");
+
+assert.equal(PUSH_PUBLIC_KEY, DEFAULT_PUSH_PUBLIC_KEY);
+assert.match(PUSH_PUBLIC_KEY, /^BKeQ/);
+assert.equal(NTFY_TOPIC_URL, DEFAULT_NTFY_TOPIC_URL);
+assert.match(NTFY_TOPIC_URL, /^https:\/\/ntfy\.sh\/parlaydesk-subs-/);
+const phone = { endpoint: "https://push.example/device", keys: { p256dh: "abc", auth: "def" } };
+const posted = ntfySubBody(phone, "iPhone", 100);
+assert.deepEqual(posted, { sub: phone, ua: "iPhone", app: "parlaybot", t: 100 });
+assert.deepEqual(ntfyUnsubBody(phone.endpoint, 200), { unsub: phone.endpoint, t: 200 });
+assert.equal(alertRoute("rz-bal"), "#live");
+assert.equal(alertRoute("td-jax"), "#live");
+assert.equal(alertRoute("final-heist"), "#results");
+assert.equal(alertRoute("ticket-1"), "#results");
+assert.equal(alertRoute("spr-1"), "#results");
+assert.equal(alertRoute("ut-1"), "#results");
+assert.equal(alertRoute("pick"), "#today");
+const sw = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
+assert.match(sw, /showNotification/);
+assert.match(sw, /Parlay Desk/);
+assert.match(sw, /ParlayBOT/);
+assert.match(sw, /#live/);
+assert.match(sw, /#results/);
+assert.match(sw, /self\.registration\.scope/);
+assert.doesNotMatch(sw, /desk-dashboard/);
 
 console.log("push tests ok");

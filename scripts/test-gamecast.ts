@@ -12,7 +12,7 @@ import {
 } from "../src/data/gamecast.ts";
 import { gradeTeamBet, sortLiveGames, teamBet } from "../src/data/liveCard.ts";
 import { courtHardware, footballField, nhlRink, threePointPath } from "../src/ui/court.ts";
-import { footballTitle } from "../src/data/gamecast.ts";
+import { footballMotion, footballTitle, incompleteTarget } from "../src/data/gamecast.ts";
 import { buildNumber, newerBuild } from "../src/lib/buildWatch.ts";
 import { absorbLiveLeg, cleanLiveTitle, findLiveLeg, liveLegKey, overallRecord, standingLabel } from "../src/data/espn.ts";
 import type { LiveGame, LiveLeg, WhyBlock } from "../src/data/types.ts";
@@ -151,6 +151,25 @@ assert.match(field, /#38bdf8/);
 assert.match(field, /#facc15/);
 assert.equal(footballTitle("Pass Incompletion", "pass incomplete", 0, false).title, "Incomplete Pass");
 assert.equal(footballTitle("Passing Touchdown", "touchdown", 12, true).title, "TOUCHDOWN");
+assert.equal(utsa?.football?.motion?.kind, "rush");
+assert.equal(utsa?.football?.motion?.fromYard, 36);
+assert.equal(utsa?.football?.motion?.toYard, 64);
+assert.equal(utsa?.football?.motion?.yards, 28);
+assert.equal(utsa?.football?.motion?.label, "RUN +28 YDS");
+assert.equal(utsa?.plays.find((play) => play.id === "rush-1")?.motion?.label, "RUN +28 YDS");
+assert.match(field, /y="23"/);
+assert.match(field, /height="6"/);
+assert.match(field, /opacity="0.22"/);
+assert.match(field, /class="distbar"/);
+assert.match(field, /y="23.5"/);
+assert.match(field, /height="5"/);
+assert.match(field, /rx="1.2"/);
+assert.match(field, /RUN \+28 YDS/);
+assert.match(field, /#8b4513/);
+assert.match(field, /animateMotion/);
+assert.match(field, /#38bdf888/);
+const frozen = footballField(utsa?.football ?? { yard: 64, down: "", drive: "", redZone: false, first: null }, { animate: false });
+assert.doesNotMatch(frozen, /<animate/);
 
 const pat = parseCast({
   header: { competitions: [{ status: { type: { state: "in", shortDetail: "0:12 - 2nd" } }, competitors: [
@@ -166,6 +185,134 @@ assert.match(pat?.football?.down ?? "", /Kickoff \/ PAT at JAX 35/);
 assert.equal(pat?.football?.yard, 35);
 assert.match(pat?.callout ?? "", /TIMEOUT · TOUCHDOWN/);
 assert.equal(pat?.plays[0]?.title, "Official Timeout");
+assert.equal(pat?.plays[0]?.motion, undefined);
+assert.equal(pat?.football?.motion?.kind, "pass");
+assert.equal(pat?.football?.motion?.fromYard, 8);
+assert.equal(pat?.football?.motion?.toYard, 0);
+assert.equal(pat?.football?.motion?.label, "TD +8 YDS");
+assert.equal(pat?.football?.motion?.scoring, true);
+const tdField = footballField(pat?.football ?? { yard: 35, down: "", drive: "", redZone: false, first: null });
+assert.match(tdField, /#34d39999/);
+assert.match(tdField, / Q /);
+assert.match(tdField, /dur="1\.05s"/);
+
+const warning = parseCast({
+  header: { competitions: [{ status: { type: { state: "in", shortDetail: "2:00 - 2nd" } }, competitors: [
+    { homeAway: "away", score: "0", team: { id: "2636", abbreviation: "UTSA", color: "0c2340" } },
+    { homeAway: "home", score: "7", team: { id: "2226", abbreviation: "FAU", color: "003366" } },
+  ] }] },
+  drives: { current: { id: "w", team: { id: "2636" }, plays: [
+    { id: "run", type: { text: "Rush" }, text: "rush for 5 yards", statYardage: 5, period: { number: 2 }, clock: { displayValue: "2:10" }, start: { down: 1, distance: 10, yardsToEndzone: 60, team: { id: "2636" } }, end: { down: 2, distance: 5, yardsToEndzone: 55, team: { id: "2636" } } },
+    { id: "tw", type: { text: "Two-Minute Warning" }, text: "Two-Minute Warning", period: { number: 2 }, clock: { displayValue: "2:00" } },
+  ] } },
+}, "NCAAF");
+assert.equal(warning?.football?.motion?.kind, "rush");
+assert.equal(warning?.football?.motion?.label, "RUN +5 YDS");
+assert.match(warning?.callout ?? "", /TWO-MINUTE WARNING · RUSH \+5 YDS/);
+
+const sack = footballMotion({
+  id: "sk",
+  type: { text: "Sack" },
+  text: "sacked for a loss of 8 yards",
+  statYardage: -8,
+  start: { yardsToEndzone: 45, team: { id: "2636" } },
+  end: { yardsToEndzone: 53, team: { id: "2636" } },
+}, { homeId: "2226", awayAbbr: "UTSA", homeAbbr: "FAU" });
+assert.equal(sack?.kind, "sack");
+assert.equal(sack?.label, "SACK -8 YDS");
+assert.match(footballField({ yard: 47, down: "", drive: "", redZone: false, first: null, motion: sack ?? undefined }), /#f8717188/);
+
+const incomplete = footballMotion({
+  id: "inc",
+  type: { text: "Pass Incompletion" },
+  text: "pass incomplete thrown to UTS42",
+  statYardage: 0,
+  start: { yardsToEndzone: 64, team: { id: "2636" } },
+  end: { yardsToEndzone: 64, team: { id: "2636" } },
+}, { homeId: "2226", awayAbbr: "UTSA", homeAbbr: "FAU" });
+assert.equal(incomplete?.kind, "incomplete");
+assert.equal(incomplete?.targetYard, 42);
+assert.equal(incomplete?.fromYard, 36);
+assert.equal(incomplete?.toYard, 36);
+assert.equal(incomplete?.yards, 0);
+assert.equal(incomplete?.label, "INC");
+assert.equal(incompleteTarget("thrown to FAU16", "UTSA", "FAU"), 84);
+assert.equal(incompleteTarget("thrown to UTS00", "UTSA", "FAU"), 0);
+assert.equal(incompleteTarget("thrown to the FAU 16", "UTSA", "FAU"), 84);
+assert.equal(incompleteTarget("pass incomplete", "UTSA", "FAU"), null);
+assert.equal(incompleteTarget("thrown to XYZ12", "UTSA", "FAU"), null);
+const incField = footballField({ yard: 36, down: "", drive: "", redZone: false, first: null, awayAbbr: "UTSA", homeAbbr: "FAU", motion: incomplete ?? undefined });
+assert.match(incField, /stroke-dasharray/);
+assert.match(incField, /✕/);
+assert.match(incField, />INC</);
+const bareInc = footballMotion({
+  id: "inc2",
+  type: { text: "Pass Incompletion" },
+  text: "pass incomplete",
+  start: { yardsToEndzone: 40, team: { id: "2226" } },
+  end: { yardsToEndzone: 40, team: { id: "2226" } },
+}, { homeId: "2226", awayAbbr: "UTSA", homeAbbr: "FAU" });
+assert.equal(bareInc?.targetYard, null);
+assert.match(footballField({ yard: 40, down: "", drive: "", redZone: false, first: null, motion: bareInc ?? undefined }), /✕/);
+
+const goal = footballMotion({
+  id: "fg",
+  type: { text: "Field Goal Good" },
+  text: "53 yard field goal is good",
+  statYardage: 53,
+  scoringPlay: true,
+  start: { yardsToEndzone: 35, team: { id: "2636" } },
+  end: { down: -1, yardsToEndzone: 35, team: { id: "2226" } },
+}, { homeId: "2226", awayAbbr: "UTSA", homeAbbr: "FAU" });
+assert.equal(goal?.kind, "kick");
+assert.equal(goal?.toYard, 100);
+assert.equal(goal?.label, "FG 53 YDS");
+const pickSix = footballMotion({
+  id: "six",
+  type: { text: "Pass Interception" },
+  text: "intercepted and returned for a touchdown",
+  statYardage: 40,
+  scoringPlay: true,
+  start: { yardsToEndzone: 40, team: { id: "2636" } },
+  end: { down: -1, yardsToEndzone: 35, team: { id: "2226" } },
+}, { homeId: "2226", awayAbbr: "UTSA", homeAbbr: "FAU" });
+assert.equal(pickSix?.kind, "pass");
+assert.equal(pickSix?.toYard, 0);
+assert.equal(pickSix?.label, "TD +40 YDS");
+
+const flagged = parseCast({
+  header: { competitions: [{ status: { type: { state: "in", shortDetail: "8:00 - 3rd" } }, competitors: [
+    { homeAway: "away", score: "10", timeoutsUsed: 1, team: { id: "33", abbreviation: "BAL", color: "241773" } },
+    { homeAway: "home", score: "7", timeoutsUsed: 0, team: { id: "30", abbreviation: "JAX", color: "006778" } },
+  ] }] },
+  drives: { current: { team: { id: "33" }, plays: [
+    { id: "p", type: { text: "Rush" }, text: "rush", statYardage: 4, start: { yardsToEndzone: 70, team: { id: "33" } }, end: { yardsToEndzone: 66, down: 2, distance: 6, team: { id: "33" } } },
+  ] } },
+}, "NFL", { possessionId: "33", awayTimeouts: 2, homeTimeouts: 3 });
+assert.equal(flagged?.possessionSide, "away");
+assert.equal(flagged?.awayTimeouts, 2);
+assert.equal(flagged?.homeTimeouts, 3);
+const usedOnly = parseCast({
+  header: { competitions: [{ status: { type: { state: "in", shortDetail: "8:00 - 3rd" } }, competitors: [
+    { homeAway: "away", score: "10", timeoutsUsed: 1, team: { id: "33", abbreviation: "BAL", color: "241773" } },
+    { homeAway: "home", score: "7", timeoutsUsed: 2, team: { id: "30", abbreviation: "JAX", color: "006778" } },
+  ] }] },
+  drives: { current: { team: { id: "30" }, plays: [
+    { id: "p", type: { text: "Pass Reception" }, text: "pass complete", statYardage: 12, start: { yardsToEndzone: 40, team: { id: "30" } }, end: { yardsToEndzone: 28, down: 1, distance: 10, team: { id: "30" } } },
+  ] } },
+}, "NFL");
+assert.equal(usedOnly?.awayTimeouts, 2);
+assert.equal(usedOnly?.homeTimeouts, 1);
+assert.equal(usedOnly?.possessionSide, "home");
+assert.equal(usedOnly?.football?.motion?.kind, "pass");
+assert.equal(usedOnly?.football?.motion?.label, "PASS +12 YDS");
+const preCast = parseCast({
+  header: { competitions: [{ status: { type: { state: "pre", shortDetail: "8:15 PM" } }, competitors: [
+    { homeAway: "away", score: "0", timeoutsUsed: 0, team: { id: "33", abbreviation: "BAL" } },
+    { homeAway: "home", score: "0", timeoutsUsed: 0, team: { id: "30", abbreviation: "JAX" } },
+  ] }] },
+}, "NFL", { possessionId: "33", awayTimeouts: 3, homeTimeouts: 3 });
+assert.equal(preCast?.possessionSide, null);
 
 const games = [
   { id: "late", pre: true, final: false, start: "2026-11-05T22:00:00Z", league: "NBA" },

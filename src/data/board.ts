@@ -54,6 +54,22 @@ export type Board = {
   clv: ClvCard | null;
   fbNote: string;
   fbLegs: { date: string; player: string; team: string; odds: string; hit: string; note: string }[];
+  /** Last night's live card, kept until 10:00 AM ET. Null once today is the live slate. */
+  nightLive: NightLive | null;
+};
+
+export type NightLive = {
+  slateDate: string;
+  tickets: Ticket[];
+  cappers: Capper[];
+  teamVs: unknown;
+  teamBuilt: string | null;
+  liveGames: LiveGame[];
+  liveTickets: LiveTicket[];
+  liveNote: string;
+  liveUpdated: string;
+  liveMood: Board["liveMood"];
+  cold: boolean;
 };
 
 const ALIAS: Record<string, string> = { NYK: "NY" };
@@ -103,6 +119,7 @@ export function emptyBoard(): Board {
     clv: null,
     fbNote: "",
     fbLegs: [],
+    nightLive: null,
   };
 }
 

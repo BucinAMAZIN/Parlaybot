@@ -1,7 +1,7 @@
 import { emptyBoard, findPlay, type Board } from "./data/board.ts";
-import { adaptDesk, fetchDesk } from "./data/desk.ts";
+import { adaptDesk, fetchDesk, readSlateCache, rememberSlate, replayYesterday, writeSlateCache, type SlateSnap } from "./data/desk.ts";
 import { offlineBanner, readDeskCache, writeDeskCache } from "./data/deskCache.ts";
-import { attachLive } from "./data/espn.ts";
+import { attachLive, liveWindowET } from "./data/espn.ts";
 import type { Play, StandingLeague } from "./data/types.ts";
 import {
   draftKingsLegLink,
@@ -13,8 +13,8 @@ import {
 import { shareCardIsPrivate } from "./lib/shareCard.ts";
 import { canvasBlob, drawShareCard } from "./lib/shareImage.ts";
 import { canOpen, linkMismatch, toLinkPlay } from "./ui/bits.ts";
-import { cardForShare, render, sportsFor } from "./ui/views.ts";
-import { disablePush, readPushDelivery, subscribePush } from "./lib/pushClient.ts";
+import { cardForShare, liveSlice, render, sportsFor } from "./ui/views.ts";
+import { disablePush, readPushDelivery, resyncPush, subscribePush } from "./lib/pushClient.ts";
 import { defaultState, knownView, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
 import { buildNumber, newerBuild } from "./lib/buildWatch.ts";
 
@@ -69,7 +69,7 @@ function applyChrome() {
 
 function revealLive() {
   if (state.view !== "live") return;
-  const game = board.liveGames.find((item) => !item.pre && !item.final);
+  const game = liveSlice(state, board).liveGames.find((item) => !item.pre && !item.final);
   if (!game || state.liveDismissed.has(game.id) || state.openGames.has(game.id)) return;
   state.openGames.add(game.id);
   state.gamePanel[game.id] = "feed";
@@ -254,8 +254,26 @@ function onClick(event: Event) {
   }
   if (act === "push") {
     const kind = action.dataset.kind;
-    if (kind !== "picks" && kind !== "locks") return;
-    void togglePush(kind);
+    if (kind !== "all" && kind !== "picks" && kind !== "locks") return;
+    void togglePush(kind === "locks" ? "locks" : kind === "picks" ? "picks" : "all");
+    return;
+  }
+  if (act === "push-test") {
+    void resyncPush().then((ok) => showToast(ok ? "Test sent. A confirmation alert arrives in about a minute." : "Turn phone alerts on before sending a test."));
+    return;
+  }
+  if (act === "live-slate") {
+    state.liveNight = action.dataset.slate !== "today";
+    paint(false);
+    return;
+  }
+  if (act === "snap-preview" || act === "snap-replay" || act === "snap-live") {
+    const key = action.dataset.track || action.dataset.game || "";
+    if (!key) return;
+    if (act === "snap-preview") state.snapPreview[key] = action.dataset.play || "";
+    if (act === "snap-live") delete state.snapPreview[key];
+    state.snapGen[key] = (state.snapGen[key] ?? 0) + 1;
+    paint(false);
     return;
   }
   if (act === "alert") {
@@ -510,8 +528,9 @@ async function refreshPushStatus() {
   if (state.sheet?.kind === "settings") paint(false);
 }
 
-async function togglePush(kind: "picks" | "locks") {
-  const next = { ...state.pushWant, [kind]: !(state.pushDelivery === "on" && state.pushWant[kind]) };
+async function togglePush(kind: "picks" | "locks" | "all") {
+  const on = state.pushDelivery === "on" && (kind === "all" ? state.pushWant.picks || state.pushWant.locks : state.pushWant[kind]);
+  const next = kind === "all" ? { picks: !on, locks: !on } : { ...state.pushWant, [kind]: !on };
   if (!next.picks && !next.locks) {
     const result = await disablePush();
     state.pushWant = next;
@@ -610,7 +629,78 @@ export function start() {
 }
 
 let refreshing = false;
+let sawTen = liveWindowET().hourET >= 10;
 const runningBuild = document.querySelector('meta[name="parlaybot-build"]')?.getAttribute("content") ?? "";
+
+function slateStore(): { getItem(key: string): string | null; setItem(key: string, value: string): void } | null {
+  try {
+    return localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function saveSlate(next: Board) {
+  const entry: SlateSnap = { slateDate: next.slateDate, tickets: next.tickets, cappers: next.cappers, teamVs: next.teamVs, teamBuilt: next.teamBuilt };
+  const storage = slateStore();
+  writeSlateCache(storage, rememberSlate(readSlateCache(storage), entry));
+}
+
+async function fillNight(next: Board, raw: unknown) {
+  const win = liveWindowET();
+  if (win.hourET >= 10 || next.slateDate === win.yesterdayET) {
+    next.nightLive = null;
+    return;
+  }
+  const cached = readSlateCache(slateStore()).find((item) => item.slateDate === win.yesterdayET) ?? null;
+  const source = cached ?? replayYesterday(raw, win.yesterdayET);
+  const ghost = emptyBoard();
+  ghost.slateDate = win.yesterdayET;
+  ghost.tickets = source.tickets;
+  ghost.cappers = source.cappers;
+  ghost.teamVs = cached?.teamVs ?? next.teamVs;
+  ghost.teamBuilt = cached?.teamBuilt ?? next.teamBuilt;
+  ghost.standings = next.standings;
+  try {
+    await attachLive(ghost, { matchPlayers: !cached });
+  } catch {
+    ghost.liveNote = "ESPN scoreboard did not load. Scores stay blank until it does.";
+  }
+  next.nightLive = {
+    slateDate: win.yesterdayET,
+    tickets: ghost.tickets,
+    cappers: ghost.cappers,
+    teamVs: ghost.teamVs,
+    teamBuilt: ghost.teamBuilt,
+    liveGames: ghost.liveGames,
+    liveTickets: ghost.liveTickets,
+    liveNote: ghost.liveNote || "No plays saved for last night.",
+    liveUpdated: ghost.liveUpdated,
+    liveMood: ghost.liveMood,
+    cold: !cached,
+  };
+}
+
+async function refreshNight(next: Board) {
+  const night = next.nightLive;
+  if (!night) return;
+  const ghost = emptyBoard();
+  ghost.slateDate = night.slateDate;
+  ghost.tickets = night.tickets;
+  ghost.cappers = night.cappers;
+  ghost.teamVs = night.teamVs;
+  ghost.teamBuilt = night.teamBuilt;
+  ghost.standings = next.standings;
+  await attachLive(ghost, { matchPlayers: night.cold });
+  next.nightLive = {
+    ...night,
+    liveGames: ghost.liveGames,
+    liveTickets: ghost.liveTickets,
+    liveNote: ghost.liveNote,
+    liveUpdated: ghost.liveUpdated,
+    liveMood: ghost.liveMood,
+  };
+}
 
 function busyPainting(): boolean {
   return state.sheet != null || document.activeElement instanceof HTMLSelectElement;
@@ -618,12 +708,21 @@ function busyPainting(): boolean {
 
 async function refreshLiveOnly() {
   if (document.visibilityState !== "visible" || refreshing) return;
+  const win = liveWindowET();
+  if (win.hourET >= 10 && !sawTen && state.view === "live") {
+    sawTen = true;
+    board.nightLive = null;
+    if (!busyPainting()) paint(false);
+  }
+  sawTen = win.hourET >= 10;
   const onCard = state.view === "live" || state.view === "today" || state.view === "cappers";
   const watching = onCard || board.liveGames.some((game) => !game.pre && !game.final);
-  if (!watching) return;
+  const nightWatch = win.hourET < 10 && !!board.nightLive && (state.view === "live" || board.nightLive.liveGames.some((game) => !game.pre && !game.final));
+  if (!watching && !nightWatch) return;
   refreshing = true;
   try {
-    await attachLive(board);
+    if (watching) await attachLive(board);
+    if (nightWatch) await refreshNight(board);
     if (!busyPainting()) paint(false);
   } catch {
     /* keep the scores already on the card */
@@ -657,10 +756,16 @@ async function refreshDesk() {
     const savedAt = new Date().toISOString();
     writeDeskCache(raw, savedAt);
     const next = boardFromRaw(raw, savedAt);
+    saveSlate(next);
     try {
       await attachLive(next);
     } catch {
       next.liveNote = "ESPN scoreboard did not load. Scores stay blank until it does.";
+    }
+    try {
+      await fillNight(next, raw);
+    } catch {
+      next.nightLive = null;
     }
     board = next;
     for (const id of [...state.selected]) {
@@ -675,10 +780,16 @@ async function refreshDesk() {
       try {
         const next = boardFromRaw(cached.raw, cached.savedAt);
         next.banner = offlineBanner(cached.savedAt);
+        saveSlate(next);
         try {
           await attachLive(next);
         } catch {
           next.liveNote = "ESPN scoreboard did not load. Scores stay blank until it does.";
+        }
+        try {
+          await fillNight(next, cached.raw);
+        } catch {
+          next.nightLive = null;
         }
         board = next;
       } catch {
