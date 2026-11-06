@@ -750,7 +750,7 @@ const blank = (): AppState => ({
   alerts: { locks: false, finals: false, redzone: false, price: false }, pushWant: { picks: false, locks: false }, pushAck: false, pushDelivery: "off",
   sheet: null, league: "NBA", standingsFrom: "today", gamePanel: {}, openGames: new Set(), gamesOpen: false, gamesSport: "All", feedFilter: {}, openPlayTracks: new Set(), playPanel: {}, castTeam: {}, castPeriod: {}, feedFull: new Set(), liveDismissed: new Set(),
   profitRange: "14d", openDates: new Set(), conference: "", statsFrom: "", statsTo: "", statsCalOpen: false, statsMode: "range", statsSection: "all",
-  statsSport: "", statsAnchor: "", statsDraft: "", nightOpen: false, resultsPick: null, openResultDates: new Set(), openTickets: new Set(),
+  statsSport: "", statsAnchor: "", statsDraft: "", nightOpen: false, openProps: new Set(), propSection: {}, openResultDates: new Set(), openTickets: new Set(),
 });
 const page = renderPage(blank(), heistBoard);
 assert.equal(page.indexOf('id="ticket-heist"') < page.indexOf('id="ticket-heist-alt"'), true);

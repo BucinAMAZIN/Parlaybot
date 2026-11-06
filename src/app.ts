@@ -13,6 +13,7 @@ import {
 import { shareCardIsPrivate } from "./lib/shareCard.ts";
 import { canvasBlob, drawShareCard } from "./lib/shareImage.ts";
 import { canOpen, linkMismatch, toLinkPlay } from "./ui/bits.ts";
+import { propOpenKey } from "./ui/statsScreen.ts";
 import { cardForShare, liveSlice, render, sportsFor } from "./ui/views.ts";
 import { disablePush, readPushDelivery, resyncPush, subscribePush } from "./lib/pushClient.ts";
 import { defaultState, knownView, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
@@ -193,7 +194,6 @@ function onClick(event: Event) {
   if (act === "nav") {
     const requested = action.dataset.view === "stats" ? "results" : ((action.dataset.view as ViewId) || "today");
     state.view = requested;
-    state.resultsPick = null;
     state.sheet = null;
     const hash = `#${state.view}`;
     if (location.hash !== hash) history.replaceState(null, "", hash);
@@ -380,9 +380,20 @@ function onClick(event: Event) {
     const sport = action.dataset.sport || "";
     const prop = action.dataset.prop || "";
     if (!sport || !prop) return;
-    state.resultsPick = { sport, prop, alt: action.dataset.alt === "1" };
-    state.openResultDates = new Set();
-    paint(true);
+    const key = propOpenKey(sport, prop, action.dataset.alt === "1");
+    if (state.openProps.has(key)) state.openProps.delete(key);
+    else state.openProps.add(key);
+    paint(false);
+    return;
+  }
+  if (act === "prop-section") {
+    const propKey = action.dataset.prop || "";
+    const key = action.dataset.key;
+    if (!propKey) return;
+    if (key === "all" || key === "heist" || key === "safe" || key === "edge" || key === "cappers" || key === "legday") {
+      state.propSection[propKey] = key;
+      paint(false);
+    }
     return;
   }
   if (act === "result-date") {
@@ -398,11 +409,6 @@ function onClick(event: Event) {
     if (!key) return;
     if (state.openTickets.has(key)) state.openTickets.delete(key);
     else state.openTickets.add(key);
-    paint(false);
-    return;
-  }
-  if (act === "results-back") {
-    state.resultsPick = null;
     paint(false);
     return;
   }
@@ -607,7 +613,6 @@ export function start() {
     const next = knownView(location.hash);
     if (!next || next === state.view) return;
     state.view = next;
-    state.resultsPick = null;
     state.sheet = null;
     paint(true);
   });

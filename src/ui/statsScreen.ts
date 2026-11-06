@@ -91,7 +91,61 @@ function spark(values: number[]): string {
   return `<svg width="80" height="40" class="spk ${up ? "pos" : "neg"}" aria-hidden="true"><polyline points="${points}" fill="none" stroke="currentColor" stroke-width="2"/></svg>`;
 }
 
-function sportCards(grades: GradeMark[], open: string): string {
+export function propOpenKey(sport: string, prop: string, alt: boolean): string {
+  return `${sport}|${prop}|${alt ? "alt" : "reg"}`;
+}
+
+function weekdayLabel(iso: string): string {
+  const [year, month, date] = iso.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+const PROP_SECTIONS = ["all", "heist", "safe", "edge", "cappers", "legday"] as const;
+
+function sectionLabel(key: (typeof PROP_SECTIONS)[number]): string {
+  if (key === "all") return "All sections";
+  if (key === "legday") return "Props";
+  return key[0].toUpperCase() + key.slice(1);
+}
+
+function propSectionNav(rows: GradeMark[], active: string, propKey: string): string {
+  const keys = PROP_SECTIONS.filter((key) => key === "all" || rows.some((row) => sectionMatch(row, key)));
+  const buttons = keys
+    .map((key) => `<button type="button" class="${active === key ? "on" : ""}" data-act="prop-section" data-key="${key}" data-prop="${esc(propKey)}">${sectionLabel(key)}</button>`)
+    .join("");
+  return `<nav class="scroller sport wrap propsecs" aria-label="Section">${buttons}</nav>`;
+}
+
+function propDrawer(sport: string, prop: string, alt: boolean, rows: GradeMark[], state: AppState, playsFor: GradePlays): string {
+  const propKey = propOpenKey(sport, prop, alt);
+  const chosen = state.propSection[propKey] ?? "all";
+  const active = chosen !== "all" && rows.some((row) => sectionMatch(row, chosen)) ? chosen : "all";
+  const shown = rows.filter((row) => sectionMatch(row, active));
+  const byDate = new Map<string, GradeMark[]>();
+  for (const row of shown) {
+    const list = byDate.get(row.date) ?? [];
+    list.push(row);
+    byDate.set(row.date, list);
+  }
+  const groups = [...byDate.keys()]
+    .sort()
+    .reverse()
+    .map((date) => {
+      const list = byDate.get(date) ?? [];
+      const dayWins = list.filter((row) => row.win).length;
+      const dateKey = `${propKey}|${date}`;
+      const open = state.openResultDates.has(dateKey);
+      const items = open ? playsFor(list, dateKey) : "";
+      return `<section class="dategrp"><button type="button" class="datehead" data-act="result-date" data-key="${esc(dateKey)}" aria-expanded="${open}"><b>${esc(weekdayLabel(date))}</b><span>${dayWins}-${list.length - dayWins}</span><span class="car">${open ? "▾" : "▸"}</span></button>${items}</section>`;
+    })
+    .join("");
+  const body = groups || `<p class="empty">No graded plays for this prop in these dates.</p>`;
+  return `<div class="propdrawer" data-prop-drawer="${esc(propKey)}">${propSectionNav(rows, active, propKey)}${body}</div>`;
+}
+
+type GradePlays = (rows: GradeMark[], prefix: string) => string;
+
+function sportCards(grades: GradeMark[], state: AppState, playsFor: GradePlays): string {
   const bySport = new Map<string, GradeMark[]>();
   for (const grade of grades) {
     const list = bySport.get(grade.sport) ?? [];
@@ -110,22 +164,24 @@ function sportCards(grades: GradeMark[], open: string): string {
       for (const row of rows) byDay.set(row.date, (byDay.get(row.date) ?? 0) + row.units);
       let running = 0;
       const line = [...byDay.keys()].sort().map((date) => (running += byDay.get(date) ?? 0));
-      const expanded = open === sport;
-      const props = expanded ? propBlock(rows, sport) : "";
+      const expanded = state.statsSport === sport;
+      const props = expanded ? propBlock(rows, sport, state, playsFor) : "";
       return `<section class="card sp${expanded ? " ex" : ""}"><button type="button" class="sprow" data-act="stats-sport" data-key="${esc(sport)}" aria-expanded="${expanded}">${ringSvg(pct, "")}<span class="spn"><b>${esc(sportTitle(sport))}</b><span class="sub">${wins}-${losses} · <b class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</b></span></span>${spark(line)}<span class="car">${expanded ? "▴" : "▾"}</span></button>${props}</section>`;
     })
     .join("");
 }
 
-function propRow(sport: string, prop: string, name: string, list: GradeMark[], splits: string, note: string, alt: boolean): string {
+function propRow(sport: string, prop: string, name: string, list: GradeMark[], splits: string, note: string, alt: boolean, state: AppState, playsFor: GradePlays): string {
   if (!list.length) return "";
   const wins = list.filter((row) => row.win).length;
   const units = list.reduce((sum, row) => sum + row.units, 0);
   const pct = Math.round((wins / list.length) * 100);
-  return `<button type="button" class="pr${alt ? " altrow" : ""}" data-act="results-prop" data-sport="${esc(sport)}" data-prop="${esc(prop)}" data-alt="${alt ? "1" : "0"}" aria-label="${esc(name)}, ${wins}-${list.length - wins}"><span class="prt"><b>${esc(name)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span><span class="car">›</span></span>${splits ? `<div class="splits">${splits}</div>` : ""}${note}</button>`;
+  const open = state.openProps.has(propOpenKey(sport, prop, alt));
+  const drawer = open ? propDrawer(sport, prop, alt, list, state, playsFor) : "";
+  return `<div class="propnest${alt ? " alt" : ""}"><button type="button" class="pr" data-act="results-prop" data-sport="${esc(sport)}" data-prop="${esc(prop)}" data-alt="${alt ? "1" : "0"}" aria-expanded="${open}" aria-label="${esc(name)}, ${wins}-${list.length - wins}"><span class="prt"><b>${esc(name)}</b><span class="sub">${wins}-${list.length - wins}</span><span class="${units > 0 ? "W" : units < 0 ? "L" : ""}">${formatSigned(units, 2)}u</span><span class="pct">${pct}%</span><span class="car">${open ? "▾" : "▸"}</span></span>${splits ? `<div class="splits">${splits}</div>` : ""}${note}</button>${drawer}</div>`;
 }
 
-function propBlock(rows: GradeMark[], sport: string): string {
+function propBlock(rows: GradeMark[], sport: string, state: AppState, playsFor: GradePlays): string {
   const groups = new Map<string, GradeMark[]>();
   for (const row of rows) {
     const list = groups.get(row.prop) ?? [];
@@ -151,7 +207,7 @@ function propBlock(rows: GradeMark[], sport: string): string {
         const names = [...new Set(side.flatMap((row) => (row.capper ?? "").split(",").map((name) => name.trim()).filter(Boolean)))];
         return names.length ? `<div class="via">via ${names.map((name) => esc(name)).join(", ")}</div>` : "";
       };
-      return `${propRow(sport, prop, prop, regular, splits, viaNote(regular), false)}${propRow(sport, prop, `${prop} Alt`, alts, "", viaNote(alts), true)}`;
+      return `${propRow(sport, prop, prop, regular, splits, viaNote(regular), false, state, playsFor)}${propRow(sport, prop, `${prop} Alt`, alts, "", viaNote(alts), true, state, playsFor)}`;
     })
     .join("");
   return `<div class="props">${body}</div>`;
@@ -176,9 +232,9 @@ export function statsSections(state: AppState): string {
     .join("");
 }
 
-export function statsSports(state: AppState, board: Board, from: string | null, to: string | null): string {
+export function statsSports(state: AppState, board: Board, from: string | null, to: string | null, playsFor: GradePlays): string {
   const grades = windowGrades(board.grades, from, to).filter((grade) => sectionMatch(grade, state.statsSection));
   const span = fileBounds(board.grades, board.series, state.statsSection);
   const empty = span.first ? `No graded plays in these dates. All dates still has this file, ${prettyDay(span.first)} through ${prettyDay(span.last)}.` : "No graded plays in this file.";
-  return `<h2 class="grouph">By sport</h2><p class="sub">Tap a sport for its props. Tap a prop for the graded plays. Regular and Alt stay separate.</p>${sportCards(grades, state.statsSport) || `<p class="empty">${esc(empty)}</p>`}`;
+  return `<h2 class="grouph">By sport</h2><p class="sub">Tap a sport for its props. Tap a prop for its dates, then a date for the graded plays. Regular and Alt stay separate.</p>${sportCards(grades, state, playsFor) || `<p class="empty">${esc(empty)}</p>`}`;
 }
