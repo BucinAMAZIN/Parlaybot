@@ -112,8 +112,9 @@ button.pr{width:100%;display:block;background:transparent;border:0;color:inherit
 .propdrawer .datehead{padding:6px 0;min-height:40px}
 .propdrawer .datehead .car{margin-left:auto}
 .propdrawer .hit{min-width:0;padding:8px 0}
-.propdrawer .hit>div,.propdrawer .ticketbtn>span{min-width:0;flex:1}
-.propdrawer .hit b{overflow-wrap:anywhere}
+.propdrawer .hit>div,.propdrawer .ticketbtn>span.tk{min-width:0;flex:1}
+.propdrawer .ticketbtn>span.car,.propdrawer .ticketbtn>span.res{flex:none}
+.propdrawer .hit b{overflow-wrap:break-word}
 .propdrawer .part{padding-left:12px}
 .night{background:#161b22;border:1px solid #2d6b4a;border-radius:18px;margin:10px 0}
 .nighthead{width:100%;display:flex;flex-direction:column;align-items:stretch;gap:2px;min-height:44px;padding:12px;background:transparent;border:0;color:inherit;font:inherit;text-align:left}
@@ -121,11 +122,17 @@ button.pr{width:100%;display:block;background:transparent;border:0;color:inherit
 .nightmeta{font-weight:700}
 .nightnote{padding:0 12px 12px;margin:0}
 .hit{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid #232a34}
-.ticketbtn,.datehead{width:100%;min-height:44px;display:flex;align-items:center;gap:8px;background:transparent;border:0;color:inherit;font:inherit;text-align:left;padding:8px 0}
-.ticketbtn .res{margin-left:auto}
+.ticketbtn,.datehead{width:100%;min-height:44px;display:flex;align-items:flex-start;gap:8px;background:transparent;border:0;color:inherit;font:inherit;text-align:left;padding:8px 0}
+.ticketbtn .car{flex:none}
+.ticketbtn .tk{display:flex;flex-direction:column;min-width:0;flex:1}
+.ticketbtn .tk .sub{white-space:normal;overflow-wrap:break-word}
+.ticketbtn b{overflow-wrap:break-word}
+.ticketbtn .res{margin-left:auto;flex:none}
 .leg.ticketleg,.hit.ticketleg{flex-direction:column;align-items:stretch}
 .datehead{border-top:1px solid #232a34}
-.part{display:flex;justify-content:space-between;gap:8px;padding:8px 0 8px 28px;border-top:1px solid #232a34}
+.part{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;padding:8px 0 8px 22px;border-top:1px solid #232a34}
+.part>div{min-width:0;flex:1}
+.part b{overflow-wrap:break-word}
 .miss{padding:0 0 8px 28px}
 .prt{display:flex;gap:8px;align-items:baseline}
 .prt b:first-child{flex:1}
@@ -147,7 +154,8 @@ html.lg .ranges button{font-size:.85rem}
 .toggle button{min-height:40px;min-width:44px;display:flex;align-items:center;justify-content:center;border-radius:9px;font-weight:700;color:#cfd6df;background:transparent;border:0;padding:0 10px}
 .toggle button.on{background:#eef2f6;color:#0d1117}
 .leg{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #232a34}
-.res{font-weight:800;min-width:52px;text-align:right}
+.res{font-weight:800;min-width:52px;text-align:right;flex:none}
+.res.miss{flex:1 0 100%;min-width:0;text-align:left;white-space:normal;color:#9aa5b1;font-weight:700}
 .res.W::before{content:"✓ "}
 .res.L::before{content:"✗ "}
 .topnav{display:flex;gap:0;margin:0 -8px 16px;overflow:hidden}
@@ -185,6 +193,7 @@ html.day .confpick select{background:#fff;color:#17202b;border-color:#d5dce6}
 @media(min-width:900px){.brand .logo{height:64px}}
 html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .chip{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:2px 9px;font-size:.75rem;font-weight:700;background:#1d2430;color:#cfd6df;border:1px solid #2c3542;white-space:nowrap}
+.chip.st{white-space:normal}
 .chip.ok{color:#7ee2a8;border-color:#245a3b}
 .chip.warn{color:#ffcc66;border-color:#5a4a1d}
 .chip.bad{color:#ff9b85;border-color:#5a2a22}
@@ -199,6 +208,25 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .scroller button i{font-style:normal;font-size:.75rem;opacity:.7}
 .scroller.sport button{min-height:34px;font-size:.8125rem;padding:0 12px}
 .scroller.wrap{flex-wrap:wrap;overflow:visible}
+.sportgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:0 0 2px}
+.sportgrid button{min-height:40px;min-width:0;padding:6px 4px;border-radius:10px;border:1px solid #2c3542;background:#161b22;color:#cfd6df;font-weight:700;font-size:.8125rem;line-height:1.2;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px;text-align:center;white-space:normal}
+.sportgrid button.on{background:#76f53a;border-color:#76f53a;color:#10210a}
+.sportgrid button.dim{opacity:.72}
+.sportgrid button i{font-style:normal;font-size:.75rem;opacity:.85}
+html.lg .sportgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+html.xl .sportgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sportdiv{display:flex;align-items:center;gap:12px;margin:14px 0 12px;color:#76f53a}
+.sportdiv .wire{height:1px;flex:1;background:#3d5a32;position:relative}
+.sportdiv .wire:after{content:"";position:absolute;width:5px;height:5px;border:1px solid currentColor;background:#0d1117;top:-3px}
+.sportdiv .wire:first-child:after{right:0;transform:rotate(45deg)}
+.sportdiv .wire:last-child:after{left:0;transform:rotate(45deg)}
+.sportdiv svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6}
+html.day .sportgrid button{background:#fff;border-color:#d5dce6;color:#243140}
+html.day .sportgrid button.on{background:#76f53a;border-color:#146c2e;color:#10210a}
+html.day .sportdiv{color:#146c2e}
+html.day .sportdiv .wire{background:#b7d8c6}
+html.day .sportdiv .wire:after{background:#f3f5f8}
+@media (prefers-reduced-motion:reduce){.sportdiv,.sportdiv svg{animation:none}}
 .book{display:flex;background:#161b22;border:1px solid #2c3542;border-radius:14px;padding:4px;gap:4px;margin:0 0 12px}
 .book button{flex:1;min-height:48px;display:flex;align-items:center;justify-content:center;border-radius:11px;font-weight:800;color:#a9b4c2;background:transparent;border:0}
 .book button.on.hr{background:#f5c400;color:#111}
@@ -428,7 +456,7 @@ details.why .ours{font-size:.6875rem;background:#2a2140;color:#c9b6ff;border-rad
 .ftbl tr.you td:first-child{box-shadow:inset 3px 0 0 #76f53a,2px 0 0 #1e2631}
 .ftbl .pos{color:#76f53a}
 .ftbl .neg{color:#ff6b6b}
-.lgtabs{display:flex;gap:6px;margin:8px -4px;padding:0 4px 4px;overflow-x:auto;scrollbar-width:none;flex-wrap:nowrap}
+.lgtabs{display:flex;gap:6px;margin:8px -4px;padding:0 4px 4px;overflow:visible;flex-wrap:wrap}
 .lgtabs::-webkit-scrollbar{display:none}
 .lgtabs button{flex:none;border:1px solid #2c3644;border-radius:99px;padding:6px 12px;font-weight:700;font-size:.8125rem;color:#aeb8c4;background:transparent;min-height:36px}
 .lgtabs button.on{border-color:#76f53a;color:#76f53a;background:#14210f}

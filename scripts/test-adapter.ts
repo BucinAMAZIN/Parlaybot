@@ -11,7 +11,7 @@ import { fileBounds, historyScope, sliceHistory } from "../src/lib/history.ts";
 import { matchingPlays } from "../src/ui/statsScreen.ts";
 import { knownView, viewFromHash, type AppState } from "../src/ui/state.ts";
 import { dedupePlays, playKey } from "../src/data/dedupePlays.ts";
-import { isTicketRow, ticketParts } from "../src/data/ticketLegs.ts";
+import { isTicketRow, legResultLabel, listedLegNames, ticketId, ticketParts } from "../src/data/ticketLegs.ts";
 import { normProp, normSide, normSport, sectionMatch } from "../src/data/gradeLabels.ts";
 import { classifySport, sportLabel } from "../src/lib/sport.ts";
 import { adaptClv } from "../src/data/adaptClv.ts";
@@ -528,11 +528,64 @@ assert.equal(nested?.[0].result, "L");
 const bloodParent = { date: "2026-11-04", cat: "First Blood", pick: "First Blood 8-leg", leg: false };
 const bloodLeg = { date: "2026-11-04", cat: "First Blood", pick: "Shai Gilgeous-Alexander first point scorer", leg: true, res: "L", stat: "First point: Kenrich Williams", prop: "First Point Scorer", odds: "+475" };
 const otherNight = { date: "2026-11-03", cat: "First Blood", pick: "Someone else", leg: true, res: "W" };
-assert.equal(ticketParts(bloodParent, [bloodParent, bloodLeg, otherNight])?.length, 1);
+assert.deepEqual(ticketParts(bloodParent, [bloodParent, bloodLeg, otherNight]), []);
+const bloodId = "2026-11-04|first|NBA|1";
+assert.equal(ticketParts({ ...bloodParent, tid: bloodId }, [bloodParent, { ...bloodLeg, tid: bloodId }, otherNight])?.[0].name, bloodLeg.pick);
 const heistTicket = { date: "2026-11-04", cat: "Heist tickets", pick: "The Heist 12-leg", leg: false };
 const heistSingle = { date: "2026-11-04", cat: "The Heist", pick: "Trae Young 9+ Assists", leg: false, res: "L" };
 assert.deepEqual(ticketParts(heistTicket, [heistTicket, heistSingle]), []);
 assert.equal(ticketParts({ date: "2026-10-18", cat: "Cappers", pick: "NFL 2-leg parlay: A + B", leg: false }, [])?.length, 0);
+const nickmPick = "6-leg parlay: Columbus Blue Jackets ML vs Dallas Stars + Philadelphia Flyers ML vs New York Rangers + Detroit Red Wings ML vs Vegas Golden Knights + Anaheim Ducks ML vs Edmonton Oilers + Pittsburgh Penguins ML vs Boston Bruins + New Jersey Devils ML vs St. Louis Blues";
+const nickm = { date: "2026-11-05", cat: "Cappers", sport: "NHL", prop: "@nickm_hockey · NHL parlay", fam: "Parlay", pick: nickmPick, res: "L", leg: false, odds: "+7355", uu: -1, stat: "", tid: "", legs: [] };
+const maskedPick = "2-leg parlay: Team A ML + Team B ML";
+const masked = { date: "2026-11-04", cat: "Cappers", sport: "NFL", prop: "@legacy · NFL parlay", fam: "Parlay", pick: maskedPick, res: "L", leg: false, odds: "+250", uu: -1, stat: "L (legs …/…/…/…/L/…)" };
+const flyersMl = { date: "2026-11-05", cat: "The Heist", sport: "NHL", prop: "Moneyline", fam: "ML", pick: "Philadelphia Flyers ML", res: "L", leg: false, stat: "L (PHI 2-3 NYR)" };
+assert.equal(ticketParts(nickm, [nickm, flyersMl])?.length, 0);
+const capperA = { date: "2026-11-05", cat: "Cappers", sport: "NHL", prop: "@capper_a · NHL parlay", fam: "Parlay", pick: "2-leg parlay: Ottawa Senators ML + Buffalo Sabres ML", res: "L", leg: false };
+const capperB = { date: "2026-11-05", cat: "Cappers", sport: "NHL", prop: "@capper_b · NHL parlay", fam: "Parlay", pick: "2-leg parlay: Florida Atlantic +14.5 + Arizona ML", res: "W", leg: false };
+const strayA = { date: "2026-11-05", cat: "Cappers", sport: "NHL", pick: "Ottawa Senators ML", leg: true, res: "W", stat: "OTT 4-1" };
+const strayB = { date: "2026-11-05", cat: "Cappers", sport: "NCAAF", pick: "Florida Atlantic +14.5", leg: true, res: "L", stat: "FAU covered" };
+assert.deepEqual(ticketParts(capperA, [capperA, capperB, strayA, strayB]), []);
+assert.deepEqual(ticketParts(capperB, [capperA, capperB, strayA, strayB]), []);
+const idA = "2026-11-05|cappers|NHL|1";
+const idB = "2026-11-05|cappers|NCAAF|1";
+const linkedA = ticketParts({ ...capperA, tid: idA }, [capperA, capperB, { ...strayA, tid: idA }, { ...strayB, tid: idB }, strayA]);
+const linkedB = ticketParts({ ...capperB, tid: idB }, [capperA, capperB, { ...strayA, tid: idA }, { ...strayB, tid: idB }, strayA]);
+assert.deepEqual(linkedA?.map((part) => [part.name, part.result]), [["Ottawa Senators ML", "W"]]);
+assert.deepEqual(linkedB?.map((part) => [part.name, part.result]), [["Florida Atlantic +14.5", "L"]]);
+assert.equal(listedLegNames(nickmPick).length, 6);
+assert.equal(listedLegNames(nickmPick)[1], "Philadelphia Flyers ML vs New York Rangers");
+assert.equal(legResultLabel("").text, "Leg result unavailable");
+assert.equal(legResultLabel("…").text, "Leg result unavailable");
+assert.equal(legResultLabel("L (legs …/…/…/…/L/…)").text, "Leg result unavailable");
+assert.equal(legResultLabel("W").text, "Won");
+assert.equal(legResultLabel("L").text, "Lost");
+assert.equal(legResultLabel("V").text, "Void");
+assert.equal(legResultLabel("P").text, "Push");
+assert.equal(legResultLabel("Pending").text, "Pending");
+assert.equal(legResultLabel("Unavailable").text, "Leg result unavailable");
+assert.notEqual(legResultLabel("").text, "Pending");
+assert.notEqual(legResultLabel("Unavailable").text, "Pending");
+const gradedLegs = ticketParts(
+  { date: "2026-11-05", cat: "Parlay +100", pick: "2-leg", leg: false, tid: "2026-11-05|parlay|NHL|1" },
+  [
+    { date: "2026-11-05", cat: "Parlay +100", pick: "Columbus Blue Jackets ML", leg: true, tid: "2026-11-05|parlay|NHL|1", prop: "ML", odds: "-120", result: "W", stat: "CBJ 4-2 DAL", gm: "CBJ @ DAL" },
+    { date: "2026-11-05", cat: "Parlay +100", pick: "Philadelphia Flyers ML", leg: true, tid: "2026-11-05|parlay|NHL|1", fam: "ML", res: "L", note: "PHI 2-3 NYR", game: "PHI @ NYR" },
+    { date: "2026-11-05", cat: "Parlay +100", pick: "Detroit Red Wings ML", leg: true, tid: "2026-11-05|parlay|NHL|1", hit: "push" },
+  ],
+);
+assert.equal(gradedLegs?.length, 3);
+assert.equal(gradedLegs?.[0].result, "W");
+assert.equal(gradedLegs?.[0].score, "CBJ 4-2 DAL");
+assert.equal(gradedLegs?.[0].game, "CBJ @ DAL");
+assert.match(gradedLegs?.[0].market ?? "", /ML · -120/);
+assert.equal(gradedLegs?.[1].result, "L");
+assert.equal(gradedLegs?.[1].score, "PHI 2-3 NYR");
+assert.equal(gradedLegs?.[1].game, "PHI @ NYR");
+assert.equal(gradedLegs?.[2].result, "push");
+assert.equal(normSport("NCAAM"), "NCAAB");
+assert.equal(sportLabel("NCAAB"), "NCAA 🏀");
+assert.equal(sportLabel("NCAAF"), "NCAA 🏈");
 const counted = adaptDesk(
   {
     today: { date: "2026-11-05", tickets: [], sports: {} },
@@ -753,6 +806,146 @@ const blank = (): AppState => ({
   statsSport: "", statsAnchor: "", statsDraft: "", nightOpen: false, openProps: new Set(), propSection: {}, openResultDates: new Set(), openTickets: new Set(),
 });
 const page = renderPage(blank(), heistBoard);
+assert.match(page, /aria-label="Sport"/);
+assert.equal(page.indexOf('aria-label="Sport"') < page.indexOf('class="sportdiv"'), true);
+assert.equal(page.indexOf('class="sportdiv"') < page.indexOf('aria-label="Products"'), true);
+assert.match(page, /class="sportgrid"/);
+assert.doesNotMatch(page, /data-key="plus100"|data-key="plus250"/);
+assert.match(page, /data-key="NFL"/);
+assert.match(page, /data-key="MLB"/);
+assert.match(page, /data-key="NASCAR"/);
+assert.match(page, /data-key="NCAAB"/);
+assert.match(page, /NCAA 🏀/);
+assert.match(page, /NCAA 🏈/);
+const capperDesk = adaptDesk({ today: { date: "2026-11-06", tickets: [], sports: {} }, results_v2: { rows: [nickm, flyersMl] } }, ncaab);
+assert.equal(sportsFor(capperDesk, null).find((row) => row.sport === "NFL")?.count, 0);
+assert.equal(capperDesk.grades.find((row) => row.play === nickmPick)?.parts?.length, 0);
+assert.equal(capperDesk.grades.find((row) => row.play === nickmPick)?.odds, "+7355");
+const capperPage = renderPage({
+  ...blank(),
+  view: "results",
+  statsSport: "NHL",
+  openProps: new Set(["NHL|Parlay|reg"]),
+  openResultDates: new Set(["NHL|Parlay|reg|2026-11-05"]),
+  openTickets: new Set(["grade|NHL|Parlay|reg|2026-11-05|0"]),
+}, capperDesk);
+const ticketButton = capperPage.match(/<button[^>]*class="ticketbtn"[\s\S]*?<\/button>/);
+assert.ok(ticketButton);
+assert.match(ticketButton[0], /@nickm_hockey · 6-leg parlay/);
+assert.match(ticketButton[0], /\+7355/);
+assert.doesNotMatch(ticketButton[0], /Dallas Stars/);
+assert.equal((capperPage.match(/Leg result unavailable/g) ?? []).length, 6);
+assert.match(capperPage, /Philadelphia Flyers ML vs New York Rangers/);
+assert.doesNotMatch(capperPage, /Pending/);
+assert.doesNotMatch(capperPage, /It is not a per-leg result/);
+assert.equal((capperPage.match(/<span class="res miss">Leg result unavailable<\/span>/g) ?? []).length, 6);
+const structured = {
+  date: "2026-11-05", cat: "Parlay +100", sport: "NHL", fam: "Parlay", prop: "NHL parlay +100", pick: "2-leg", res: "L", odds: "+119", uu: -1, leg: false,
+  tid: "2026-11-05|parlay|NHL|1",
+  legs: [
+    { pick: "Columbus Blue Jackets ML", result: "W", stat: "CBJ 4-2 DAL", prop: "ML", odds: "-120" },
+    { pick: "Philadelphia Flyers ML", res: "L", note: "PHI 2-3 NYR", fam: "ML" },
+    { pick: "Detroit Red Wings ML", hit: "" },
+  ],
+};
+const structuredDesk = adaptDesk({ today: { date: "2026-11-06", tickets: [], sports: {} }, results_v2: { rows: [structured] } }, ncaab);
+assert.deepEqual(structuredDesk.grades[0]?.parts?.map((part) => part.result), ["W", "L", ""]);
+const structuredPage = renderPage({
+  ...blank(),
+  view: "results",
+  statsSport: "NHL",
+  openProps: new Set(["NHL|Parlay|reg"]),
+  openResultDates: new Set(["NHL|Parlay|reg|2026-11-05"]),
+  openTickets: new Set(["grade|NHL|Parlay|reg|2026-11-05|0"]),
+}, structuredDesk);
+assert.match(structuredPage, /class="res W">Won</);
+assert.match(structuredPage, /class="res L">Lost</);
+assert.match(structuredPage, /CBJ 4-2 DAL/);
+assert.match(structuredPage, /PHI 2-3 NYR/);
+assert.equal((structuredPage.match(/Leg result unavailable/g) ?? []).length, 1);
+const maskedDesk = adaptDesk({ today: { date: "2026-11-06", tickets: [], sports: {} }, results_v2: { rows: [masked] } }, ncaab);
+assert.equal(maskedDesk.grades[0]?.parts?.length, 0);
+assert.equal(maskedDesk.grades[0]?.stat, "L (legs …/…/…/…/L/…)");
+const maskedPage = renderPage({
+  ...blank(),
+  view: "results",
+  statsSport: "NFL",
+  openProps: new Set(["NFL|Parlay|reg"]),
+  openResultDates: new Set(["NFL|Parlay|reg|2026-11-04"]),
+  openTickets: new Set(["grade|NFL|Parlay|reg|2026-11-04|0"]),
+}, maskedDesk);
+assert.equal((maskedPage.match(/<span class="res miss">Leg result unavailable<\/span>/g) ?? []).length, 2);
+assert.match(maskedPage, /The file note is “L \(legs …\/…\/…\/…\/L\/…\)”\. It is not a per-leg result/);
+assert.equal((maskedPage.match(/class="res L">Lost/g) ?? []).length, 1);
+const pairDesk = adaptDesk({ today: { date: "2026-11-06", tickets: [], sports: {} }, results_v2: { rows: [capperA, capperB, strayA, strayB] } }, ncaab);
+assert.equal(pairDesk.grades.length, 2);
+assert.ok(pairDesk.grades.every((grade) => grade.parts?.length === 0));
+const pairPage = renderPage({
+  ...blank(),
+  view: "results",
+  statsSport: "NHL",
+  openProps: new Set(["NHL|Parlay|reg"]),
+  openResultDates: new Set(["NHL|Parlay|reg|2026-11-05"]),
+  openTickets: new Set(["grade|NHL|Parlay|reg|2026-11-05|0", "grade|NHL|Parlay|reg|2026-11-05|1"]),
+}, pairDesk);
+const pairArticles = [...pairPage.matchAll(/<article class="hit ticketleg">[\s\S]*?<\/article>/g)].map((match) => match[0]);
+const articleA = pairArticles.find((html) => html.includes("Ottawa Senators ML"));
+const articleB = pairArticles.find((html) => html.includes("Florida Atlantic"));
+assert.equal(pairArticles.length, 2);
+assert.ok(articleA && articleB);
+assert.equal((articleA.match(/Leg result unavailable/g) ?? []).length, 2);
+assert.equal((articleB.match(/Leg result unavailable/g) ?? []).length, 2);
+assert.doesNotMatch(articleA, /OTT 4-1|FAU covered|class="res W"/);
+assert.doesNotMatch(articleB, /OTT 4-1|FAU covered/);
+const previewNickm = JSON.parse(readFileSync(new URL("../fixtures/capper-legs-preview-not-live.json", import.meta.url), "utf8"));
+assert.equal(previewNickm.ticket_id, "2026-11-05|capper|@nickm_hockey|parlay|53192485");
+const previewParts = ticketParts(previewNickm, [previewNickm, capperA, strayA]);
+assert.deepEqual(previewParts?.map((part) => part.result), ["W", "L", "L", "W", "L", "W"]);
+assert.equal(previewParts?.[0].legId, "2026-11-05|capper|@nickm_hockey|parlay|53192485|L1");
+assert.equal(previewParts?.[0].market, "ML");
+assert.equal(previewParts?.[0].selection, "Columbus Blue Jackets");
+assert.equal(previewParts?.[0].line, undefined);
+assert.equal(previewParts?.[0].score, "DAL 1-2 CBJ");
+assert.equal(previewParts?.[0].game, "DAL @ CBJ");
+assert.equal(previewParts?.[0].sourceUrl, "https://www.espn.com/nhl/game/_/gameId/401892655");
+assert.equal(ticketId(previewNickm), previewNickm.ticket_id);
+assert.deepEqual(ticketParts(capperA, [previewNickm, capperA, strayA]), []);
+const lineLeg = ticketParts(
+  { date: "2026-11-05", cat: "Cappers", pick: "2-leg parlay: A + B", ticket_id: "2026-11-05|capper|@sample|parlay|abcd1234", legs: [{ pick: "Player 30+ points", market: "player prop: points", selection: "Player", line: 30, result: "Unavailable", reason: "No settlement source", source: "Action Network" }] },
+  [],
+);
+assert.equal(lineLeg?.[0].line, "30");
+assert.equal(lineLeg?.[0].reason, "No settlement source");
+assert.equal(lineLeg?.[0].source, "Action Network");
+assert.equal(legResultLabel(lineLeg?.[0].result ?? "").text, "Leg result unavailable");
+const linkedByTicketId = ticketParts(
+  { date: "2026-11-05", cat: "Cappers", pick: "2-leg parlay: A + B", ticket_id: "id-ticket" },
+  [
+    { date: "2026-11-05", cat: "Cappers", pick: "Team A ML", leg: true, ticket_id: "id-ticket", result: "W", detail: "A won" },
+    { date: "2026-11-06", cat: "Cappers", pick: "Team B ML", leg: true, ticket_id: "id-ticket", result: "L" },
+    { date: "2026-11-05", cat: "Cappers", pick: "Other ticket ML", leg: true, result: "L", detail: "not this ticket" },
+  ],
+);
+assert.deepEqual(linkedByTicketId?.map((part) => part.score), ["A won"]);
+const previewDesk = adaptDesk({ today: { date: "2026-11-06", tickets: [], sports: {} }, results_v2: { rows: [previewNickm] } }, ncaab);
+assert.equal(previewDesk.grades.length, 1);
+assert.equal(previewDesk.grades[0]?.parts?.length, 6);
+const previewPage = renderPage({
+  ...blank(),
+  view: "results",
+  statsSport: "NHL",
+  openProps: new Set(["NHL|Parlay|reg"]),
+  openResultDates: new Set(["NHL|Parlay|reg|2026-11-05"]),
+  openTickets: new Set(["grade|NHL|Parlay|reg|2026-11-05|0"]),
+}, previewDesk);
+assert.equal((previewPage.match(/class="res W">Won/g) ?? []).length, 3);
+assert.equal((previewPage.match(/class="res L">Lost/g) ?? []).length, 4);
+assert.match(previewPage, /DAL 1-2 CBJ/);
+assert.match(previewPage, /DAL @ CBJ/);
+assert.doesNotMatch(previewPage, /Leg result unavailable/);
+const nflOnly = renderPage({ ...blank(), view: "results", statsSport: "NFL" }, capperDesk);
+assert.match(nflOnly, /No graded plays for 🏈 NFL in this section/);
+assert.doesNotMatch(nflOnly, /data-key="NFL"[\s\S]{0,80}0-0/);
 assert.equal(page.indexOf('id="ticket-heist"') < page.indexOf('id="ticket-heist-alt"'), true);
 assert.match(page, /Heist Alt/);
 assert.match(page, /Whole Heist in Hard Rock \(5 of 8 verified legs\)/);
