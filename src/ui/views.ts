@@ -274,7 +274,8 @@ function productChips(board: Board, state: AppState): string {
       }),
     )
     .join("");
-  return `<nav class="scroller sport wrap" aria-label="Sport">${sportButtons}</nav><nav class="scroller wrap" aria-label="Products">${buttons}</nav>`;
+  const divider = `<div class="sportdiv" role="separator"><span class="wire"></span><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3v5M13 3h6M7 11h18v16H7zM3 16h4m18 0h4"/><path d="M11 22h10"/><circle cx="12" cy="16" r="1.5"/><circle cx="20" cy="16" r="1.5"/></svg><span class="wire"></span></div>`;
+  return `<nav class="sportgrid" aria-label="Sport">${sportButtons}</nav>${divider}<nav class="scroller wrap" aria-label="Products">${buttons}</nav>`;
 }
 
 function playOnGame(play: Play, game: LiveGame): boolean {

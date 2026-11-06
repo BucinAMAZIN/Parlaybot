@@ -804,8 +804,10 @@ const blank = (): AppState => ({
 });
 const page = renderPage(blank(), heistBoard);
 assert.match(page, /aria-label="Sport"/);
-assert.equal(page.indexOf('aria-label="Sport"') < page.indexOf('aria-label="Products"'), true);
-assert.match(page, /class="scroller sport wrap"/);
+assert.equal(page.indexOf('aria-label="Sport"') < page.indexOf('class="sportdiv"'), true);
+assert.equal(page.indexOf('class="sportdiv"') < page.indexOf('aria-label="Products"'), true);
+assert.match(page, /class="sportgrid"/);
+assert.doesNotMatch(page, /data-key="plus100"|data-key="plus250"/);
 assert.match(page, /data-key="NFL"/);
 assert.match(page, /data-key="MLB"/);
 assert.match(page, /data-key="NASCAR"/);

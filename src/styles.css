@@ -208,6 +208,25 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .scroller button i{font-style:normal;font-size:.75rem;opacity:.7}
 .scroller.sport button{min-height:34px;font-size:.8125rem;padding:0 12px}
 .scroller.wrap{flex-wrap:wrap;overflow:visible}
+.sportgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;margin:0 0 2px}
+.sportgrid button{min-height:40px;min-width:0;padding:6px 4px;border-radius:10px;border:1px solid #2c3542;background:#161b22;color:#cfd6df;font-weight:700;font-size:.8125rem;line-height:1.2;display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:4px;text-align:center;white-space:normal}
+.sportgrid button.on{background:#76f53a;border-color:#76f53a;color:#10210a}
+.sportgrid button.dim{opacity:.72}
+.sportgrid button i{font-style:normal;font-size:.75rem;opacity:.85}
+html.lg .sportgrid{grid-template-columns:repeat(3,minmax(0,1fr))}
+html.xl .sportgrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.sportdiv{display:flex;align-items:center;gap:12px;margin:14px 0 12px;color:#76f53a}
+.sportdiv .wire{height:1px;flex:1;background:#3d5a32;position:relative}
+.sportdiv .wire:after{content:"";position:absolute;width:5px;height:5px;border:1px solid currentColor;background:#0d1117;top:-3px}
+.sportdiv .wire:first-child:after{right:0;transform:rotate(45deg)}
+.sportdiv .wire:last-child:after{left:0;transform:rotate(45deg)}
+.sportdiv svg{width:22px;height:22px;flex:none;fill:none;stroke:currentColor;stroke-width:1.6}
+html.day .sportgrid button{background:#fff;border-color:#d5dce6;color:#243140}
+html.day .sportgrid button.on{background:#76f53a;border-color:#146c2e;color:#10210a}
+html.day .sportdiv{color:#146c2e}
+html.day .sportdiv .wire{background:#b7d8c6}
+html.day .sportdiv .wire:after{background:#f3f5f8}
+@media (prefers-reduced-motion:reduce){.sportdiv,.sportdiv svg{animation:none}}
 .book{display:flex;background:#161b22;border:1px solid #2c3542;border-radius:14px;padding:4px;gap:4px;margin:0 0 12px}
 .book button{flex:1;min-height:48px;display:flex;align-items:center;justify-content:center;border-radius:11px;font-weight:800;color:#a9b4c2;background:transparent;border:0}
 .book button.on.hr{background:#f5c400;color:#111}
