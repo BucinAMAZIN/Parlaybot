@@ -22,6 +22,7 @@ import {
 } from "./bits.ts";
 import { liveLegKey, liveWindowET, slateLabel, trackPlayOnBoard } from "../data/espn.ts";
 import { displayCat, sectionMatch } from "../data/gradeLabels.ts";
+import { legResultLabel, listedLegNames } from "../data/ticketLegs.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type FootballMotion, type GameCast } from "../data/gamecast.ts";
 import { courtHardware, footballField, nhlRink } from "./court.ts";
 import { noteVisible } from "../lib/cardFilter.ts";
@@ -106,14 +107,23 @@ function countPlays(board: Board, product: string | null, sport: SportFilter): n
   return seen.size;
 }
 
-export function sportsFor(board: Board, product: string | null): { sport: string; count: number }[] {
+function listedSport(sport: string): sport is SportFilter {
+  return (SPORT_ORDER as readonly string[]).includes(sport) || sport === "Other";
+}
+
+export function sportsFor(board: Board, product: string | null): { sport: SportFilter; count: number }[] {
   const present = new Set<string>();
   for (const ticket of board.tickets) {
     if (ticket.board && ticket.board !== "ALL") present.add(ticket.board);
     else if (!ticket.board) for (const play of ticket.plays) if (play.sport && play.sport !== "Other") present.add(play.sport);
   }
   for (const note of board.notices) if (note.sport && note.sport !== "Other") present.add(note.sport);
-  return SPORT_ORDER.filter((sport) => present.has(sport)).map((sport) => ({ sport, count: countPlays(board, product, sport) }));
+  const ordered: SportFilter[] = [...SPORT_ORDER];
+  for (const sport of present) {
+    if (!listedSport(sport) || ordered.includes(sport)) continue;
+    ordered.push(sport);
+  }
+  return ordered.map((sport) => ({ sport, count: countPlays(board, product, sport) }));
 }
 
 export function visibleTickets(board: Board, state: AppState): Ticket[] {
@@ -264,7 +274,7 @@ function productChips(board: Board, state: AppState): string {
       }),
     )
     .join("");
-  return `<nav class="scroller sport" aria-label="Sport">${sportButtons}</nav><nav class="scroller" aria-label="Products">${buttons}</nav>`;
+  return `<nav class="scroller sport wrap" aria-label="Sport">${sportButtons}</nav><nav class="scroller wrap" aria-label="Products">${buttons}</nav>`;
 }
 
 function playOnGame(play: Play, game: LiveGame): boolean {
@@ -414,7 +424,7 @@ function gamesPanel(games: LiveGame[], state: AppState): string {
       return `${head}${rows.map((game) => renderGame(game, state, false)).join("")}`;
     })
     .join("");
-  return `<nav class="scroller sport gamesports" aria-label="Today's games by sport">${chips}</nav>${body}`;
+  return `<nav class="scroller sport gamesports wrap" aria-label="Today's games by sport">${chips}</nav>${body}`;
 }
 
 function renderLiveLeg(leg: LiveLeg): string {
@@ -749,14 +759,6 @@ function live(state: AppState, board: Board): string {
   return `<h1 style="font-size:1.75rem">Live</h1><div class="sub">Your legs in games now${updated}</div>${liveNightBar(state, board)}${lock}${moodBlock}<section class="game"><div class="sub"><b>Tickets</b></div>${bars || `<p class="empty">No data yet</p>`}</section>${games || `<p class="empty">No data yet</p>`}<div class="sub" style="margin:4px 0">${esc(shown.liveNote)}</div><button type="button" class="linkrow" data-act="standings" data-from="live">Standings · NBA · NHL · NFL ›</button>`;
 }
 
-function resultWord(value: string): string {
-  if (value === "W") return "Won";
-  if (value === "L") return "Lost";
-  if (value === "V") return "Void";
-  if (value === "P") return "Push";
-  return value;
-}
-
 function recordedTeam(board: Board, date: string, name: string): string {
   const player = name.toLowerCase();
   const found = board.fbLegs.find((leg) => leg.date === date && player.includes(leg.player.toLowerCase()));
@@ -765,15 +767,29 @@ function recordedTeam(board: Board, date: string, name: string): string {
 }
 
 function partBlock(parts: TicketPart[] | undefined, board: Board, date: string): string {
-  if (!parts?.length) return `<p class="sub miss">Leg details aren't available for this ticket.</p>`;
+  if (!parts?.length) return "";
   return parts
     .map((part) => {
       const where = [part.market, part.game || recordedTeam(board, date, part.name)].filter(Boolean).join(" · ");
       const score = part.score ? `<div class="sub">${esc(part.score)}</div>` : "";
-      const badge = part.result ? `<span class="res ${esc(part.result)}">${esc(resultWord(part.result))}</span>` : "";
-      return `<div class="part"><div><b>${esc(part.name)}</b>${where ? `<div class="sub">${esc(where)}</div>` : ""}${score}</div>${badge}</div>`;
+      const label = legResultLabel(part.result);
+      return `<div class="part"><div><b>${esc(part.name)}</b>${where ? `<div class="sub">${esc(where)}</div>` : ""}${score}</div><span class="res ${label.tone}">${esc(label.text)}</span></div>`;
     })
     .join("");
+}
+
+function namedLegBlock(names: string[]): string {
+  return names
+    .map((name) => `<div class="part"><div><b>${esc(name)}</b></div><span class="res miss">Leg result unavailable</span></div>`)
+    .join("");
+}
+
+function ticketLegsHtml(play: string, parts: TicketPart[] | undefined, board: Board, date: string, stat: string | undefined): string {
+  if (parts?.length) return partBlock(parts, board, date);
+  const names = listedLegNames(play);
+  if (!names.length) return `<p class="sub miss">Leg details aren't available for this ticket.</p>`;
+  const note = stat ? `<p class="sub">The file note is “${esc(stat)}”. It is not a per-leg result.</p>` : "";
+  return `${namedLegBlock(names)}${note}`;
 }
 
 function weekday(iso: string): string {
@@ -814,7 +830,9 @@ function nightBlock(state: AppState, board: Board): string {
               }
               const key = `${ticket.id}|${index}`;
               const open = state.openTickets.has(key);
-              return `<div class="leg ticketleg"><button type="button" class="ticketbtn" data-act="ticket-legs" data-key="${esc(key)}" aria-expanded="${open}"><span class="car">${open ? "▾" : "▸"}</span><span><b>${esc(leg.name)}</b><div class="sub">${esc(leg.stat)}</div></span>${outcome}</button>${open ? partBlock(leg.parts, board, leg.date || "") : ""}<div>${extra}</div>${via}${clv}${close}</div>`;
+              const count = leg.parts?.length || listedLegNames(leg.name).length;
+              const title = count ? `${count}-leg parlay` : leg.name;
+              return `<div class="leg ticketleg"><button type="button" class="ticketbtn" data-act="ticket-legs" data-key="${esc(key)}" aria-expanded="${open}"><span class="car">${open ? "▾" : "▸"}</span><span class="tk"><b>${esc(title)}</b><span class="sub">${esc(leg.stat)}</span></span>${outcome}</button>${open ? ticketLegsHtml(leg.name, leg.parts, board, leg.date || "", undefined) : ""}<div>${extra}</div>${via}${clv}${close}</div>`;
             })
             .join("");
           return `<section class="ticket"><header><div><h3>${esc(ticket.title)}</h3><div class="sub">${esc(ticket.meta)}</div></div><span style="display:flex;align-items:center;gap:6px">${mascot(ticket.mood, 40)}<span class="res ${ticket.result}">${ticket.result === "W" ? "Won" : ticket.result === "L" ? "Lost" : "Void"}</span></span></header>${legs}<div class="tfoot"><button type="button" class="btn share" data-act="share" data-id="${esc(ticket.id)}" data-settled="1">Share as image</button></div></section>`;
@@ -832,13 +850,19 @@ function nightBlock(state: AppState, board: Board): string {
 function gradeHits(state: AppState, board: Board, rows: GradeMark[], prefix: string): string {
   return rows
     .map((row, index) => {
-      const units = `${formatSigned(row.units, 2)}u`;
-      const body = `<b>${esc(row.play || row.detail || row.prop)}</b><div class="sub">${esc(weekday(row.date))} · ${esc(displayCat(row.cat))} · ${esc(units)}</div>${row.capper ? `<div class="via">via ${esc(row.capper)}</div>` : ""}`;
+      const units = row.unitsKnown === false ? "" : ` · ${formatSigned(row.units, 2)}u`;
+      const odds = row.odds ? ` · ${esc(row.odds)}` : "";
       const outcome = `<span class="res ${row.win ? "W" : "L"}">${row.win ? "Won" : "Lost"}</span>`;
-      if (!row.ticket) return `<article class="hit">${outcome}<div>${body}</div></article>`;
+      if (!row.ticket) {
+        const body = `<b>${esc(row.play || row.detail || row.prop)}</b><div class="sub">${esc(weekday(row.date))} · ${esc(displayCat(row.cat))}${esc(units)}</div>${row.capper ? `<div class="via">via ${esc(row.capper)}</div>` : ""}`;
+        return `<article class="hit">${outcome}<div>${body}</div></article>`;
+      }
       const ticketKey = `grade|${prefix}|${index}`;
       const ticketOpen = state.openTickets.has(ticketKey);
-      return `<article class="hit ticketleg"><button type="button" class="ticketbtn" data-act="ticket-legs" data-key="${esc(ticketKey)}" aria-expanded="${ticketOpen}"><span class="car">${ticketOpen ? "▾" : "▸"}</span><span>${body}</span>${outcome}</button>${ticketOpen ? partBlock(row.parts, board, row.date) : ""}</article>`;
+      const count = row.parts?.length || listedLegNames(row.play || "").length;
+      const title = count ? `${row.capper ? `${row.capper} · ` : ""}${count}-leg parlay` : row.play || row.prop;
+      const body = `<span class="tk"><b>${esc(title)}</b><span class="sub">${esc(weekday(row.date))} · ${esc(displayCat(row.cat))}${odds}${esc(units)}</span></span>`;
+      return `<article class="hit ticketleg"><button type="button" class="ticketbtn" data-act="ticket-legs" data-key="${esc(ticketKey)}" aria-expanded="${ticketOpen}"><span class="car">${ticketOpen ? "▾" : "▸"}</span>${body}${outcome}</button>${ticketOpen ? ticketLegsHtml(row.play || "", row.parts, board, row.date, row.stat) : ""}</article>`;
     })
     .join("");
 }

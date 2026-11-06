@@ -5,6 +5,9 @@ export function normSport(raw: string): string {
   if (sport.includes("NCAAM") || sport === "NCAAB") return "NCAAB";
   if (sport.includes("NCAA F") || sport === "NCAAF") return "NCAAF";
   if (sport === "BIG 4") return "Big 4";
+  if (sport === "MLB") return "MLB";
+  if (sport === "NFL") return "NFL";
+  if (sport === "NASCAR") return "NASCAR";
   return raw.trim() || "Other";
 }
 
@@ -13,7 +16,7 @@ export function sportTitle(sport: string): string {
   if (sport === "NBA") return "🏀 NBA";
   if (sport === "NFL") return "🏈 NFL";
   if (sport === "NCAAF") return "NCAA 🏈";
-  if (sport === "NCAAB") return "NCAA 🏀";
+  if (sport === "NCAAB" || sport === "NCAAM") return "NCAA 🏀";
   if (sport === "MLB") return "⚾ MLB";
   if (sport === "NASCAR") return "🏁 NASCAR";
   return sport;

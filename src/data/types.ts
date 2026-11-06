@@ -272,6 +272,12 @@ export type GradeMark = {
   ticket?: boolean;
   /** Recorded constituent legs. Empty when this is a ticket and the file has none. */
   parts?: TicketPart[];
+  /** Posted American odds, only when the result row has them. */
+  odds?: string;
+  /** Desk stat text. A masked leg list is not a per-leg grade. */
+  stat?: string;
+  /** False when the row has no units field. */
+  unitsKnown?: boolean;
 };
 
 export type CapperGroup = "heist" | "an";

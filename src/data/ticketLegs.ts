@@ -44,3 +44,22 @@ export function ticketParts(parent: Row, rows: Row[]): TicketPart[] | null {
     : rows.filter((row) => row.leg === true && !text(row.tid) && text(row.date) === date && text(row.cat) === text(parent.cat));
   return kids.map(partFrom);
 }
+
+/** Names written in a ticket pick such as "6-leg parlay: A + B". Not a grade. */
+export function listedLegNames(pick: string): string[] {
+  const match = pick.trim().match(/^\d+\s*-?\s*leg\b[^:]*:\s*(.+)$/i);
+  if (!match) return [];
+  const names = match[1].split(/\s+\+\s+/).map((name) => name.trim()).filter(Boolean);
+  return names.length >= 2 ? names : [];
+}
+
+/** A sourced leg grade. Anything else, including a blank or an ellipsis, is not Pending. */
+export function legResultLabel(result: string): { text: string; tone: "" | "W" | "L" | "V" | "P" } {
+  const raw = result.trim();
+  if (/^(w|won)$/i.test(raw)) return { text: "Won", tone: "W" };
+  if (/^(l|lost)$/i.test(raw)) return { text: "Lost", tone: "L" };
+  if (/^(v|void)$/i.test(raw)) return { text: "Void", tone: "V" };
+  if (/^(p|push)$/i.test(raw)) return { text: "Push", tone: "P" };
+  if (/^pending$/i.test(raw)) return { text: "Pending", tone: "" };
+  return { text: "Leg result unavailable", tone: "" };
+}

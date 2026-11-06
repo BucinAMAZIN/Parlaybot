@@ -2,6 +2,7 @@ import type { Board } from "../data/board.ts";
 import { sectionMatch, sportRank, sportTitle } from "../data/gradeLabels.ts";
 import type { GradeMark } from "../data/types.ts";
 import { fileBounds, prettyDay, windowGrades } from "../lib/history.ts";
+import { SPORT_ORDER } from "../lib/sport.ts";
 import { esc, formatSigned } from "../lib/format.ts";
 import { ringSvg } from "./bits.ts";
 import type { AppState } from "./state.ts";
@@ -152,7 +153,9 @@ function sportCards(grades: GradeMark[], state: AppState, playsFor: GradePlays):
     list.push(grade);
     bySport.set(grade.sport, list);
   }
-  const sports = [...bySport.keys()].filter((sport) => (bySport.get(sport) ?? []).length).sort((a, b) => sportRank(a) - sportRank(b));
+  const sports = [...bySport.keys()]
+    .filter((sport) => (bySport.get(sport) ?? []).length)
+    .sort((a, b) => (state.statsSport === a ? -1 : state.statsSport === b ? 1 : sportRank(a) - sportRank(b)));
   return sports
     .map((sport) => {
       const rows = bySport.get(sport) ?? [];
@@ -232,9 +235,38 @@ export function statsSections(state: AppState): string {
     .join("");
 }
 
+function sportNav(fileGrades: GradeMark[], shown: GradeMark[], state: AppState): string {
+  const inFile = new Set(fileGrades.map((grade) => grade.sport));
+  const inWindow = new Map<string, number>();
+  for (const grade of shown) inWindow.set(grade.sport, (inWindow.get(grade.sport) ?? 0) + 1);
+  const ordered: string[] = [...SPORT_ORDER];
+  for (const sport of [...inFile].sort((a, b) => sportRank(a) - sportRank(b))) {
+    if (!ordered.includes(sport)) ordered.push(sport);
+  }
+  const buttons = ordered
+    .map((sport) => {
+      const count = inWindow.get(sport) ?? 0;
+      const on = state.statsSport === sport ? "on" : "";
+      const dim = count === 0 ? " dim" : "";
+      return `<button type="button" class="${on}${dim}" data-act="stats-sport" data-key="${esc(sport)}">${esc(sportTitle(sport))}<i>${count}</i></button>`;
+    })
+    .join("");
+  return `<nav class="scroller sport wrap" aria-label="Sport">${buttons}</nav>`;
+}
+
+function missingSport(sport: string, fileGrades: GradeMark[]): string {
+  const title = sportTitle(sport);
+  const any = fileGrades.some((grade) => grade.sport === sport);
+  const text = any ? `No graded plays for ${title} in these dates.` : `No graded plays for ${title} in this section.`;
+  return `<p class="empty">${esc(text)}</p>`;
+}
+
 export function statsSports(state: AppState, board: Board, from: string | null, to: string | null, playsFor: GradePlays): string {
+  const fileGrades = board.grades.filter((grade) => sectionMatch(grade, state.statsSection));
   const grades = windowGrades(board.grades, from, to).filter((grade) => sectionMatch(grade, state.statsSection));
   const span = fileBounds(board.grades, board.series, state.statsSection);
   const empty = span.first ? `No graded plays in these dates. All dates still has this file, ${prettyDay(span.first)} through ${prettyDay(span.last)}.` : "No graded plays in this file.";
-  return `<h2 class="grouph">By sport</h2><p class="sub">Tap a sport for its props. Tap a prop for its dates, then a date for the graded plays. Regular and Alt stay separate.</p>${sportCards(grades, state, playsFor) || `<p class="empty">${esc(empty)}</p>`}`;
+  const gap = state.statsSport && !grades.some((grade) => grade.sport === state.statsSport) ? missingSport(state.statsSport, fileGrades) : "";
+  const cards = sportCards(grades, state, playsFor);
+  return `<h2 class="grouph">By sport</h2><p class="sub">Every sport stays listed. A dim sport has no graded plays in these dates. Tap a sport for its props. Tap a prop for its dates, then a date for the graded plays. Regular and Alt stay separate.</p>${sportNav(fileGrades, grades, state)}${gap}${cards || `<p class="empty">${esc(empty)}</p>`}`;
 }
