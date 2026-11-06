@@ -63,12 +63,15 @@ const NAV: [ViewId, string][] = [
 const PRODUCTS: [string, string][] = [
   ["heist", "Heist"],
   ["heist-alt", "Heist Alt"],
+  ["plus100", "+100"],
+  ["plus250", "+250"],
   ["safe", "Safe +100"],
   ["potd", "POTD"],
   ["parlay", "Parlay +100"],
   ["edge", "Edge"],
   ["legday", "Props"],
   ["first", "First Blood"],
+  ["lotto", "Lotto Ticket"],
   ["nascar", "NASCAR"],
   ["props", "Prop Scout"],
   ["cappers", "Cappers"],
@@ -240,6 +243,7 @@ function singlesCard(ticket: Ticket): boolean {
 function ticketFoot(ticket: Ticket, state: AppState, on: number, off: number, openLegs: number): string {
   if (singlesCard(ticket)) return "";
   const book = ticket.productKey === "first" ? "hr" : state.book;
+  if (ticket.emptyNote && !on && !off) return `<p class="sub">${esc(ticket.emptyNote)}</p>`;
   if (ticket.dkSlipNote && book === "dk") return `<p class="sub">${esc(ticket.dkSlipNote)}</p>`;
   if (ticket.slipLabel && book === "hr") {
     const note = ticket.slipNote ? `<p class="sub">${esc(ticket.slipNote)}</p>` : "";
@@ -251,12 +255,21 @@ function ticketFoot(ticket: Ticket, state: AppState, on: number, off: number, op
   return `<span class="na">No open legs</span>`;
 }
 
+/** First Blood is an NBA ticket. Lotto Ticket is an NFL ticket. */
+function productSport(key: string): "NBA" | "NFL" | null {
+  if (key === "first") return "NBA";
+  if (key === "lotto") return "NFL";
+  return null;
+}
+
 function productChips(board: Board, state: AppState): string {
   const buttons = PRODUCTS.map(([key, label]) => {
+    const home = productSport(key);
+    if (home && state.sport !== "All" && state.sport !== "Big 4" && state.sport !== home) return "";
     const total = countPlays(board, key, "All");
-    const any = board.tickets.some((ticket) => ticket.productKey === key && ticket.plays.length);
+    const any = board.tickets.some((ticket) => ticket.productKey === key && (ticket.plays.length > 0 || !!ticket.emptyNote));
     const filtered = countPlays(board, key, state.sport);
-    const noted = board.notices.some((note) => note.section === key);
+    const noted = board.notices.some((note) => note.section === key && (!note.sport || state.sport === "All" || state.sport === "Big 4" || note.sport === state.sport));
     if (!total && !any && !noted) return "";
     const on = state.product === key ? "on" : "";
     const dim = filtered === 0 ? " dim" : "";
@@ -334,6 +347,20 @@ function chartWindow(board: Board, range: RangeKey, customFrom = "", customTo = 
   return { points: windowed.points, headline, note, rings: windowRings(grades, section), ringsNote, from: windowed.from, to: windowed.to, starts: windowed.starts };
 }
 
+function propLedgerBlock(board: Board): string {
+  if (!board.propLedgers.length) return "";
+  const cards = board.propLedgers
+    .map((row) => {
+      const pushes = row.p ? `-${row.p}` : "";
+      const pct = row.pct == null ? "—" : `${row.pct}%`;
+      const sports = row.sports.map((sport) => `<div class="rrow"><span>${esc(sport.name)}</span><b>${esc(sport.line)}</b></div>`).join("");
+      const tone = row.key === "safe100" ? "retired" : "recordwait";
+      return `<section class="ticket ${tone}"><header><div><h3>${esc(row.title)}</h3><p class="stamp">${esc(row.detail)}</p><div class="sub">${row.w}-${row.l}${pushes} · ${esc(pct)}</div></div></header>${sports}</section>`;
+    })
+    .join("");
+  return `<h2 class="grouph">Prop ticket records</h2><p class="sub">Safe +100 stays retired on its own record. +100 and +250 are separate from each other and from Official Parlay +100.</p>${cards}`;
+}
+
 export function renderPage(state: AppState, board: Board): string {
   if (state.view === "today") return shell("today", today(state, board), board);
   if (state.view === "live") return shell("live", live(state, board), board);
@@ -352,7 +379,7 @@ function today(state: AppState, board: Board): string {
   const tickets = visibleTickets(board, state);
   const visiblePlays = tickets.flatMap((ticket) => ticket.plays);
   const gameList = board.liveGames.filter((game) => visiblePlays.some((play) => playOnGame(play, game)));
-  const sections = ["heist", "heist-alt", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
+  const sections = ["heist", "heist-alt", "plus100", "plus250", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
   const blocks = sections
     .map((section) => {
       if (state.product && state.product !== section) return "";
@@ -362,7 +389,7 @@ function today(state: AppState, board: Board): string {
         ? `<p class="stamprow"><b>THE HEIST</b> <span class="stamp">${esc(board.heistStamp)}</span></p>`
         : "";
       if (!mine.length && !notes.length && !stamp) return "";
-      const bareTitle: Record<string, string> = { first: "First Blood", lotto: "Lotto", cappers: "Cappers", props: "Prop Scout" };
+      const bareTitle: Record<string, string> = { first: "First Blood", lotto: "Lotto Ticket", cappers: "Cappers", props: "Prop Scout" };
       const label = mine.length ? "" : (bareTitle[section] ?? "");
       const head = label ? `<h2 class="grouph">${label}</h2>` : "";
       const noteHtml = notes.map((note) => `<p class="sub">${esc(note.text)}</p>`).join("");
@@ -657,7 +684,7 @@ function tagTone(tag: string): string {
   if (tag.startsWith("Props")) return "props";
   if (tag.startsWith("Heist")) return "heist";
   if (tag === "First Blood") return "blood";
-  if (tag === "Lotto") return "lotto";
+  if (tag === "Lotto" || tag === "Lotto Ticket") return "lotto";
   return "cap";
 }
 
@@ -883,6 +910,7 @@ ${statsCalendar(state, board, windowed.from, windowed.to)}
 <nav class="scroller sport wrap" aria-label="Section">${statsSections(state)}</nav>
 <div class="card"><h2>Profit</h2><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
 ${four ? `<div class="card"><div class="rings">${four}</div></div>` : ""}
+${propLedgerBlock(board)}
 ${statsSports(state, board, windowed.from, windowed.to, (rows, prefix) => gradeHits(state, board, rows, prefix))}
 ${clvCard(board, windowed.from, windowed.to, state.statsSection)}`;
 }

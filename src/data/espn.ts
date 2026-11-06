@@ -497,7 +497,7 @@ export function tagRank(tag: string): number {
   if (tag === "Heist ALT") return 7;
   if (tag === "Heist") return 6;
   if (tag === "First Blood") return 8;
-  if (tag === "Lotto") return 9;
+  if (tag === "Lotto" || tag === "Lotto Ticket") return 9;
   return 10;
 }
 

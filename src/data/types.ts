@@ -134,6 +134,8 @@ export type Ticket = {
   dkSlipNote?: string;
   /** Verified Hard Rock deep link for the whole ticket. */
   hrSlip?: string;
+  /** Shown instead of a slip button when the file has no legs, such as a ticket that has not been built. */
+  emptyNote?: string;
   warnings?: string[];
   skips?: { capper: string; pick: string; reason: string }[];
   excluded?: { capper: string; pick: string; reason: string }[];
@@ -282,6 +284,8 @@ export type GradeMark = {
   play?: string;
   /** True when this graded row is a parlay or ticket. It is not an extra result. */
   ticket?: boolean;
+  /** results_v2 ticket_key, such as alt100 or alt250. Legacy Safe rows leave this empty. */
+  ticketKey?: string;
   /** Recorded constituent legs. Empty when this is a ticket and the file has none. */
   parts?: TicketPart[];
   /** Posted American odds, only when the result row has them. */

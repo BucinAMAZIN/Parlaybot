@@ -58,7 +58,7 @@ export type AppState = {
   statsTo: string;
   statsCalOpen: boolean;
   statsMode: "day" | "week" | "range";
-  statsSection: "all" | "heist" | "safe" | "edge" | "cappers" | "legday";
+  statsSection: "all" | "heist" | "safe" | "plus100" | "plus250" | "edge" | "cappers" | "legday";
   statsSport: string;
   statsAnchor: string;
   statsDraft: string;

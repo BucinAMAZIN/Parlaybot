@@ -23,6 +23,7 @@ import { dedupePlays } from "./dedupePlays.ts";
 import { isTicketRow, ticketParts } from "./ticketLegs.ts";
 import { capperOf, displayCat, normProp, normSide, normSport } from "./gradeLabels.ts";
 import { buildHeist } from "./heist.ts";
+import { propLedgersFrom, propRetirementFrom, propTicketsFrom } from "./propTickets.ts";
 import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
 export const DESK_URL = "https://bucinamazin.github.io/desk-dashboard/parlay/data.json";
@@ -489,6 +490,7 @@ function gradesFrom(rows: Row[]): GradeMark[] {
       detail: famMissing && label !== "First Blood" ? pick : undefined,
       play: pick || prop || "Play",
       ticket: isTicketRow(row),
+      ticketKey: str(row.ticket_key) || undefined,
       parts: isTicketRow(row) ? ticketParts(row, rows) ?? [] : undefined,
     });
   }
@@ -619,36 +621,10 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   tickets.push(...heistCards.tickets);
   if (heistCards.notice) notices.push(heistCards.notice);
 
-  const safe = isRow(data.safe100) ? data.safe100 : {};
-  const safeSeen = new Set<string>();
-  const safeBoards = new Map<string, Play[]>();
-  const addSafe = (boardKey: string, rows: Row[], prefix: string) => {
-    const plays = withTags(takePlays(rows, prefix, statuses, safeSeen), boardKey === "ALL" || boardKey === "ALL_AND_BIG4" ? "+100 ALT" : `+100 ALT · ${boardKey}`);
-    if (!plays.length) return;
-    const list = safeBoards.get(boardKey) ?? [];
-    list.push(...plays);
-    safeBoards.set(boardKey, list);
-  };
-  addSafe("ALL", rowsOf(safe.legs ?? safe.plays), "safe");
-  const safeSports = isRow(safe.sports) ? safe.sports : {};
-  for (const [key, value] of Object.entries(safeSports)) {
-    const boardKey = /^today$/i.test(key) ? "ALL_AND_BIG4" : preparedKey(key);
-    const row = isRow(value) ? value : {};
-    const rows = Array.isArray(value) ? rowsOf(value) : rowsOf(row.legs ?? row.plays ?? (str(row.pick) ? [row] : []));
-    addSafe(boardKey, rows.filter((item) => item.pulled !== true && !/\bpulled\b/i.test(str(item.status))), `safe-${boardKey}`);
-  }
-  addSafe("ALL", rowsOf(safe.extra).filter((item) => item.pulled !== true), "safe-extra");
-  for (const [boardKey, plays] of safeBoards) {
-    const card = ticket(`safe-${boardKey}`, "safe", boardKey === "ALL" || boardKey === "ALL_AND_BIG4" ? "Safe +100" : `Safe +100 · ${boardKey}`, "Desk", plays, "main", undefined, builtLabel(safe), boardKey === "ALL" ? undefined : boardKey);
-    if (card) tickets.push(card);
-  }
-  if (isRow(safe.notes)) {
-    for (const [key, text] of Object.entries(safe.notes)) {
-      const boardKey = /^today$/i.test(key) ? "ALL_AND_BIG4" : preparedKey(key);
-      if (safeBoards.has(boardKey) || !str(text)) continue;
-      notices.push({ text: str(text), section: "parlay", sport: null });
-    }
-  }
+  const retirement = propRetirementFrom(data);
+  const propCards = propTicketsFrom(data, iso, (row, id, hint) => playFrom(row, id, statuses, hint));
+  tickets.push(...propCards.tickets);
+  notices.push(...propCards.notices);
 
   const sports = isRow(today.sports) ? today.sports : {};
   for (const item of rowsOf(today.tickets)) {
@@ -681,9 +657,9 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     if (/potd/i.test(name)) continue;
     if (/safe/i.test(name)) {
       const plays = takePlays(legsOrSelf(item), "safe-ticket", statuses, new Set());
-      const card = ticket("safe", "safe", name, str(item.desc) || "Desk", plays, "main", oddsOf(item.odds) ?? undefined, builtLabel(item) ?? builtLabel(safe));
+      const card = ticket("safe", "safe", name, str(item.desc) || "Desk", plays, "main", oddsOf(item.odds) ?? undefined, builtLabel(item));
       if (card) tickets.push(card);
-      else if (str(item.pick) && !(/builds at the 10 AM|not at 7 AM/i.test(str(item.pick)) && rowsOf(today.tickets).some((ticket) => /\+100|parlay/i.test(str(ticket.name)) && !/safe/i.test(str(ticket.name)) && rowsOf(ticket.legs).length))) notices.push({ text: `${name}: ${str(item.pick)}`, section: "parlay", sport: null });
+      else if (!retirement && str(item.pick) && !(/builds at the 10 AM|not at 7 AM/i.test(str(item.pick)) && rowsOf(today.tickets).some((ticket) => /\+100|parlay/i.test(str(ticket.name)) && !/safe/i.test(str(ticket.name)) && rowsOf(ticket.legs).length))) notices.push({ text: `${name}: ${str(item.pick)}`, section: "parlay", sport: null });
       continue;
     }
     const rawPlays = takePlays(legsOrSelf(item), `t-${norm(name).replace(/ /g, "-")}`, statuses, new Set());
@@ -754,11 +730,14 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   const firstTicket = firstBloodTicket(isRow(data.first_blood) ? data.first_blood : null, iso, statuses);
   if (firstTicket) tickets.push(firstTicket);
   const td = isRow(data.td_city) ? data.td_city : {};
-  if (str(td.date) === iso && rowsOf(td.legs).length) {
-    const plays = withTags(takePlays(rowsOf(td.legs), "lotto", statuses, new Set()), "Lotto");
-    const card = ticket("lotto", "lotto", str(td.title) || "Lotto Ticket", str(td.label) || "Desk", plays, "fun");
+  const tdLegs = rowsOf(td.legs);
+  const tdSport = classifySport(str(td.sport) || str(td.title));
+  const tdCurrent = tdLegs.length > 0 && (!iso || str(td.date) >= iso || tdLegs.some((leg) => str(leg.game_date) >= iso || str(leg.date) >= iso));
+  if (tdCurrent && tdSport === "NFL") {
+    const plays = withTags(takePlays(tdLegs, "lotto", statuses, new Set(), "NFL"), "Lotto Ticket");
+    const card = ticket("lotto", "lotto", str(td.title) || "Lotto Ticket", str(td.label) || "Lotto Ticket", plays, "fun");
     if (card) tickets.push(card);
-  } else if (!rowsOf(td.legs).length && str(td.rolled_off || td.msg)) notices.push({ text: str(td.rolled_off || td.msg), section: "lotto", sport: null });
+  } else if (!tdLegs.length && str(td.rolled_off || td.msg)) notices.push({ text: str(td.rolled_off || td.msg), section: "lotto", sport: "NFL" });
   const altRaw = Array.isArray(data.alt_lines) ? data.alt_lines : isRow(data.alt_lines) ? data.alt_lines.rows ?? data.alt_lines.board ?? [] : [];
   const altToday = rowsOf(altRaw).filter((row) => !str(row.date) || str(row.date) === iso);
   if (altToday.length) {
@@ -815,6 +794,8 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     fbNote: str(isRow(data.fb_legs) ? data.fb_legs.note : ""),
     fbLegs: fbLegRows(data.fb_legs),
     nightLive: null,
+    propLedgers: propLedgersFrom(data, retirement),
+    propRetirement: retirement,
   };
 }
 

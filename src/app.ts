@@ -43,8 +43,12 @@ loadPrefs(state);
 
 let toastTimer = 0;
 
+function locatePlay(id: string): Play | undefined {
+  return findPlay(board, id);
+}
+
 function pickedPlays(): Play[] {
-  return [...state.selected].map((id) => findPlay(board, id)).filter((play): play is Play => !!play);
+  return [...state.selected].map((id) => locatePlay(id)).filter((play): play is Play => !!play);
 }
 
 function bookFor(plays: Play[]): "hr" | "dk" {
@@ -110,7 +114,7 @@ function toLink(play: Play): LinkPlay {
 function openScope(scope: string, id: string, forced?: "hr" | "dk") {
   let plays: Play[] = [];
   if (scope === "leg") {
-    const play = findPlay(board, id);
+    const play = locatePlay(id);
     if (play) plays = [play];
   } else if (scope === "ticket") {
     plays = (board.tickets.find((ticket) => ticket.id === id)?.plays ?? []).filter((play) => play.slip !== false);
@@ -203,7 +207,7 @@ function onClick(event: Event) {
   if (act === "book") {
     state.book = action.dataset.book === "dk" ? "dk" : "hr";
     for (const id of [...state.selected]) {
-      const play = findPlay(board, id);
+      const play = locatePlay(id);
       if (!play || !canOpen(play, state.book)) state.selected.delete(id);
     }
     savePrefs(state);
@@ -361,7 +365,7 @@ function onClick(event: Event) {
   }
   if (act === "stats-section") {
     const key = action.dataset.key;
-    if (key === "all" || key === "heist" || key === "safe" || key === "edge" || key === "cappers" || key === "legday") state.statsSection = key;
+    if (key === "all" || key === "heist" || key === "safe" || key === "plus100" || key === "plus250" || key === "edge" || key === "cappers" || key === "legday") state.statsSection = key;
     paint(false);
     return;
   }
@@ -390,7 +394,7 @@ function onClick(event: Event) {
     const propKey = action.dataset.prop || "";
     const key = action.dataset.key;
     if (!propKey) return;
-    if (key === "all" || key === "heist" || key === "safe" || key === "edge" || key === "cappers" || key === "legday") {
+    if (key === "all" || key === "heist" || key === "safe" || key === "plus100" || key === "plus250" || key === "edge" || key === "cappers" || key === "legday") {
       state.propSection[propKey] = key;
       paint(false);
     }
@@ -774,7 +778,7 @@ async function refreshDesk() {
     }
     board = next;
     for (const id of [...state.selected]) {
-      if (!findPlay(board, id)) state.selected.delete(id);
+      if (!locatePlay(id)) state.selected.delete(id);
     }
     paint(false);
   } catch {
