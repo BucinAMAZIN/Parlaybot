@@ -546,6 +546,12 @@ assert.equal(counted.results.find((ticket) => ticket.title.includes("Safe"))?.le
 
 assert.equal(showsPreparedBoard("ALL", "All"), true);
 assert.equal(showsPreparedBoard("ALL", "NHL"), false);
+assert.equal(showsPreparedBoard("ALL", "Big 4"), false);
+assert.equal(showsPreparedBoard("BIG4", "Big 4"), true);
+assert.equal(showsPreparedBoard("BIG4", "All"), false);
+assert.equal(showsPreparedBoard("ALL_AND_BIG4", "All"), true);
+assert.equal(showsPreparedBoard("ALL_AND_BIG4", "Big 4"), true);
+assert.equal(showsPreparedBoard("ALL_AND_BIG4", "NHL"), false);
 assert.equal(showsPreparedBoard("NHL", "NHL"), true);
 assert.equal(showsPreparedBoard("NHL", "All"), false);
 assert.equal(showsPreparedBoard(undefined, "NHL"), true);
@@ -577,12 +583,13 @@ const prepared = adaptDesk(
   ncaab,
 );
 const potdBoards = prepared.tickets.filter((item) => item.productKey === "potd");
-assert.deepEqual(potdBoards.map((item) => item.board), ["ALL", "NHL", "NBA", "ALL"]);
+assert.deepEqual(potdBoards.map((item) => item.board), ["BIG4", "NHL", "NBA", "ALL"]);
 assert.deepEqual(potdBoards.find((item) => item.board === "NHL")?.plays.map((play) => play.name), ["Sport Player Over 0.5 Points"]);
 assert.equal(potdBoards.filter((item) => item.board === "ALL").flatMap((item) => item.plays).some((play) => play.name.includes("All Board")), true);
-assert.equal(potdBoards.filter((item) => item.board === "ALL").flatMap((item) => item.plays).some((play) => play.name.includes("Official")), true);
+assert.equal(potdBoards.filter((item) => item.board === "ALL").flatMap((item) => item.plays).some((play) => play.name.includes("Official")), false);
+assert.equal(potdBoards.find((item) => item.board === "BIG4")?.plays.some((play) => play.name.includes("Official")), true);
 const nhlParlay = prepared.tickets.find((item) => item.id === "parlay-NHL");
-const allParlay = prepared.tickets.find((item) => item.board === "ALL" && item.productKey === "parlay");
+const allParlay = prepared.tickets.find((item) => item.board === "ALL_AND_BIG4" && item.productKey === "parlay");
 assert.deepEqual(nhlParlay?.plays.map((play) => play.name), ["Leg A Over 0.5 Points", "Leg B Over 0.5 Assists"]);
 assert.equal(allParlay?.plays.some((play) => play.name.includes("Overall")), true);
 assert.equal(nhlParlay?.plays.some((play) => play.name.includes("Overall")), false);
@@ -805,6 +812,52 @@ assert.equal(sportsFor(slate, "cappers").find((row) => row.sport === "NFL")?.cou
 const slatePage = renderPage(blank(), slate);
 assert.match(slatePage, /NCAA 🏀<i>1<\/i>/);
 assert.match(slatePage, /NFL<i>3<\/i>/);
+assert.match(slatePage, /Big 4<i>3<\/i>/);
+const pots = adaptDesk(
+  {
+    today: {
+      date: "2026-11-06",
+      tickets: [
+        { name: "POTD", pick: "Brandin Podziemski Over 16.5 Points", sport: "NBA", odds: "-110" },
+        { name: "+100 ticket", odds: "+100", legs: [{ pick: "Shared Leg Over 0.5 Points", sport: "NHL", odds: "-120" }] },
+      ],
+      sports: {
+        ALL: { potd: { pick: "Ryan O'Reilly Over 0.5 Points", sport: "NHL", odds: "-130" } },
+        NBA: { potd: { pick: "Brandin Podziemski Over 16.5 Points", sport: "NBA", odds: "-110" } },
+        NFL: { potd: { pick: "Zay Flowers Over 48.5 Receiving Yards", sport: "NFL", odds: "-115" } },
+        NHL: { potd: { pick: "Brock Boeser Over 0.5 Points", sport: "NHL", odds: "-125" } },
+      },
+    },
+    edge: {
+      picks: [
+        { pick: "College Over 1.5 Points", sport: "NCAA F" },
+        { pick: "Skater Over 0.5 Points", sport: "NHL" },
+        { pick: "Guard Over 1.5 Points", sport: "NBA" },
+      ],
+    },
+    results_v2: { rows: [] },
+  },
+  ncaab,
+);
+const potdOn = (sport: "All" | "Big 4" | "NBA" | "NFL" | "NHL") => visibleTickets(pots, { ...blank(), product: "potd", sport }).flatMap((ticket) => ticket.plays.map((play) => play.name));
+assert.deepEqual(potdOn("All"), ["Ryan O'Reilly Over 0.5 Points"]);
+assert.deepEqual(potdOn("Big 4"), ["Brandin Podziemski Over 16.5 Points"]);
+assert.deepEqual(potdOn("NBA"), ["Brandin Podziemski Over 16.5 Points"]);
+assert.deepEqual(potdOn("NFL"), ["Zay Flowers Over 48.5 Receiving Yards"]);
+assert.deepEqual(potdOn("NHL"), ["Brock Boeser Over 0.5 Points"]);
+const potdPage = renderPage({ ...blank(), product: "potd", sport: "All" }, pots);
+assert.match(potdPage, /All sports/);
+assert.match(potdPage, /Big 4<i>1<\/i>/);
+assert.match(potdPage, /POTD<i>1<\/i>/);
+const edgeAll = visibleTickets(pots, { ...blank(), product: "edge", sport: "All" }).flatMap((ticket) => ticket.plays);
+const edgeBig = visibleTickets(pots, { ...blank(), product: "edge", sport: "Big 4" }).flatMap((ticket) => ticket.plays);
+assert.equal(edgeAll.length, 3);
+assert.equal(edgeBig.length, 2);
+assert.equal(edgeBig.some((play) => play.sport === "NCAAF"), false);
+const shared = pots.tickets.find((ticket) => ticket.productKey === "parlay");
+assert.equal(shared?.board, "ALL_AND_BIG4");
+assert.equal(visibleTickets(pots, { ...blank(), product: "parlay", sport: "All" }).length, 1);
+assert.equal(visibleTickets(pots, { ...blank(), product: "parlay", sport: "Big 4" }).length, 1);
 
 const butlerCap = { date: "2026-11-04", sport: "NCAAB", cat: "Cappers", pick: "Butler Bulldogs -23.5 (vs FDU; early CBB play)", prop: "@showtimepicks2 · NCAAB spread", stat: "W (FDU 65-99 BTLR)", res: "W", uu: 0.91, leg: false, alt: false };
 const butlerHeist = { date: "2026-11-04", sport: "NCAAB", cat: "The Heist", pick: "Butler Bulldogs -23.5", prop: "@showtimepicks2 · Spread", stat: "FDU 65-99 BTLR", res: "W", uu: 0.5, leg: false, alt: false };

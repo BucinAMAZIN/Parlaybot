@@ -25,3 +25,6 @@ export function sportLabel(sport: string): string {
 }
 
 export const SPORT_ORDER = ["NHL", "NBA", "NFL", "NCAAF", "NCAAB", "MLB", "WNBA", "NASCAR", "Tennis"] as const;
+
+/** MLB, NHL, NBA, and NFL. College and the other sports stay on All. */
+export const BIG4_SPORTS = new Set(["MLB", "NHL", "NBA", "NFL"]);

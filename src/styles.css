@@ -289,6 +289,7 @@ details.why .ours{font-size:.6875rem;background:#2a2140;color:#c9b6ff;border-rad
 .fgl{display:flex;flex-wrap:wrap;gap:4px 12px;justify-content:space-between;font-size:.75rem;color:#9aa5b1;margin:4px 0 6px}
 .pbp{display:flex;gap:8px;padding:7px 0;border-top:1px solid #1e2631;font-size:.8125rem}
 .pbp .lg{flex:none;width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:.625rem;font-weight:800;color:#fff;object-fit:contain;background:transparent}
+.pbp .lg.neutral{background:#1d2430;border:1px solid #2c3542;color:#8b97a8;font-size:.9rem}
 .pbp .pm{flex:1;min-width:0;overflow-wrap:anywhere}
 .pbp .ps{flex:none;text-align:right;color:#c9d3df;font-variant-numeric:tabular-nums}
 .casthead{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:10px 8px;border-radius:14px;margin:0 0 8px;max-width:100%;min-width:0;overflow:hidden;background:linear-gradient(90deg, color-mix(in srgb, var(--wash-a) 42%, transparent), transparent 46%, transparent 54%, color-mix(in srgb, var(--wash-h) 42%, transparent))}
@@ -315,7 +316,7 @@ details.why .ours{font-size:.6875rem;background:#2a2140;color:#c9b6ff;border-rad
 .first-line{stroke:#ffd84d;stroke-width:.8}
 .redzone{fill:#ff4d4d40}
 .ball{fill:#d3542a;stroke:#fff;stroke-width:.3}
-.rink-ice{fill:#d5e6f6;stroke:#9eb4c9}
+.rink-ice{fill:#e8f1fa;stroke:#4a607a}
 .base{fill:none;stroke:#c9d3df;stroke-width:1.2}
 .base.on{fill:#f4f7fb}
 .legendline{display:flex;flex-wrap:wrap;gap:6px 12px;margin:6px 0 8px;color:#a9b4c2;font-size:.85rem}
@@ -433,7 +434,8 @@ html.day .court-line{stroke:#1d4e34}
 html.day .court-paint{fill:#1d4e34;opacity:.1}
 html.day .court-note{fill:#1d4e34}
 html.day .shot-ring{stroke:#17202b}
-html.day .rink-ice{fill:#f3f7fb}
+html.day .rink-ice{fill:#f3f8fd;stroke:#4a607a}
+html.day .pbp .lg.neutral{background:#eef2f6;border-color:#d5dde6;color:#5c6b7c}
 html.day .legendline,html.day .pbp .ps{color:inherit}
 html.day .chip.ok{color:#0f5c28;border-color:#8fbfa2}
 html.day .chip.warn,

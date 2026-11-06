@@ -42,6 +42,8 @@ export type RinkMark = {
   abbr: string;
   home: boolean;
   sog: boolean;
+  /** A scoring shot. Drawn larger than a save. */
+  goal: boolean;
   cx: number;
   cy: number;
   periodKey: string;
@@ -157,26 +159,62 @@ export function isFreeThrow(typeText: string, playText: string): boolean {
   return /free\s*throw|freethrow/i.test(`${typeText} ${playText}`);
 }
 
+/** Hockey row title. ESPN marks every hockey play shootingPlay, so made/missed is not used here. */
+export function hockeyPlayTitle(typeText: string, playText: string, made: boolean): string {
+  const blob = `${typeText} ${playText}`.toLowerCase();
+  const key = typeText.toLowerCase().replace(/[\s_]+/g, "-");
+  if (key === "goal" || /^goal$/i.test(typeText.trim()) || made) return "Goal";
+  if (key === "shot-blocked" || key === "blocked" || /shot blocked by|\bblocked shot\b/.test(blob)) return "Blocked Shot";
+  if (key === "shot-missed" || key === "missed" || /\bmissed shot\b/.test(blob)) return "Missed Shot";
+  if (key === "shot-on-goal" || key === "shot") return "Shot on Goal";
+  if (key === "faceoff" || /face ?off/.test(blob)) return "Faceoff";
+  if (key === "penalty" || /\bpenalty\b/.test(blob)) return "Penalty";
+  if (key === "stoppage" || /\bstoppage\b/.test(blob)) return "Stoppage";
+  if (key === "period-start") return "Period Start";
+  if (key === "period-end" || key === "end-of-period") return "End of Period";
+  if (key === "hit" || /^hit$/i.test(typeText.trim())) return "Hit";
+  if (key === "giveaway") return "Giveaway";
+  if (key === "takeaway") return "Takeaway";
+  const human = humanizeType(typeText) || derivePlayTitle(playText);
+  return human && !/^play$/i.test(human) ? human : "Update";
+}
+
 /**
- * Row title. Shooting plays that are not free throws gain made / missed.
- * The word Play is never returned.
+ * Row title. Basketball shooting plays that are not free throws gain made / missed.
+ * Hockey, football, and baseball keep the play type. The word Play is never returned.
  */
-export function gcHum(typeText: string, playText: string, shooting: boolean, made: boolean, freeThrow: boolean): string {
+export function gcHum(typeText: string, playText: string, shooting: boolean, made: boolean, freeThrow: boolean, kind: GameCast["kind"] = "basketball"): string {
+  if (kind === "hockey") return hockeyPlayTitle(typeText, playText, made);
   const raw = typeText.trim();
   let base = !raw || /^play$/i.test(raw) ? derivePlayTitle(playText) : humanizeType(raw) || derivePlayTitle(playText);
   if (!base || /^play$/i.test(base)) base = derivePlayTitle(playText);
   if (/^play$/i.test(base)) base = "Update";
-  if (shooting && !freeThrow) return `${base} ${made ? "made" : "missed"}`;
+  if (kind === "basketball" && shooting && !freeThrow) return `${base} ${made ? "made" : "missed"}`;
   return base;
 }
 
-export function calloutOf(clock: string, play: { type: string; text: string; abbr: string; shooting: boolean; made: boolean; freeThrow: boolean } | null): string {
+export function calloutOf(clock: string, play: { type: string; text: string; abbr: string; shooting: boolean; made: boolean; freeThrow: boolean } | null, kind: GameCast["kind"] = "basketball"): string {
   if (/halftime/i.test(clock)) return "HALFTIME";
   if (!play) return "LIVE";
-  if (/timeout/i.test(play.type) || /timeout/i.test(play.text)) return "TIMEOUT";
-  if (play.shooting && !play.freeThrow && /\bthree\b|3-point/i.test(play.text) && play.made && play.abbr) return `${play.abbr} THREE`;
-  if (play.shooting && !play.freeThrow && !play.made) return "MISSED SHOT";
-  const title = gcHum(play.type, play.text, false, false, true);
+  if (kind === "hockey") {
+    const title = hockeyPlayTitle(play.type, play.text, play.made);
+    if (title === "Goal") return play.abbr ? `${play.abbr} GOAL` : "GOAL";
+    if (title === "Shot on Goal") return "SHOT SAVED";
+    if (title === "Missed Shot") return "MISSED SHOT";
+    if (title === "Blocked Shot") return "BLOCKED SHOT";
+    if (title === "Faceoff") return "FACEOFF";
+    if (title === "Penalty") return "PENALTY";
+    if (title === "Stoppage") return "STOPPAGE";
+    if (title === "Period Start") return "PERIOD START";
+    if (title === "End of Period") return "END OF PERIOD";
+    return title.toUpperCase();
+  }
+  if (kind === "basketball") {
+    if (/timeout/i.test(play.type) || /timeout/i.test(play.text)) return "TIMEOUT";
+    if (play.shooting && !play.freeThrow && /\bthree\b|3-point/i.test(play.text) && play.made && play.abbr) return `${play.abbr} THREE`;
+    if (play.shooting && !play.freeThrow && !play.made) return "MISSED SHOT";
+  }
+  const title = gcHum(play.type, play.text, false, false, true, kind);
   return title && !/^play$/i.test(title) ? title.toUpperCase() : "LIVE";
 }
 
@@ -231,6 +269,25 @@ export function readableColor(color: string, alt: string): string {
     return value;
   };
   return tune(primary) || tune(secondary) || "#8fb4ff";
+}
+
+function colorDistance(left: string, right: string): number {
+  const a = Number.parseInt(left.replace("#", ""), 16);
+  const b = Number.parseInt(right.replace("#", ""), 16);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 999;
+  const channel = (shift: number) => Math.abs(((a >> shift) & 255) - ((b >> shift) & 255));
+  return channel(16) + channel(8) + channel(0);
+}
+
+/** Away and home marks stay different colors on pale ice. */
+function splitIceColors(awayColor: string, awayAlt: string, homeColor: string, homeAlt: string): [string, string] {
+  const away = readableColor(awayColor, awayAlt);
+  let home = readableColor(homeColor, homeAlt);
+  if (colorDistance(away, home) >= 90) return [away, home];
+  const alt = readableColor(homeAlt, "#1d5bbf");
+  if (colorDistance(away, alt) >= 90) return [away, alt];
+  home = colorDistance(away, "#f5c400") >= 90 ? "#f5c400" : "#1d5bbf";
+  return [away, home];
 }
 
 function courtKind(league: string): GameCast["court"] {
@@ -304,7 +361,9 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
       abbr: str(team.abbreviation),
       name: str(team.shortDisplayName) || str(team.displayName) || str(team.abbreviation),
       score: str(row.score),
-      color: readableColor(str(team.color), str(team.alternateColor)),
+      rawColor: str(team.color),
+      rawAlt: str(team.alternateColor),
+      color: "",
       logo: logoOf(team),
       home: str(row.homeAway) === "home",
     };
@@ -312,6 +371,9 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
   const away = sides.find((side) => !side.home);
   const home = sides.find((side) => side.home);
   if (!away || !home) return null;
+  const [awayColor, homeColor] = splitIceColors(away.rawColor, away.rawAlt, home.rawColor, home.rawAlt);
+  away.color = awayColor;
+  home.color = homeColor;
   const byId = new Map(sides.map((side) => [side.id, side]));
   const kind = kindOf(league);
   const court = kind === "basketball" ? courtKind(league) : null;
@@ -345,6 +407,7 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
     if (key) used.add(key);
     const clockText = str(isRow(row.clock) ? row.clock.displayValue : row.clock);
     const when = [clockText, periodLabel(periodNumber, periodText)].filter(Boolean).join(" - ");
+    const typeAbbr = str(typeRow.abbreviation);
     const freeThrow = isFreeThrow(typeText, text);
     const shooting = row.shootingPlay === true;
     const made = row.scoringPlay === true;
@@ -355,19 +418,30 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
       const point = courtPoint(x, y, side.home);
       if (point) shots.push({ abbr, home: side.home, made, cx: point.cx, cy: point.cy, periodKey: key, color: side.color });
     }
-    if (kind === "hockey" && x != null && y != null && x >= -100 && x <= 100 && y >= -42.5 && y <= 42.5 && side) {
-      const blob = `${typeText} ${text}`.toLowerCase();
-      const blocked = /block/.test(blob);
-      const missed = /miss/.test(blob);
-      const sog = !blocked && !missed && /shot|goal/.test(blob);
-      if (/shot|goal|miss|block/.test(blob)) rink.push({ abbr, home: side.home, sog, cx: x, cy: y, periodKey: key, color: side.color });
+    const hockeyType = typeAbbr || typeText;
+    const blockedShot = kind === "hockey" && (typeAbbr.toLowerCase() === "shot-blocked" || /shot blocked by/i.test(text));
+    const markSide = blockedShot && side ? (side.home ? away : home) : side;
+    if (kind === "hockey" && x != null && y != null && x >= -100 && x <= 100 && y >= -42.5 && y <= 42.5 && markSide) {
+      const shot = hockeyPlayTitle(hockeyType, `${typeText} ${text}`, made);
+      if (shot === "Goal" || shot === "Shot on Goal" || shot === "Missed Shot" || shot === "Blocked Shot") {
+        rink.push({
+          abbr: markSide.abbr,
+          home: markSide.home,
+          sog: shot === "Goal" || shot === "Shot on Goal",
+          goal: shot === "Goal",
+          cx: x,
+          cy: y,
+          periodKey: key,
+          color: markSide.color,
+        });
+      }
     }
     const play: CastPlay = {
       id: str(row.id),
       abbr,
       logo: side?.logo || "",
-      color: side?.color || "#8fb4ff",
-      title: gcHum(typeText, text, shooting, made, freeThrow),
+      color: side?.color || "",
+      title: gcHum(kind === "hockey" ? hockeyType : typeText, text, shooting, made, freeThrow, kind),
       text,
       when,
       periodKey: key,
@@ -376,14 +450,14 @@ export function parseCast(summary: unknown, league: string): GameCast | null {
       win: "",
     };
     plays.push(play);
-    lastMeta = { type: typeText, text, abbr, shooting, made, freeThrow };
+    lastMeta = { type: kind === "hockey" ? hockeyType : typeText, text, abbr: markSide?.abbr || abbr, shooting, made, freeThrow };
   }
   const newest = plays.at(-1);
   if (newest && state === "in") {
     const pct = (newest.id ? wpByPlay.get(newest.id) : undefined) ?? wpFallback;
     if (pct != null) newest.win = winLine(pct, away.abbr, home.abbr);
   }
-  const callout = state === "pre" ? "" : calloutOf(clock, lastMeta);
+  const callout = state === "pre" ? "" : calloutOf(clock, lastMeta, kind);
   return {
     away: { id: away.id, abbr: away.abbr, name: away.name, score: away.score, color: away.color, logo: away.logo, home: false },
     home: { id: home.id, abbr: home.abbr, name: home.name, score: home.score, color: home.color, logo: home.logo, home: true },

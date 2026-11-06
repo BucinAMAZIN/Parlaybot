@@ -247,11 +247,18 @@ export function preparedKey(key: string): string {
   return sportOf(key);
 }
 
-/** A prepared board is shown on All only when it is the all-sports source, and on a sport only when the keys match. */
+/** A prepared board is shown on All or Big 4 only for its own source, and on a sport only when the keys match. */
 export function showsPreparedBoard(board: string | undefined, sport: string): boolean {
   if (!board) return true;
-  if (sport === "All") return board === "ALL";
+  if (sport === "All") return board === "ALL" || board === "ALL_AND_BIG4";
+  if (sport === "Big 4") return board === "BIG4" || board === "ALL_AND_BIG4";
   return board === sport;
+}
+
+function parlayReady(row: Row | null): boolean {
+  if (!row) return false;
+  if (rowsOf(row.legs).length) return true;
+  return Boolean(str(row.pick));
 }
 
 function rowsOf(value: unknown): Row[] {
@@ -572,7 +579,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     if (!/potd/i.test(str(item.name))) continue;
     const name = str(item.name) || "POTD";
     const plays = takePlays(legsOrSelf(item), `potd-ticket-${norm(name).replace(/ /g, "-")}`, statuses, new Set());
-    const card = ticket(`potd-ticket-${norm(name).replace(/ /g, "-")}`, "potd", name, ["All sports · Best picks", str(item.desc) || str(item.pick)].filter(Boolean).join(" · "), plays, "official", oddsOf(item.odds) ?? undefined, builtLabel(item), "ALL");
+    const card = ticket(`potd-ticket-${norm(name).replace(/ /g, "-")}`, "potd", "POTD · Big 4", ["Big 4 · MLB · NHL · NBA · NFL", str(item.desc) || str(item.pick)].filter(Boolean).join(" · "), plays, "official", oddsOf(item.odds) ?? undefined, builtLabel(item), "BIG4");
     if (card) tickets.push(card);
   }
   for (const [key, value] of Object.entries(sports)) {
@@ -580,7 +587,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     const board = preparedKey(key);
     if (board === "ALL") {
       const plays = takePlays(legsOrSelf(value.potd), "potd-all", statuses, new Set());
-      const card = ticket("potd-all", "potd", "POTD · All sports", ["Best picks", str(value.potd.desc) || str(value.potd.pick)].filter(Boolean).join(" · "), plays, "official", oddsOf(value.potd.odds) ?? undefined, builtLabel(value.potd), "ALL");
+      const card = ticket("potd-all", "potd", "POTD · All sports", ["All sports · Best pick", str(value.potd.desc) || str(value.potd.pick)].filter(Boolean).join(" · "), plays, "official", oddsOf(value.potd.odds) ?? undefined, builtLabel(value.potd), "ALL");
       if (card) tickets.push(card);
       continue;
     }
@@ -590,6 +597,9 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     if (card) tickets.push(card);
   }
 
+  const allSports = isRow(sports.ALL) ? sports.ALL : {};
+  const allParlay = isRow(allSports.parlay) ? allSports.parlay : null;
+  const sharedParlay = !parlayReady(allParlay);
   for (const item of rowsOf(today.tickets)) {
     const name = str(item.name);
     if (/potd/i.test(name)) continue;
@@ -601,7 +611,12 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
       continue;
     }
     const plays = takePlays(legsOrSelf(item), `t-${norm(name).replace(/ /g, "-")}`, statuses, new Set());
-    const card = ticket(`parlay-${norm(name).replace(/ /g, "-")}`, "parlay", name, ["All sports · Best picks", str(item.desc) || str(item.pick)].filter(Boolean).join(" · "), plays, "official", oddsOf(item.odds) ?? undefined, builtLabel(item), "ALL");
+    const board = sharedParlay ? "ALL_AND_BIG4" : "BIG4";
+    const title = sharedParlay ? "Parlay +100" : "Parlay +100 · Big 4";
+    const meta = sharedParlay
+      ? ["All sports · Big 4", str(item.desc) || str(item.pick)].filter(Boolean).join(" · ")
+      : ["Big 4 · MLB · NHL · NBA · NFL", str(item.desc) || str(item.pick)].filter(Boolean).join(" · ");
+    const card = ticket(`parlay-${norm(name).replace(/ /g, "-")}`, "parlay", title, meta, plays, "official", oddsOf(item.odds) ?? undefined, builtLabel(item), board);
     if (card) tickets.push(card);
   }
   for (const [sport, value] of Object.entries(sports)) {

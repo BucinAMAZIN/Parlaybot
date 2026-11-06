@@ -11,9 +11,9 @@ import {
   winLine,
 } from "../src/data/gamecast.ts";
 import { gradeTeamBet, sortLiveGames, teamBet } from "../src/data/liveCard.ts";
-import { courtHardware, threePointPath } from "../src/ui/court.ts";
+import { courtHardware, nhlRink, threePointPath } from "../src/ui/court.ts";
 import { buildNumber, newerBuild } from "../src/lib/buildWatch.ts";
-import { absorbLiveLeg, cleanLiveTitle, findLiveLeg, liveLegKey } from "../src/data/espn.ts";
+import { absorbLiveLeg, cleanLiveTitle, findLiveLeg, liveLegKey, overallRecord, standingLabel } from "../src/data/espn.ts";
 import type { LiveGame, LiveLeg, WhyBlock } from "../src/data/types.ts";
 
 const away = courtPoint(16, 24, false);
@@ -206,5 +206,83 @@ assert.equal(liveLegKey("Trae Young 9+ Assists", "NBA"), "prop:trae young:assist
 assert.notEqual(liveLegKey("Trae Young 9+ Assists", "NBA"), liveLegKey("Trae Young Over 9.5 Assists", "NBA"));
 assert.equal(liveLegKey("Rashod Bateman 5+ Rec Yards", "NFL"), "prop:rashod bateman:receivingYards:over:4.5");
 assert.notEqual(liveLegKey("Rashod Bateman 5+ Rec Yards", "NFL"), liveLegKey("Rashod Bateman Over 13.5 Rec Yards", "NFL"));
+
+assert.equal(gcHum("Face Off", "William Karlsson faceoff won against Emmitt Finnie", true, false, false, "hockey"), "Faceoff");
+assert.equal(gcHum("Stoppage", "Goalie Stopped", true, false, false, "hockey"), "Stoppage");
+assert.equal(gcHum("Period Start", "Start of 1st Period", true, false, false, "hockey"), "Period Start");
+assert.equal(gcHum("shot-on-goal", "Moritz Seider Snap Shot saved by Carter Hart", true, false, false, "hockey"), "Shot on Goal");
+assert.equal(gcHum("shot-missed", "Jack Eichel missed the net", true, false, false, "hockey"), "Missed Shot");
+assert.equal(gcHum("shot-blocked", "Alex DeBrincat shot blocked by Ivan Barbashev", true, false, false, "hockey"), "Blocked Shot");
+assert.equal(gcHum("goal", "Jack Eichel goal", true, true, false, "hockey"), "Goal");
+assert.equal(gcHum("Rush", "Player rushes for 4 yards", true, false, false, "football"), "Rush");
+assert.equal(gcHum("Hit", "Player hit", true, false, false, "hockey"), "Hit");
+assert.equal(/missed/i.test(gcHum("Face Off", "faceoff won", true, false, false, "hockey")), false);
+assert.equal(calloutOf("19:24 - 1st", { type: "faceoff", text: "faceoff won", abbr: "VGK", shooting: true, made: false, freeThrow: false }, "hockey"), "FACEOFF");
+assert.equal(calloutOf("19:24 - 1st", { type: "shot-on-goal", text: "Snap Shot saved", abbr: "DET", shooting: true, made: false, freeThrow: false }, "hockey"), "SHOT SAVED");
+assert.equal(calloutOf("19:24 - 1st", { type: "goal", text: "goal", abbr: "VGK", shooting: true, made: true, freeThrow: false }, "hockey"), "VGK GOAL");
+assert.equal(calloutOf("", { type: "stoppage", text: "Goalie Stopped", abbr: "", shooting: true, made: false, freeThrow: false }, "hockey"), "STOPPAGE");
+
+const nhl = parseCast(
+  {
+    header: {
+      competitions: [
+        {
+          status: { type: { state: "in", shortDetail: "19:24 - 1st" } },
+          competitors: [
+            { homeAway: "away", score: "0", team: { id: "1", abbreviation: "VGK", color: "b4975a", alternateColor: "333f42", logos: [{ href: "https://a.espncdn.com/vgk.png" }] } },
+            { homeAway: "home", score: "0", team: { id: "2", abbreviation: "DET", color: "ce1126", alternateColor: "ffffff" } },
+          ],
+        },
+      ],
+    },
+    plays: [
+      { text: "Start of 1st Period", type: { text: "Period Start", abbreviation: "period-start" }, shootingPlay: true, period: { number: 1, displayValue: "1st" }, clock: { displayValue: "0:00" } },
+      { text: "William Karlsson faceoff won against Emmitt Finnie", type: { text: "Face Off", abbreviation: "faceoff" }, shootingPlay: true, team: { id: "1" }, period: { number: 1 }, clock: { displayValue: "0:36" } },
+      { text: "Goalie Stopped", type: { text: "Stoppage", abbreviation: "stoppage" }, shootingPlay: true, period: { number: 1 }, clock: { displayValue: "0:36" } },
+      { text: "Moritz Seider Snap Shot saved by Carter Hart", type: { text: "Shot", abbreviation: "shot-on-goal" }, shootingPlay: true, team: { id: "2" }, coordinate: { x: 50, y: 10 }, period: { number: 1 }, clock: { displayValue: "0:34" } },
+      { text: "Alex DeBrincat shot blocked by Ivan Barbashev", type: { text: "Blocked Shot", abbreviation: "shot-blocked" }, shootingPlay: true, team: { id: "1" }, coordinate: { x: -40, y: 5 }, period: { number: 1 }, clock: { displayValue: "0:20" } },
+      { text: "Jack Eichel missed the net", type: { text: "Missed Shot", abbreviation: "shot-missed" }, shootingPlay: true, team: { id: "1" }, coordinate: { x: 70, y: -10 }, period: { number: 1 }, clock: { displayValue: "0:10" } },
+      { text: "Jack Eichel goal", type: { text: "Goal", abbreviation: "goal" }, shootingPlay: true, scoringPlay: true, team: { id: "1" }, coordinate: { x: 80, y: 2 }, period: { number: 1 }, clock: { displayValue: "0:05" } },
+    ],
+  },
+  "NHL",
+);
+assert.ok(nhl);
+assert.equal(nhl?.callout, "VGK GOAL");
+assert.equal(nhl?.plays.some((play) => /missed/i.test(play.title) && play.title !== "Missed Shot"), false);
+assert.deepEqual(
+  nhl?.plays.map((play) => play.title),
+  ["Goal", "Missed Shot", "Blocked Shot", "Shot on Goal", "Stoppage", "Faceoff", "Period Start"],
+);
+assert.equal(nhl?.plays.find((play) => play.title === "Period Start")?.abbr, "");
+assert.equal(nhl?.rink.find((mark) => mark.cx === -40)?.abbr, "DET");
+assert.equal(nhl?.rink.find((mark) => mark.cx === 50)?.sog, true);
+assert.equal(nhl?.rink.find((mark) => mark.cx === 50)?.goal, false);
+assert.equal(nhl?.rink.find((mark) => mark.goal)?.abbr, "VGK");
+const rink = nhlRink("https://a.espncdn.com/det.png", "rink-vgk");
+assert.match(rink, /viewBox|-100/);
+assert.match(rink, /stroke="#c8102e" stroke-width="1.05"/);
+assert.match(rink, /x1="-25"/);
+assert.match(rink, /x1="25"/);
+assert.match(rink, /x1="-89"/);
+assert.match(rink, /x1="89"/);
+assert.match(rink, /M -89 -6 A 6 6 0 0 1 -89 6 Z/);
+assert.match(rink, /M 89 -6 A 6 6 0 0 0 89 6 Z/);
+assert.match(rink, /x="-93"/);
+assert.match(rink, /x="89" y="-3.2"/);
+assert.match(rink, /cx="-69" cy="-22" r="15"/);
+assert.match(rink, /cx="69" cy="22" r="15"/);
+assert.match(rink, /cx="-20" cy="-22" r="1.1"/);
+assert.match(rink, /cx="20" cy="22" r="1.1"/);
+assert.match(rink, /opacity="0.16"/);
+assert.equal(overallRecord([{ type: "total", name: "overall", summary: "10-5-2" }, { type: "home", summary: "6-2-1" }]), "10-5-2");
+assert.equal(
+  standingLabel(
+    { source: "desk", leagues: { NHL: { note: "", columns: [], groups: [{ name: "Pacific", columns: [], rows: [{ rank: 1, abbr: "VGK", label: "", cells: [], starred: false }] }] } } },
+    "NHL",
+    "VGK",
+  ),
+  "1st Pac",
+);
 
 console.log("gamecast tests ok");

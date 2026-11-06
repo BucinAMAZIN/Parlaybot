@@ -213,7 +213,7 @@ function onClick(event: Event) {
   }
   if (act === "sport") {
     const key = action.dataset.key || "All";
-    const allowed = key === "All" || sportsFor(board, state.product).some((item) => item.sport === key);
+    const allowed = key === "All" || key === "Big 4" || sportsFor(board, state.product).some((item) => item.sport === key);
     if (allowed) state.sport = key as AppState["sport"];
     paint(false);
     return;

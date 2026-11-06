@@ -42,7 +42,7 @@ function slateDate(iso: string): string {
   return parts.replace(/-/g, "");
 }
 
-type EventTeam = { abbr: string; name: string; score: number; home: boolean; names: string[] };
+type EventTeam = { abbr: string; name: string; score: number; home: boolean; names: string[]; record: string };
 
 type EventRow = {
   id: string;
@@ -59,6 +59,78 @@ type EventRow = {
   summary?: Json;
 };
 
+const ABBR_ALIAS: Record<string, string[]> = {
+  UTA: ["UTAH"],
+  UTAH: ["UTA"],
+  NJ: ["NJD"],
+  NJD: ["NJ"],
+  TB: ["TBL"],
+  TBL: ["TB"],
+  LA: ["LAK"],
+  LAK: ["LA"],
+  SJ: ["SJS"],
+  SJS: ["SJ"],
+  MTL: ["MON"],
+  MON: ["MTL"],
+  WSH: ["WAS"],
+  WAS: ["WSH"],
+  NY: ["NYK"],
+  NYK: ["NY"],
+};
+
+const DIVISION: Record<string, string> = {
+  pacific: "Pac",
+  atlantic: "Atl",
+  metropolitan: "Met",
+  metro: "Met",
+  central: "Cen",
+  east: "East",
+  west: "West",
+  north: "North",
+  south: "South",
+};
+
+/** ESPN scoreboard record. Prefer the overall / total summary, such as 10-5-2. */
+export function overallRecord(records: unknown): string {
+  if (!Array.isArray(records)) return "";
+  for (const row of records) {
+    if (!isObj(row)) continue;
+    const type = str(row.type).toLowerCase();
+    const name = str(row.name).toLowerCase();
+    if (type === "total" || name === "overall" || name === "total") {
+      const summary = str(row.summary) || str(row.displayValue);
+      if (summary) return summary;
+    }
+  }
+  return "";
+}
+
+function ordinal(rank: number): string {
+  const teen = rank % 100;
+  const suffix = teen >= 11 && teen <= 13 ? "th" : rank % 10 === 1 ? "st" : rank % 10 === 2 ? "nd" : rank % 10 === 3 ? "rd" : "th";
+  return `${rank}${suffix}`;
+}
+
+function shortDivision(name: string): string {
+  const word = name.replace(/division/gi, "").trim().split(/\s+/)[0]?.toLowerCase() ?? "";
+  if (!word) return "";
+  return DIVISION[word] ?? `${word.slice(0, 1).toUpperCase()}${word.slice(1, 3)}`;
+}
+
+/** Division place from the desk standings, such as 1st Pac. Empty when the team is not in the file. */
+export function standingLabel(standings: Board["standings"] | undefined, league: string, abbr: string): string {
+  const groups = standings?.leagues?.[league]?.groups ?? [];
+  const names = new Set([abbr.toUpperCase(), ...(ABBR_ALIAS[abbr.toUpperCase()] ?? [])]);
+  for (const group of groups) {
+    const index = group.rows.findIndex((row) => names.has(row.abbr.toUpperCase()));
+    if (index < 0) continue;
+    const rank = group.rows[index]?.rank || index + 1;
+    const division = shortDivision(group.name);
+    return division ? `${ordinal(rank)} ${division}` : ordinal(rank);
+  }
+  return "";
+}
+
 function namesOf(team: Json): string[] {
   return [team.abbreviation, team.shortDisplayName, team.displayName, team.name, team.location]
     .map((item) => str(item).toLowerCase())
@@ -72,7 +144,7 @@ function eventOf(raw: unknown, league: LiveGame["league"], group: string, path: 
   const teams = (Array.isArray(comp.competitors) ? comp.competitors : []).flatMap((item) => {
     if (!isObj(item) || !isObj(item.team)) return [];
     const home = str(item.homeAway) === "home";
-    return [{ abbr: str(item.team.abbreviation) || "?", name: str(item.team.shortDisplayName) || str(item.team.displayName), score: num(item.score) ?? 0, home, names: namesOf(item.team) }];
+    return [{ abbr: str(item.team.abbreviation) || "?", name: str(item.team.shortDisplayName) || str(item.team.displayName), score: num(item.score) ?? 0, home, names: namesOf(item.team), record: overallRecord(item.records) }];
   });
   const away = teams.find((team) => !team.home);
   const home = teams.find((team) => team.home);
@@ -341,7 +413,7 @@ function legFor(play: Play, event: EventRow, awayScore: number, homeScore: numbe
   };
 }
 
-function pbp(summary: Json | undefined, away: string, home: string): LiveFeed["pbp"] {
+function pbp(summary: Json | undefined, away: string, home: string, league: LiveGame["league"] = "NBA"): LiveFeed["pbp"] {
   if (!summary) return [];
   const raw = summary.plays;
   const items = Array.isArray(raw) ? raw : isObj(raw) && Array.isArray(raw.items) ? raw.items : [];
@@ -352,7 +424,9 @@ function pbp(summary: Json | undefined, away: string, home: string): LiveFeed["p
     const team = str(isObj(item.team) ? item.team.abbreviation : item.team) || away;
     const typeText = str(isObj(item.type) ? item.type.text : item.type);
     const freeThrow = isFreeThrow(typeText, text);
-    const title = gcHum(typeText, text, item.shootingPlay === true, item.scoringPlay === true, freeThrow);
+    const kind = league === "NHL" ? "hockey" : league === "NFL" || league === "NCAAF" ? "football" : league === "MLB" ? "baseball" : "basketball";
+    const typeAbbr = str(isObj(item.type) ? item.type.abbreviation : "");
+    const title = gcHum(kind === "hockey" ? typeAbbr || typeText : typeText, text, item.shootingPlay === true, item.scoringPlay === true, freeThrow, kind);
     const score = [str(item.awayScore), str(item.homeScore)].filter((part) => part !== "").join("  ");
     return [{ team: team === home || team === away ? team : away, event: title, when: str(isObj(item.clock) ? item.clock.displayValue : item.clock) || str(item.period) || "", score, desc: text, period: str(isObj(item.period) ? item.period.displayValue : item.period) || "All" }];
   });
@@ -441,7 +515,7 @@ function deskRanks(teamVs: unknown, away: string, home: string): { name: string;
   return [];
 }
 
-function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: string | null): LiveGame {
+function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: string | null, standings?: Board["standings"]): LiveGame {
   const names = plays.map((play) => propOf(play.name, event.league)?.player ?? "").filter(Boolean);
   const fromEspn = espnTeamStats(event.summary);
   const fromDesk = fromEspn.length ? [] : deskRanks(teamVs, event.away.abbr, event.home.abbr);
@@ -474,8 +548,8 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
     start: event.date || undefined,
     pre: cast ? cast.pre : pre,
     final: cast ? cast.final : event.state === "post",
-    awaySide: { abbr: event.away.abbr, record: "—", standing: "—" },
-    homeSide: { abbr: event.home.abbr, record: "—", standing: "—" },
+    awaySide: { abbr: event.away.abbr, record: event.away.record || "—", standing: standingLabel(standings, event.league, event.away.abbr) || "—" },
+    homeSide: { abbr: event.home.abbr, record: event.home.record || "—", standing: standingLabel(standings, event.league, event.home.abbr) || "—" },
     legs,
     liveFeed: {
       pbp: cast
@@ -487,7 +561,7 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
             desc: item.text,
             period: item.periodKey,
           }))
-        : pbp(event.summary, event.away.abbr, event.home.abbr),
+        : pbp(event.summary, event.away.abbr, event.home.abbr, event.league),
       box: box(event.summary, names),
       teamStats: fromEspn.length ? fromEspn : fromDesk,
       real: true,
@@ -573,7 +647,7 @@ export async function attachLive(board: Board): Promise<void> {
       }
     }),
   );
-  const games = sortLiveGames(wanted.map((event) => gameOf(event, plays.filter((play) => matches(play, event)), board.teamVs, board.teamBuilt)));
+  const games = sortLiveGames(wanted.map((event) => gameOf(event, plays.filter((play) => matches(play, event)), board.teamVs, board.teamBuilt, board.standings)));
   const mood = moodOf(games);
   board.liveGames = games;
   board.liveTickets = board.tickets.flatMap((ticket) => {
