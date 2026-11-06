@@ -28,21 +28,20 @@ function partFrom(row: Row): TicketPart {
 }
 
 /**
- * Legs recorded for this ticket in the same results rows.
- * Null when the row is not a ticket. An empty list means the ticket is real and the file has no legs for it.
- * Matching uses the ticket id, else the nested legs, else same date and product. It does not read today's card.
+ * Legs recorded for this ticket.
+ * Null when the row is not a ticket. An empty list means the ticket is real and no leg is uniquely linked.
+ * A leg counts only when it is nested on the ticket, or when it is a sibling with the same non-empty tid and date.
+ * Same date, category, or capper is not an identity. Those rows stay unattached.
  */
 export function ticketParts(parent: Row, rows: Row[]): TicketPart[] | null {
   if (!isTicketRow(parent)) return null;
   if (Array.isArray(parent.legs) && parent.legs.length > 0) {
     return parent.legs.filter((item): item is Row => !!item && typeof item === "object").map(partFrom);
   }
-  const date = text(parent.date);
   const tid = text(parent.tid);
-  const kids = tid
-    ? rows.filter((row) => row.leg === true && text(row.tid) === tid && text(row.date) === date)
-    : rows.filter((row) => row.leg === true && !text(row.tid) && text(row.date) === date && text(row.cat) === text(parent.cat));
-  return kids.map(partFrom);
+  if (!tid) return [];
+  const date = text(parent.date);
+  return rows.filter((row) => row.leg === true && text(row.tid) === tid && text(row.date) === date).map(partFrom);
 }
 
 /** Names written in a ticket pick such as "6-leg parlay: A + B". Not a grade. */
