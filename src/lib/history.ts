@@ -50,13 +50,17 @@ export function windowWinRate(grades: GradeMark[]): number | null {
   return wins + losses ? Math.round((wins / (wins + losses)) * 100) : null;
 }
 
-export function windowRings(grades: GradeMark[]): { pct: number; label: string }[] {
+export function windowRings(grades: GradeMark[], section = "all"): { pct: number; label: string }[] {
   const tally = new Map<string, { w: number; l: number }>();
   for (const grade of grades) {
-    const bucket = tally.get(grade.cat) ?? { w: 0, l: 0 };
-    if (grade.win) bucket.w += 1;
-    else bucket.l += 1;
-    tally.set(grade.cat, bucket);
+    const cats = grade.cats?.length ? grade.cats : [grade.cat];
+    for (const cat of cats) {
+      if (!sectionMatch(cat, section)) continue;
+      const bucket = tally.get(cat) ?? { w: 0, l: 0 };
+      if (grade.win) bucket.w += 1;
+      else bucket.l += 1;
+      tally.set(cat, bucket);
+    }
   }
   const rings: { pct: number; label: string }[] = [];
   for (const [cat, label] of CATS) {
@@ -69,7 +73,7 @@ export function windowRings(grades: GradeMark[]): { pct: number; label: string }
 
 export function fileBounds(grades: GradeMark[], series: SeriesPoint[], section: string): { first: string; last: string } {
   const dates: string[] = [];
-  for (const grade of grades) if (sectionMatch(grade.cat, section)) dates.push(grade.date);
+  for (const grade of grades) if (sectionMatch(grade, section)) dates.push(grade.date);
   if (!section || section === "all") for (const point of series) if (point.iso) dates.push(point.iso);
   dates.sort();
   return { first: dates[0] ?? "", last: dates[dates.length - 1] ?? "" };

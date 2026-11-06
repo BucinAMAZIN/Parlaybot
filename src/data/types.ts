@@ -221,6 +221,8 @@ export type SeriesPoint = { day: string; profit: number; winRate: number | null;
 export type GradeMark = {
   date: string;
   cat: string;
+  /** Every product this one play was posted in. All sections counts the play once. */
+  cats?: string[];
   win: boolean;
   units: number;
   sport: string;

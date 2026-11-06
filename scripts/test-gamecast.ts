@@ -196,5 +196,15 @@ assert.equal(findLiveLeg("McNeese Cowboys ML", game)?.label, "Trailing 48–53")
 assert.equal(findLiveLeg("McNeese Cowboys ML (vs UNT; CBB free play)", game)?.key, mlKey);
 assert.notEqual(liveLegKey("Justice Hill Over 2.5 Receptions", "NFL"), liveLegKey("Justice Hill Over 1.5 Receptions", "NFL"));
 assert.equal(liveLegKey("Mikhail Sergachev o0.5 Points", "NHL"), liveLegKey("Mikhail Sergachev Over 0.5 Points (via @capper)", "NHL"));
+const mccain = liveLegKey("Jared McCain 3+ Rebounds", "NBA");
+assert.equal(mccain, liveLegKey("Jared McCain o2.5 Rebounds", "NBA"));
+assert.equal(mccain, "prop:jared mccain:rebounds:over:2.5");
+assert.equal(liveLegKey("Justice Hill Over 2.5 Receptions", "NFL"), liveLegKey("Justice Hill o2.5 Receptions", "NFL"));
+assert.notEqual(liveLegKey("Josh Cuevas Over 2.5 Receptions", "NFL"), liveLegKey("Josh Cuevas 1+ Receptions", "NFL"));
+assert.equal(liveLegKey("Josh Cuevas 1+ Receptions", "NFL"), "prop:josh cuevas:receptions:over:0.5");
+assert.equal(liveLegKey("Trae Young 9+ Assists", "NBA"), "prop:trae young:assists:over:8.5");
+assert.notEqual(liveLegKey("Trae Young 9+ Assists", "NBA"), liveLegKey("Trae Young Over 9.5 Assists", "NBA"));
+assert.equal(liveLegKey("Rashod Bateman 5+ Rec Yards", "NFL"), "prop:rashod bateman:receivingYards:over:4.5");
+assert.notEqual(liveLegKey("Rashod Bateman 5+ Rec Yards", "NFL"), liveLegKey("Rashod Bateman Over 13.5 Rec Yards", "NFL"));
 
 console.log("gamecast tests ok");

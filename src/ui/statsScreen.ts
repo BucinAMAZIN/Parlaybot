@@ -162,7 +162,7 @@ export function matchingPlays(grades: GradeMark[], sport: string, prop: string, 
 }
 
 export function statsCalendar(state: AppState, board: Board, from: string | null, to: string | null): string {
-  const grades = board.grades.filter((grade) => sectionMatch(grade.cat, state.statsSection));
+  const grades = board.grades.filter((grade) => sectionMatch(grade, state.statsSection));
   const span = fileBounds(board.grades, board.series, state.statsSection);
   return calendar(state, grades, from ?? "", to ?? "", span.first || from || "", span.last || to || "");
 }
@@ -177,7 +177,7 @@ export function statsSections(state: AppState): string {
 }
 
 export function statsSports(state: AppState, board: Board, from: string | null, to: string | null): string {
-  const grades = windowGrades(board.grades, from, to).filter((grade) => sectionMatch(grade.cat, state.statsSection));
+  const grades = windowGrades(board.grades, from, to).filter((grade) => sectionMatch(grade, state.statsSection));
   const span = fileBounds(board.grades, board.series, state.statsSection);
   const empty = span.first ? `No graded plays in these dates. All dates still has this file, ${prettyDay(span.first)} through ${prettyDay(span.last)}.` : "No graded plays in this file.";
   return `<h2 class="grouph">By sport</h2><p class="sub">Tap a sport for its props. Tap a prop for the graded plays. Regular and Alt stay separate.</p>${sportCards(grades, state.statsSport) || `<p class="empty">${esc(empty)}</p>`}`;

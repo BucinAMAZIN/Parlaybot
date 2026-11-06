@@ -417,9 +417,12 @@ function gradesFrom(rows: Row[]): GradeMark[] {
     const label = normProp(fam, prop, pick, stat);
     const famMissing = !fam.trim() || fam.trim().toLowerCase() === "other";
     const capper = capperOf(prop) || capperOf(pick);
+    const cat = str(row.cat);
+    const listed = Array.isArray(row.cats) ? row.cats.map(str).filter(Boolean) : [];
     marks.push({
       date,
-      cat: str(row.cat),
+      cat,
+      cats: listed.length ? listed : [cat],
       win: res === "W",
       units: num(row.uu) ?? 0,
       sport: normSport(str(row.sport)),
@@ -451,11 +454,14 @@ function ringsFrom(rows: Row[]): Board["rings"] {
     if (row.leg === true) continue;
     const res = str(row.res);
     if (res !== "W" && res !== "L") continue;
-    const cat = str(row.cat);
-    const bucket = tally.get(cat) ?? { w: 0, l: 0 };
-    if (res === "W") bucket.w += 1;
-    else bucket.l += 1;
-    tally.set(cat, bucket);
+    const listed = Array.isArray(row.cats) ? row.cats.map(str).filter(Boolean) : [];
+    const cats = listed.length ? listed : [str(row.cat)];
+    for (const cat of cats) {
+      const bucket = tally.get(cat) ?? { w: 0, l: 0 };
+      if (res === "W") bucket.w += 1;
+      else bucket.l += 1;
+      tally.set(cat, bucket);
+    }
   }
   const rings: Board["rings"] = [];
   for (const [cat, label] of wanted) {
@@ -652,7 +658,8 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
   if (!rowsOf(td.legs).length && str(td.rolled_off || td.msg)) notices.push({ text: str(td.rolled_off || td.msg), section: "lotto", sport: null });
 
   const resultRows = rowsOf(isRow(data.results_v2) ? data.results_v2.rows : null);
-  const unique = dedupePlays(resultRows);
+  const chart = isRow(data.record) ? data.record.chart : null;
+  const unique = dedupePlays(resultRows, chart);
   const graded = lastGraded(unique.rows, iso || "9999");
   const clv = adaptClv(data.clv);
   const settled = graded
@@ -676,7 +683,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     liveMood: null,
     results: settled.results,
     recap: settled.recap,
-    series: seriesFrom(isRow(data.record) ? data.record.chart : null, unique.rows, year, unique.droppedUnits),
+    series: seriesFrom(chart, unique.rows, year, unique.droppedUnits),
     grades: gradesFrom(unique.rows),
     rings: ringsFrom(unique.rows),
     nascar: { when: "", rows: [] },

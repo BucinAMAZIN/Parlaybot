@@ -19,6 +19,7 @@ import {
   renderWhy,
   ringSvg,
 } from "./bits.ts";
+import { liveLegKey } from "../data/espn.ts";
 import { displayCat, sectionMatch, sportTitle } from "../data/gradeLabels.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type GameCast } from "../data/gamecast.ts";
 import { courtHardware } from "./court.ts";
@@ -52,17 +53,31 @@ function sportOk(sport: Play["sport"], filter: SportFilter): boolean {
   return filter === "All" || sport === filter;
 }
 
+const LIVE_LEAGUES = new Set<LiveGame["league"]>(["NBA", "NHL", "NFL", "MLB", "NCAAF", "NCAAB", "WNBA"]);
+
+function countLeague(sport: Play["sport"]): LiveGame["league"] {
+  return LIVE_LEAGUES.has(sport as LiveGame["league"]) ? (sport as LiveGame["league"]) : "NBA";
+}
+
+function playsFor(ticket: Ticket, sport: SportFilter): Play[] {
+  if (ticket.board) return showsPreparedBoard(ticket.board, sport) ? ticket.plays : [];
+  return ticket.plays.filter((play) => sportOk(play.sport, sport));
+}
+
 function countPlays(board: Board, product: string | null, sport: SportFilter): number {
-  let count = 0;
-  for (const ticket of board.tickets) {
-    if (product && ticket.productKey !== product) continue;
-    if (ticket.board) {
-      if (showsPreparedBoard(ticket.board, sport)) count += ticket.plays.length;
-      continue;
+  if (product) {
+    let count = 0;
+    for (const ticket of board.tickets) {
+      if (ticket.productKey !== product) continue;
+      count += playsFor(ticket, sport).length;
     }
-    count += ticket.plays.filter((play) => sportOk(play.sport, sport)).length;
+    return count;
   }
-  return count;
+  const seen = new Set<string>();
+  for (const ticket of board.tickets) {
+    for (const play of playsFor(ticket, sport)) seen.add(`${play.sport}|${liveLegKey(play.name, countLeague(play.sport))}`);
+  }
+  return seen.size;
 }
 
 export function sportsFor(board: Board, product: string | null): { sport: string; count: number }[] {
@@ -206,7 +221,7 @@ function rangeControl(state: AppState): string {
 function sectionSeries(board: Board, section: string): SeriesPoint[] {
   const byDay = new Map<string, number>();
   for (const grade of board.grades) {
-    if (!sectionMatch(grade.cat, section)) continue;
+    if (!sectionMatch(grade, section)) continue;
     byDay.set(grade.date, (byDay.get(grade.date) ?? 0) + grade.units);
   }
   let running = 0;
@@ -218,19 +233,22 @@ function sectionSeries(board: Board, section: string): SeriesPoint[] {
 }
 
 function chartWindow(board: Board, range: RangeKey, customFrom = "", customTo = "", section = "all"): { points: SeriesPoint[]; headline: string; note: string; rings: { pct: number; label: string }[]; ringsNote: string; from: string | null; to: string | null; starts: string | null } {
-  const series = section === "all" ? board.series : sectionSeries(board, section);
+  const series = sectionSeries(board, section);
   if (!series.length) return { points: [], headline: "No data yet", note: "", rings: [], ringsNote: "", from: null, to: null, starts: null };
   const preset = sliceHistory(series, range);
   const windowed = customFrom && customTo
     ? { points: series.filter((point) => point.iso && point.iso >= customFrom && point.iso <= customTo), from: customFrom, to: customTo, starts: null as string | null }
     : preset;
-  const grades = windowGrades(board.grades.filter((grade) => sectionMatch(grade.cat, section)), windowed.from, windowed.to);
+  const grades = windowGrades(board.grades.filter((grade) => sectionMatch(grade, section)), windowed.from, windowed.to);
   const delta = unitChange(series, windowed.points);
+  const wins = grades.filter((grade) => grade.win).length;
+  const losses = grades.length - wins;
   const rate = windowWinRate(grades);
-  const headline = delta == null ? "No chart in this file" : `${formatSigned(delta, 2)}u · ${rate == null ? "no graded tickets in this range" : `${rate}% win rate`}`;
-  const note = windowed.starts ? `History starts ${windowed.starts}.` : "Running units from the desk chart.";
+  const record = grades.length ? `${wins}-${losses} · ` : "";
+  const headline = delta == null ? "No chart in this file" : `${formatSigned(delta, 2)}u · ${record}${rate == null ? "no graded tickets in this range" : `${rate}% win rate`}`;
+  const note = windowed.starts ? `History starts ${windowed.starts}.` : "Running units from the graded plays.";
   const ringsNote = windowed.starts ? `History starts ${windowed.starts}. Win rates use the graded tickets on these dates.` : "Win rates use the graded tickets on these dates.";
-  return { points: windowed.points, headline, note, rings: windowRings(grades), ringsNote, from: windowed.from, to: windowed.to, starts: windowed.starts };
+  return { points: windowed.points, headline, note, rings: windowRings(grades, section), ringsNote, from: windowed.from, to: windowed.to, starts: windowed.starts };
 }
 
 export function renderPage(state: AppState, board: Board): string {
@@ -632,7 +650,7 @@ function nightBlock(state: AppState, board: Board): string {
 function propList(state: AppState, board: Board, windowed: { from: string | null; to: string | null; starts: string | null }): string {
   const pick = state.resultsPick;
   if (!pick) return "";
-  const grades = windowGrades(board.grades, windowed.from, windowed.to).filter((grade) => sectionMatch(grade.cat, state.statsSection));
+  const grades = windowGrades(board.grades, windowed.from, windowed.to).filter((grade) => sectionMatch(grade, state.statsSection));
   const rows = matchingPlays(grades, pick.sport, pick.prop, pick.alt);
   const wins = rows.filter((row) => row.win).length;
   const units = rows.reduce((sum, row) => sum + row.units, 0);

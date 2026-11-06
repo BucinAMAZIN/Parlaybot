@@ -69,9 +69,8 @@ export function normProp(fam: string, prop: string, pick = "", stat = ""): strin
 export function normSide(pick: string, prop: string, alt: boolean): "over" | "under" | "alt" | "other" {
   const text = `${pick} ${prop}`;
   if (alt || /\(alt\)|\balt(?:ernative)? line\b|→/.test(text)) return "alt";
-  if (/·\s*other\b|alt line/i.test(prop)) return "alt";
   if (/\(under\)|\bunder\b|\bu\d/i.test(text)) return "under";
-  if (/\(over\)|\bover\b|\bo\d/i.test(text)) return "over";
+  if (/\(over\)|\bover\b|\bo\d|\d+(?:\.\d+)?\s*\+/i.test(text)) return "over";
   return "other";
 }
 
@@ -80,7 +79,12 @@ export function displayCat(cat: string): string {
   return /^leg\s*day$/i.test(cat.trim()) ? "Props" : cat;
 }
 
-export function sectionMatch(cat: string, section: string): boolean {
+export function sectionMatch(cat: string | { cat: string; cats?: string[] }, section: string): boolean {
+  if (cat && typeof cat === "object") {
+    if (!section || section === "all") return true;
+    const names = cat.cats?.length ? cat.cats : [cat.cat];
+    return names.some((name) => sectionMatch(name, section));
+  }
   if (!section || section === "all") return true;
   const name = cat.toLowerCase();
   if (section === "heist") return name.includes("heist");

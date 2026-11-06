@@ -258,8 +258,10 @@ export function liveLegKey(playName: string, league: LiveGame["league"], teams?:
   const titled = cleanLiveTitle(playName);
   const prop = propOf(titled, league);
   if (prop) {
-    const dir = prop.under ? "under" : prop.plus ? "plus" : "over";
-    return `prop:${normBit(prop.player)}:${prop.key}:${dir}:${prop.line}`;
+    const plusWhole = prop.plus && Number.isInteger(prop.line) && prop.line >= 1;
+    const dir = prop.under ? "under" : plusWhole || !prop.plus ? "over" : "plus";
+    const line = plusWhole ? prop.line - 0.5 : prop.line;
+    return `prop:${normBit(prop.player)}:${prop.key}:${dir}:${line}`;
   }
   const bet = teamBet(titled);
   if (bet) {

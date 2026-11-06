@@ -5,14 +5,14 @@ import { edgeFeedTicket, presentEdgePick, tallyEdge } from "../src/data/presentE
 import { draftKingsLegLink, draftKingsSlipLink, hardRockLegLink, hardRockSlipLink, HR_MISMATCH_NOTE, isBlockedHrSid } from "../src/lib/links.ts";
 import { propLine } from "../src/lib/propLine.ts";
 import { movedAltLine, readHrLive, verifiedLegSid } from "../src/data/heist.ts";
-import { renderPage, visibleTickets } from "../src/ui/views.ts";
+import { renderPage, sportsFor, visibleTickets } from "../src/ui/views.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
 import { fileBounds, historyScope, sliceHistory } from "../src/lib/history.ts";
 import { matchingPlays } from "../src/ui/statsScreen.ts";
 import { knownView, viewFromHash, type AppState } from "../src/ui/state.ts";
 import { dedupePlays, playKey } from "../src/data/dedupePlays.ts";
 import { isTicketRow, ticketParts } from "../src/data/ticketLegs.ts";
-import { normProp, normSide, normSport } from "../src/data/gradeLabels.ts";
+import { normProp, normSide, normSport, sectionMatch } from "../src/data/gradeLabels.ts";
 import { classifySport, sportLabel } from "../src/lib/sport.ts";
 import { adaptClv } from "../src/data/adaptClv.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
@@ -271,22 +271,29 @@ assert.equal(normProp("Other", "@austinsprops · Other", "Josh Hart o12.5 RA", "
 assert.equal(normProp("Other", "First Blood", "First Blood 7-leg", ""), "First Blood");
 assert.equal(normProp("Other", "mystery market", "some pick", ""), "Misc");
 assert.equal(normSide("Franz Wagner Over 0.5", "points", true), "alt");
-assert.equal(normSide("Christian Braun 4+ Rebs", "@austinsprops · Other", false), "alt");
-assert.equal(normSide("Josh Giddey o7.5 Asts", "@austinsprops · Other", false), "alt");
-assert.equal(normSide("Kevin Durant o5.5 Rebs", "@austinsprops · Other", false), "alt");
-const braunAlt = { date: "2026-10-28", sport: "NBA", cat: "Alt lines", pick: "Christian Braun 4+ Rebs", stat: "0 REB", prop: "NBA alt line · o4.5 → 4+ · @austinsprops", res: "L", uu: -1, leg: false };
-const braunHeist = { date: "2026-10-28", sport: "NBA", cat: "The Heist", pick: "Christian Braun 4+ Rebs", stat: "0 REB", prop: "@austinsprops · Other", res: "L", uu: -1, leg: false };
+assert.equal(normSide("Christian Braun 4+ Rebs", "@austinsprops · Other", false), "over");
+assert.equal(normSide("Josh Giddey o7.5 Asts", "@austinsprops · Other", false), "over");
+assert.equal(normSide("Kevin Durant o5.5 Rebs", "@austinsprops · Other", false), "over");
+assert.equal(normSide("Davion Mitchell o19.5 PA", "@panpotd · Other", false), "over");
+const braunAlt = { date: "2026-10-28", sport: "NBA", cat: "Alt lines", pick: "Christian Braun 4+ Rebs", stat: "0 REB", prop: "NBA alt line · o4.5 → 4+ · @austinsprops", res: "L", uu: -1, leg: false, alt: true };
+const braunHeist = { date: "2026-10-28", sport: "NBA", cat: "The Heist", pick: "Christian Braun 4+ Rebs", stat: "0 REB", prop: "@austinsprops · Other", res: "L", uu: -1, leg: false, alt: true };
+const braunOver = { date: "2026-10-28", sport: "NBA", cat: "Cappers", pick: "Christian Braun o4.5 Rebs (Nuggets vs Pelicans)", stat: "L (0 REB)", prop: "@austinsprops · NBA rebounds (over)", res: "L", uu: -1, leg: false, alt: false };
 const packersA = { date: "2026-10-18", sport: "NFL", cat: "Cappers", pick: "Green Bay Packers ML", stat: "W (DAL 13-23 GB)", prop: "@showtimepicks2 · NFL ML", res: "W", uu: 0.93, leg: false };
 const packersB = { date: "2026-10-18", sport: "NFL", cat: "Cappers", pick: "Green Bay Packers ML", stat: "W (DAL 13-23 GB)", prop: "@alexcaruso · NFL ML", res: "W", uu: 0, leg: false };
-assert.equal(playKey(braunAlt), "");
-assert.equal(playKey(braunHeist), "");
+assert.equal(playKey(braunAlt), playKey(braunHeist));
+assert.notEqual(playKey(braunAlt), "");
+assert.notEqual(playKey(braunAlt), playKey(braunOver));
 assert.equal(playKey(packersA), playKey(packersB));
-const deduped = dedupePlays([braunAlt, braunHeist, packersA, packersB]);
+const deduped = dedupePlays([braunAlt, braunHeist, braunOver, packersA, packersB]);
 assert.equal(deduped.rows.length, 3);
 assert.equal(deduped.droppedUnits.get("2026-10-18"), 0);
-assert.match(String(deduped.rows.find((row) => row.cat === "Cappers")?.prop), /@showtimepicks2/);
-assert.match(String(deduped.rows.find((row) => row.cat === "Cappers")?.prop), /@alexcaruso/);
-assert.equal(normSide("Cameron Boozer o24.5 PR", "@austinsprops · Other", false), "alt");
+assert.equal(deduped.droppedUnits.has("2026-10-28"), false);
+assert.match(String(deduped.rows.find((row) => row.cat === "Cappers" && String(row.pick).includes("Packers"))?.prop), /@showtimepicks2/);
+assert.match(String(deduped.rows.find((row) => row.cat === "Cappers" && String(row.pick).includes("Packers"))?.prop), /@alexcaruso/);
+const braunKept = deduped.rows.find((row) => String(row.pick).includes("4+"));
+assert.equal(braunKept?.alt, true);
+assert.deepEqual(braunKept?.cats, ["Alt lines", "The Heist"]);
+assert.equal(normSide("Cameron Boozer o24.5 PR", "@austinsprops · Other", false), "over");
 assert.equal(normSport("NCAAM"), "NCAAB");
 const blood = adaptDesk(
   {
@@ -484,20 +491,21 @@ assert.match(scope14, /All dates shows the whole file/);
 const graded = adaptDesk(
   {
     today: { date: "2026-11-05", tickets: [], sports: {} },
-    results_v2: { rows: [braunAlt, braunHeist, packersA, packersB] },
+    results_v2: { rows: [braunAlt, braunHeist, braunOver, packersA, packersB] },
     record: { chart: [["10/18", 1], ["10/28", 2], ["11/04", 3]] },
   },
   ncaab,
 );
 assert.equal(graded.grades.length, 3);
-assert.equal(graded.grades.filter((row) => row.play === "Christian Braun 4+ Rebs").length, 2);
+assert.equal(graded.grades.filter((row) => row.play === "Christian Braun 4+ Rebs").length, 1);
 const braunRows = graded.grades.filter((row) => row.prop === "Rebounds");
 const regular = matchingPlays(graded.grades, "NBA", "Rebounds", false);
 const alts = matchingPlays(graded.grades, "NBA", "Rebounds", true);
 assert.equal(regular.length + alts.length, braunRows.length);
 assert.equal(new Set([...regular, ...alts]).size, braunRows.length);
-assert.equal(alts.length, 2);
-assert.deepEqual(alts.map((row) => row.cat).sort(), ["Alt lines", "The Heist"]);
+assert.equal(alts.length, 1);
+assert.equal(regular.length, 1);
+assert.deepEqual([...(alts[0].cats ?? [])].sort(), ["Alt lines", "The Heist"]);
 const bounds = fileBounds(graded.grades, graded.series, "all");
 assert.equal(bounds.first <= "2026-10-18" && bounds.last >= "2026-11-04", true);
 const nbaUnits = braunRows.reduce((sum, row) => sum + row.units, 0);
@@ -758,5 +766,111 @@ assert.equal(dkPage.includes("Whole Heist in Hard Rock"), false);
 assert.equal(dkPage.includes("Whole Heist Alt in Hard Rock"), false);
 assert.equal(visibleTickets(heistBoard, { ...blank(), sport: "NCAAB" }).some((ticket) => ticket.id === "heist-alt"), false);
 assert.equal(visibleTickets(heistBoard, { ...blank(), sport: "NCAAB" }).find((ticket) => ticket.id === "heist")?.plays.length, 1);
+
+const slate = adaptDesk(
+  {
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    heist: {
+      legs: [
+        { pick: "McNeese Cowboys ML", sport: "NCAAB" },
+        { pick: "Justice Hill Over 2.5 Receptions", sport: "NFL" },
+        { pick: "Rashod Bateman Over 13.5 Rec Yards", sport: "NFL" },
+      ],
+      conv: [
+        { hr_pick: "Justice Hill o2.5 Receptions", pick: "Justice Hill Over 2.5 Receptions", sport: "NFL", hr: "original line kept" },
+        { hr_pick: "Rashod Bateman 5+ Rec Yards", pick: "Rashod Bateman Over 13.5 Rec Yards", sport: "NFL" },
+      ],
+    },
+    cappers: [
+      { name: "@showtimepicks2", today: [{ pick: "McNeese Cowboys ML (vs UNT; CBB free play)", sport: "NCAAB" }] },
+      {
+        name: "@alexcaruso",
+        today: [
+          { pick: "Justice Hill Over 2.5 Receptions (BAL vs JAX; NFL Play of the Day, POTD)", sport: "NFL" },
+          { pick: "Rashod Bateman Over 13.5 Rec Yards (BAL vs JAX; NFL play)", sport: "NFL" },
+        ],
+      },
+    ],
+  },
+  ncaab,
+);
+const allSports = sportsFor(slate, null);
+assert.equal(allSports.find((row) => row.sport === "NCAAB")?.count, 1);
+assert.equal(allSports.find((row) => row.sport === "NFL")?.count, 3);
+assert.equal(sportsFor(slate, "heist").find((row) => row.sport === "NCAAB")?.count, 1);
+assert.equal(sportsFor(slate, "cappers").find((row) => row.sport === "NCAAB")?.count, 1);
+assert.equal(sportsFor(slate, "heist").find((row) => row.sport === "NFL")?.count, 2);
+assert.equal(sportsFor(slate, "heist-alt").find((row) => row.sport === "NFL")?.count, 2);
+assert.equal(sportsFor(slate, "cappers").find((row) => row.sport === "NFL")?.count, 2);
+const slatePage = renderPage(blank(), slate);
+assert.match(slatePage, /NCAA 🏀<i>1<\/i>/);
+assert.match(slatePage, /NFL<i>3<\/i>/);
+
+const butlerCap = { date: "2026-11-04", sport: "NCAAB", cat: "Cappers", pick: "Butler Bulldogs -23.5 (vs FDU; early CBB play)", prop: "@showtimepicks2 · NCAAB spread", stat: "W (FDU 65-99 BTLR)", res: "W", uu: 0.91, leg: false, alt: false };
+const butlerHeist = { date: "2026-11-04", sport: "NCAAB", cat: "The Heist", pick: "Butler Bulldogs -23.5", prop: "@showtimepicks2 · Spread", stat: "FDU 65-99 BTLR", res: "W", uu: 0.5, leg: false, alt: false };
+const giddeyCap = { date: "2026-11-04", sport: "NBA", cat: "Cappers", pick: "Josh Giddey o7.5 Asts (CHI vs NYK; NBA #3)", prop: "@austinsprops · NBA assists (over)", stat: "L (6 AST)", res: "L", uu: -1, leg: false, alt: false };
+const giddeyHeist = { date: "2026-11-04", sport: "NBA", cat: "The Heist", pick: "Josh Giddey o7.5 Asts", prop: "@austinsprops · Other", stat: "6 AST", res: "L", uu: -1, leg: false, alt: false };
+const mccainCap = { date: "2026-11-04", sport: "NBA", cat: "Cappers", pick: "Jared McCain 3+ Rebounds (vs CLE; NBA Play of the Day)", prop: "@alexcaruso · NBA rebounds (over)", stat: "L (1 REB)", res: "L", uu: -1, leg: false, alt: false };
+const mccainHeist = { date: "2026-11-04", sport: "NBA", cat: "The Heist", pick: "Jared McCain o2.5 Rebounds", prop: "@alexcaruso · Rebounds", stat: "1 REB", res: "L", uu: -1, leg: false, alt: false };
+const traeAlt = { date: "2026-11-04", sport: "NBA", cat: "Alt lines", pick: "Trae Young 9+ Assists", prop: "NBA alt line · o9.5 → 9+ · @alexcaruso", stat: "6 AST", res: "L", uu: -1, leg: false, alt: true };
+const traeHeist = { date: "2026-11-04", sport: "NBA", cat: "The Heist", pick: "Trae Young 9+ Assists", prop: "@alexcaruso · Assists", stat: "6 AST", res: "L", uu: -1, leg: false, alt: true };
+const traeOver = { date: "2026-11-04", sport: "NBA", cat: "Cappers", pick: "Trae Young Over 9.5 Assists (vs ATL; NBA Play #1)", prop: "@alexcaruso · NBA assists (over)", stat: "L (6 AST)", res: "L", uu: -1, leg: false, alt: false };
+const hezonjaAlt = { date: "2026-11-04", sport: "NBA", cat: "Alt lines", pick: "Mario Hezonja 11+ PR", prop: "NBA alt line · o13.5 → 11+ · @panpotd", stat: "20 P+R", res: "W", uu: 0.31, leg: false, alt: true };
+const hezonjaHeist = { date: "2026-11-04", sport: "NBA", cat: "The Heist", pick: "Mario Hezonja 11+ PR", prop: "@panpotd · Other", stat: "20 P+R", res: "W", uu: 0.31, leg: false, alt: true };
+const hezonjaOver = { date: "2026-11-04", sport: "NBA", cat: "Cappers", pick: "Mario Hezonja O 13.5 PR (vs OKC; NBA Wednesday Play #2)", prop: "@panpotd · NBA pts+reb (over)", stat: "W (20 P+R)", res: "W", uu: 0.95, leg: false, alt: false };
+assert.equal(playKey(butlerCap), playKey(butlerHeist));
+assert.equal(playKey(giddeyCap), playKey(giddeyHeist));
+assert.equal(playKey(mccainCap), playKey(mccainHeist));
+assert.equal(playKey(traeAlt), playKey(traeHeist));
+assert.notEqual(playKey(traeAlt), playKey(traeOver));
+assert.equal(playKey(hezonjaAlt), playKey(hezonjaHeist));
+assert.notEqual(playKey(hezonjaAlt), playKey(hezonjaOver));
+assert.match(playKey(mccainCap), /\|o2\.5$/);
+assert.match(playKey(traeAlt), /\|o8\.5$/);
+assert.match(playKey(traeOver), /\|o9\.5$/);
+assert.match(playKey(braunAlt), /\|o3\.5$/);
+assert.match(playKey(braunOver), /\|o4\.5$/);
+const paired = adaptDesk(
+  {
+    today: { date: "2026-11-05", tickets: [], sports: {} },
+    results_v2: { rows: [butlerCap, butlerHeist, giddeyCap, giddeyHeist, mccainCap, mccainHeist, traeAlt, traeHeist, traeOver, hezonjaAlt, hezonjaHeist, hezonjaOver, braunAlt, braunHeist, braunOver, packersA, packersB] },
+    record: { chart: [["10/18", 1], ["10/28", 2], ["11/04", 3]] },
+  },
+  ncaab,
+);
+const once = (name: string) => paired.grades.filter((grade) => (grade.play ?? "").includes(name));
+assert.equal(once("Butler").length, 1);
+assert.equal(once("Giddey").length, 1);
+assert.equal(once("McCain").length, 1);
+assert.equal(once("9+").length, 1);
+assert.equal(once("Over 9.5").length, 1);
+assert.equal(once("11+").length, 1);
+assert.equal(once("13.5").length, 1);
+assert.equal(once("Butler")[0].units, 0.91);
+assert.equal(once("Giddey")[0].side, "over");
+assert.equal(once("McCain")[0].side, "over");
+assert.equal(once("9+")[0].side, "alt");
+assert.equal(once("Over 9.5")[0].side, "over");
+assert.equal(once("11+")[0].side, "alt");
+assert.equal(once("4+")[0].side, "alt");
+assert.equal(once("o4.5")[0].side, "over");
+for (const name of ["Butler", "Giddey", "McCain"]) {
+  const grade = once(name)[0];
+  assert.equal(sectionMatch(grade, "all"), true);
+  assert.equal(sectionMatch(grade, "heist"), true);
+  assert.equal(sectionMatch(grade, "cappers"), true);
+}
+assert.equal(sectionMatch(once("9+")[0], "heist"), true);
+assert.equal(sectionMatch(once("9+")[0], "cappers"), false);
+assert.equal(paired.grades.filter((grade) => sectionMatch(grade, "cappers") && (grade.play ?? "").includes("Packers")).length, 1);
+const profit = (html: string) => html.match(/<h2>Profit<\/h2>[\s\S]*?<div class="sub">([^<]+)<\/div>/)?.[1] ?? "";
+const todaySummary = renderPage({ ...blank(), view: "today" }, paired);
+const resultsSummary = renderPage({ ...blank(), view: "results", statsSection: "all" }, paired);
+assert.equal(profit(todaySummary), profit(resultsSummary));
+assert.equal(profit(todaySummary), "-3.83u · 3-6 · 33% win rate");
+const heistSummary = renderPage({ ...blank(), view: "results", statsSection: "heist" }, paired);
+const capperSummary = renderPage({ ...blank(), view: "results", statsSection: "cappers" }, paired);
+assert.notEqual(profit(heistSummary), profit(todaySummary));
+assert.notEqual(profit(capperSummary), profit(todaySummary));
 
 console.log("adapter tests ok", adapted.picks.length, "picks");
