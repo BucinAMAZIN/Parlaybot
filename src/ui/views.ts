@@ -2,7 +2,7 @@ import type { Board } from "../data/board.ts";
 import { findPlay } from "../data/board.ts";
 import { showsPreparedBoard } from "../data/desk.ts";
 import { LEAGUES } from "../data/standings.ts";
-import type { LiveGame, LiveLeg, Play, SeriesPoint, Ticket, TicketPart } from "../data/types.ts";
+import type { BookId, LiveGame, LiveLeg, Play, SeriesPoint, Ticket, TicketPart } from "../data/types.ts";
 import { formatSigned, esc } from "../lib/format.ts";
 import { fileBounds, historyScope, sliceHistory, unitChange, windowGrades, windowRings, windowWinRate, type RangeKey } from "../lib/history.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled, type ShareCard } from "../lib/shareCard.ts";
@@ -15,11 +15,13 @@ import {
   chartSvg,
   mascot,
   listedOn,
+  paceWord,
+  reactionOf,
   renderPlay,
   renderWhy,
   ringSvg,
 } from "./bits.ts";
-import { liveLegKey } from "../data/espn.ts";
+import { liveLegKey, trackPlayOnBoard } from "../data/espn.ts";
 import { displayCat, sectionMatch, sportTitle } from "../data/gradeLabels.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type GameCast } from "../data/gamecast.ts";
 import { courtHardware, nhlRink } from "./court.ts";
@@ -129,13 +131,13 @@ function bookToggle(book: AppState["book"]): string {
   return `<div class="book" role="tablist"><button type="button" class="hr ${book === "hr" ? "on" : ""}" data-act="book" data-book="hr">Hard Rock</button><button type="button" class="dk ${book === "dk" ? "on" : ""}" data-act="book" data-book="dk">DraftKings</button></div>`;
 }
 
-function renderTicket(ticket: Ticket, state: AppState): string {
+function renderTicket(ticket: Ticket, state: AppState, board: Board): string {
   const book = ticket.productKey === "first" ? "hr" : state.book;
   const on = ticket.showAll ? ticket.plays : ticket.plays.filter((play) => listedOn(play, book));
   const off = ticket.showAll ? [] : ticket.plays.filter((play) => !listedOn(play, book));
   const who = bookCode(book);
   const offHtml = off.length
-    ? `<details class="off"><summary>${off.length} play${off.length === 1 ? "" : "s"} not on ${who}, tap to view ▾</summary>${off.map((play) => renderPlay(play, book, state.selected, true)).join("")}</details>`
+    ? `<details class="off" data-keep="off:${esc(ticket.id)}"><summary>${off.length} play${off.length === 1 ? "" : "s"} not on ${who}, tap to view ▾</summary>${off.map((play) => renderPlay(play, book, state.selected, true, playTracker(board, state, ticket.id, play, book))).join("")}</details>`
     : "";
   const openLegs = on.filter((play) => canOpen(play, book) && play.slip !== false);
   const foot = ticketFoot(ticket, state, on.length, off.length, openLegs.length);
@@ -150,7 +152,38 @@ function renderTicket(ticket: Ticket, state: AppState): string {
     : "";
   const skips = noteList(ticket.skips, "Not added to Heist");
   const excluded = noteList(ticket.excluded, "Not on Heist Alt");
-  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div>${warnings}${subset}</div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected)).join("")}${offHtml}${skips}${excluded}<div class="tfoot">${foot}</div></section>`;
+  return `<section class="ticket" id="ticket-${esc(ticket.id)}"><header><div><h3>${esc(ticket.title)} ${badge}<button type="button" class="info" data-act="rules" data-id="${esc(ticket.id)}" aria-label="Rules for ${esc(ticket.title)}">i</button></h3>${stamp}<div class="sub">${esc(ticket.meta)}</div>${warnings}${subset}</div>${share}</header>${on.map((play) => renderPlay(play, book, state.selected, false, playTracker(board, state, ticket.id, play, book))).join("")}${offHtml}${skips}${excluded}<div class="tfoot">${foot}</div></section>`;
+}
+
+function playTracker(board: Board, state: AppState, ticketId: string, play: Play, book: BookId): string {
+  const tracked = trackPlayOnBoard(play, board, book);
+  if (!tracked) return "";
+  const { game, leg } = tracked;
+  const key = `${ticketId}:${play.id}`;
+  const open = state.openPlayTracks.has(key) ? "open" : "";
+  if (game.pre) {
+    if (!game.liveFeed?.teamStats.length) return "";
+    return `<details class="ptrack pre" data-play-live="${esc(key)}" ${open}><summary class="ptrack-sum"><span>Team VS · Matchup ranks</span><span class="car">${open ? "▴" : "▾"}</span></summary>${vsBody(game)}</details>`;
+  }
+  const clock = game.final ? `<span class="final">FINAL</span>` : `<span class="pdot"></span> LIVE · ${esc(game.clock)}`;
+  const head = `<span class="ptrack-score">${esc(game.away)} <b>${game.awayScore}</b> @ ${esc(game.home)} <b>${game.homeScore}</b></span><span class="ptrack-clock">${clock}<span class="car">${open ? "▴" : "▾"}</span></span>`;
+  const waiting = /Waiting on 1st score/.test(leg?.label ?? "");
+  const bar = leg && leg.pace !== "pre" && !waiting ? propBar(leg, game.final) : waiting ? `<div class="ptrack-wait">${esc(leg?.label ?? "")}</div>` : "";
+  const panel = state.playPanel[key] ?? "feed";
+  return `<details class="ptrack" data-play-live="${esc(key)}" ${open}><summary class="ptrack-sum">${head}${bar}<span class="ptrack-hint">Feed · Box · VS</span></summary>${renderGameBody(game, panel, state, key)}</details>`;
+}
+
+function propBar(leg: LiveLeg, final: boolean): string {
+  const pace = PACE[leg.pace];
+  const width = Math.max(0, Math.min(100, leg.line ? (leg.current / leg.line) * 100 : 0));
+  const face = reactionOf(leg);
+  const current = Number.isInteger(leg.current) ? String(leg.current) : String(leg.current);
+  const line = Number.isInteger(leg.line) ? String(leg.line) : String(leg.line);
+  const figure = /Waiting|HIT ·|MISS ·|VOID ·|Leading|Trailing|Tied|covering/.test(leg.label ?? "") ? "" : `${current} / ${line}${leg.unit ? ` ${leg.unit}` : ""}`;
+  const word = paceWord(leg, final);
+  const live = !final && leg.pace !== "dead" && leg.pace !== "pre" ? " live" : "";
+  const emoji = face.emoji ? `<span class="emr ${face.cls}" aria-hidden="true">${face.emoji}</span>` : "";
+  return `<span class="ptrack-prop"><span class="ptrack-fig"><b>${esc(figure)}</b> ${figure ? "· " : ""}${esc(word)}</span>${emoji}</span><span class="ptrack-bar${live}"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></span>`;
 }
 
 function noteList(rows: { capper: string; pick: string; reason: string }[] | undefined, label: string): string {
@@ -288,7 +321,7 @@ function today(state: AppState, board: Board): string {
       const label = mine.length ? "" : (bareTitle[section] ?? "");
       const head = label ? `<h2 class="grouph">${label}</h2>` : "";
       const noteHtml = notes.map((note) => `<p class="sub">${esc(note.text)}</p>`).join("");
-      const bodies = mine.map((ticket) => renderTicket(ticket, state)).join("");
+      const bodies = mine.map((ticket) => renderTicket(ticket, state, board)).join("");
       const injury = board.injuryCheck && mine.some((ticket) => ticket.plays.some((play) => play.status)) ? `<p class="stamp">${esc(board.injuryCheck)}</p>` : "";
       return `${head}${stamp}${noteHtml}${injury}${bodies}`;
     })
@@ -352,12 +385,15 @@ function gamesPanel(games: LiveGame[], state: AppState): string {
 
 function renderLiveLeg(leg: LiveLeg): string {
   const pace = PACE[leg.pace];
-  const width = Math.max(0, Math.min(100, (leg.current / leg.line) * 100));
+  const width = Math.max(0, Math.min(100, leg.line ? (leg.current / leg.line) * 100 : 0));
   const face = pace.mood ? mascot(pace.mood, 36) : `<span class="mascot" style="width:36px;height:36px"></span>`;
   const current = Number.isInteger(leg.current) ? String(leg.current) : String(leg.current);
   const line = Number.isInteger(leg.line) ? String(leg.line) : String(leg.line);
   const figure = leg.label || `${current}/${line}${leg.unit ? ` ${leg.unit}` : ""}`;
-  return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${esc(figure)}</span></div><div class="lv-bar"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace p-${leg.pace}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why)}</div></div>`;
+  const mood = reactionOf(leg);
+  const emoji = mood.emoji ? `<span class="emr ${mood.cls}" aria-hidden="true">${mood.emoji}</span>` : "";
+  const live = leg.pace !== "dead" && leg.pace !== "pre" ? " live" : "";
+  return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${esc(figure)}${emoji}</span></div><div class="lv-bar${live}"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace p-${leg.pace}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why, `why:${leg.key || leg.name}`)}</div></div>`;
 }
 
 function sideLine(side: LiveGame["awaySide"]): string {
@@ -376,15 +412,16 @@ function renderGame(game: LiveGame, state: AppState, withLegs: boolean): string 
   return `<section class="game"><details class="gx" data-game="${esc(game.id)}" ${open}><summary><div class="ghead"><div><div class="score">${esc(score)}</div>${ctx}</div>${clock}</div><div class="tap">▾ Feed · Box · VS</div></summary>${renderGameBody(game, panel, state)}</details>${legs}</section>`;
 }
 
-function renderGameBody(game: LiveGame, panel: "feed" | "box" | "vs", state: AppState): string {
+function renderGameBody(game: LiveGame, panel: "feed" | "box" | "vs", state: AppState, track = ""): string {
   const pills = (["feed", "box", "vs"] as const)
     .map((id) => {
       const label = id === "feed" ? "Feed" : id === "box" ? "Box score" : "Team VS";
-      return `<button type="button" class="${panel === id ? "on" : ""}" data-act="panel" data-game="${esc(game.id)}" data-panel="${id}">${label}</button>`;
+      const who = track ? `data-act="play-panel" data-track="${esc(track)}"` : `data-act="panel" data-game="${esc(game.id)}"`;
+      return `<button type="button" class="${panel === id ? "on" : ""}" ${who} data-panel="${id}">${label}</button>`;
     })
     .join("");
   let body = "";
-  if (panel === "feed") body = feedBody(game, state);
+  if (panel === "feed") body = feedBody(game, state, track);
   else if (panel === "box") body = boxBody(game);
   else body = vsBody(game);
   const cast = game.liveFeed?.cast;
@@ -406,7 +443,7 @@ function scoreHead(cast: GameCast): string {
   return `<div class="casthead" style="--wash-a:${esc(cast.away.color)};--wash-h:${esc(cast.home.color)}">${side(cast.away)}<div class="castscore"><span class="nums"><b>${esc(cast.away.score || "–")}</b><b>${esc(cast.home.score || "–")}</b></span><span class="clock${cast.live ? "" : " pre"}">${dot}${esc(cast.clock || (cast.pre ? "Not started" : ""))}</span></div>${side(cast.home, true)}</div>`;
 }
 
-function feedBody(game: LiveGame, state: AppState): string {
+function feedBody(game: LiveGame, state: AppState, track = ""): string {
   const cast = game.liveFeed?.cast;
   if (!cast) {
     const items = game.liveFeed?.real ? game.liveFeed.pbp : [];
@@ -418,27 +455,32 @@ function feedBody(game: LiveGame, state: AppState): string {
       )
       .join("");
   }
-  const filter = state.feedFilter[game.id] ?? { team: "All", period: "All" };
+  const filter = track
+    ? { team: state.castTeam[track] ?? "All", period: state.castPeriod[track] ?? "All" }
+    : state.feedFilter[game.id] ?? { team: "All", period: "All" };
   const visual = cast.kind === "basketball"
-    ? courtBlock(game.id, cast, filter)
+    ? courtBlock(game.id, cast, filter, track)
     : cast.kind === "football"
       ? fieldBlock(cast)
       : cast.kind === "hockey"
-        ? rinkBlock(game.id, cast, filter)
+        ? rinkBlock(game.id, cast, filter, track)
         : cast.kind === "baseball"
           ? diamondBlock(cast)
           : "";
-  return `${visual}${playList(game.id, cast, state.feedFull.has(game.id))}`;
+  return `${visual}${playList(game.id, cast, state.feedFull.has(track || game.id), track)}`;
 }
 
-function pillRow(gameId: string, label: string, current: string, keys: string[], field: "team" | "period"): string {
+function pillRow(gameId: string, label: string, current: string, keys: string[], field: "team" | "period", track = ""): string {
   const buttons = keys
-    .map((key) => `<button type="button" class="${current === key ? "on" : ""}" data-act="feed" data-game="${esc(gameId)}" data-${field}="${esc(key)}">${esc(key)}</button>`)
+    .map((key) => {
+      const who = track ? `data-act="play-feed" data-track="${esc(track)}"` : `data-act="feed" data-game="${esc(gameId)}"`;
+      return `<button type="button" class="${current === key ? "on" : ""}" ${who} data-${field}="${esc(key)}">${esc(key)}</button>`;
+    })
     .join("");
   return `<div class="pills castpills" aria-label="${esc(label)}">${buttons}</div>`;
 }
 
-function courtBlock(gameId: string, cast: GameCast, filter: { team: string; period: string }): string {
+function courtBlock(gameId: string, cast: GameCast, filter: { team: string; period: string }, track = ""): string {
   const shown = filterShots(cast.shots, filter.team, filter.period);
   const marks = shown
     .map((shot, index) => shotMark(shot, index === shown.length - 1))
@@ -448,7 +490,7 @@ function courtBlock(gameId: string, cast: GameCast, filter: { team: string; peri
     : `<text class="court-note" x="47" y="27" text-anchor="middle">${esc(cast.pre ? "Fills in once the game starts" : "Shot locations not available for this game")}</text>`;
   const svg = `<svg class="court" viewBox="-1 -1 96 52" role="img" aria-label="Shot chart"><rect class="court-floor" x="0" y="0" width="94" height="50"/><rect class="court-line" x="0" y="0" width="94" height="50" fill="none"/><line class="court-line" x1="47" y1="0" x2="47" y2="50"/><circle class="court-line" cx="47" cy="25" r="6" fill="none"/>${courtHardware(cast.court === "nba", esc(cast.home.logo))}${marks}${note}</svg>`;
   const teams = ["All", cast.away.abbr, cast.home.abbr].filter(Boolean);
-  return `${pillRow(gameId, "Team", filter.team, teams, "team")}${pillRow(gameId, "Period", filter.period, ["All", ...cast.periods], "period")}<div class="courtwrap">${svg}</div><p class="legendline"><span>● made</span><span>✕ missed</span><span>○ latest</span><b>${esc(fgLine(shown, cast.away.abbr))}</b><b>${esc(fgLine(shown, cast.home.abbr))}</b></p>`;
+  return `${pillRow(gameId, "Team", filter.team, teams, "team", track)}${pillRow(gameId, "Period", filter.period, ["All", ...cast.periods], "period", track)}<div class="courtwrap">${svg}</div><p class="legendline"><span>● made</span><span>✕ missed</span><span>○ latest</span><b>${esc(fgLine(shown, cast.away.abbr))}</b><b>${esc(fgLine(shown, cast.home.abbr))}</b></p>`;
 }
 
 function shotMark(shot: CourtShot, latest: boolean): string {
@@ -480,14 +522,14 @@ function rinkMark(mark: GameCast["rink"][number], latest: boolean): string {
   return `${ring}<g stroke="${esc(mark.color)}" stroke-width="0.65" stroke-linecap="round"><line x1="${(x - 1.7).toFixed(2)}" y1="${(y - 1.7).toFixed(2)}" x2="${(x + 1.7).toFixed(2)}" y2="${(y + 1.7).toFixed(2)}"/><line x1="${(x - 1.7).toFixed(2)}" y1="${(y + 1.7).toFixed(2)}" x2="${(x + 1.7).toFixed(2)}" y2="${(y - 1.7).toFixed(2)}"/></g>`;
 }
 
-function rinkBlock(gameId: string, cast: GameCast, filter: { team: string; period: string }): string {
+function rinkBlock(gameId: string, cast: GameCast, filter: { team: string; period: string }, track = ""): string {
   const shown = filterShots(cast.rink, filter.team, filter.period);
   const marks = shown.map((mark, index) => rinkMark(mark, index === shown.length - 1)).join("");
   const note = cast.rink.length ? "" : `<text class="court-note" x="0" y="2" text-anchor="middle">${esc(cast.pre ? "Fills in once the game starts" : "Shot locations not available for this game")}</text>`;
   const clip = `rink-${gameId.replace(/[^a-z0-9_-]/gi, "") || "ice"}`;
   const svg = `<svg class="rink" viewBox="-104 -46 208 92" role="img" aria-label="Rink">${nhlRink(/^https:\/\//i.test(cast.home.logo) ? cast.home.logo : "", clip)}<g clip-path="url(#${clip})">${marks}${note}</g></svg>`;
   const teams = ["All", cast.away.abbr, cast.home.abbr].filter(Boolean);
-  return `${pillRow(gameId, "Team", filter.team, teams, "team")}${pillRow(gameId, "Period", filter.period, ["All", ...cast.periods], "period")}<div class="courtwrap">${svg}</div><p class="legendline"><span>● SOG</span><span>✕ miss/blk</span><span>★ goal</span><span>○ latest</span><b>${esc(sogLine(shown, cast.away.abbr))}</b><b>${esc(sogLine(shown, cast.home.abbr))}</b></p>`;
+  return `${pillRow(gameId, "Team", filter.team, teams, "team", track)}${pillRow(gameId, "Period", filter.period, ["All", ...cast.periods], "period", track)}<div class="courtwrap">${svg}</div><p class="legendline"><span>● SOG</span><span>✕ miss/blk</span><span>★ goal</span><span>○ latest</span><b>${esc(sogLine(shown, cast.away.abbr))}</b><b>${esc(sogLine(shown, cast.home.abbr))}</b></p>`;
 }
 
 function diamondBlock(cast: GameCast): string {
@@ -497,13 +539,13 @@ function diamondBlock(cast: GameCast): string {
   return `<div class="diamondwrap"><svg class="diamond" viewBox="0 0 80 70" role="img" aria-label="Bases">${base(spot.bases[1], 36, 8)}${base(spot.bases[2], 16, 28)}${base(spot.bases[0], 56, 28)}<rect class="base on" x="36" y="50" width="7" height="7" transform="rotate(45 39.5 53.5)"/></svg><p class="legendline"><b>${esc(spot.balls)}-${esc(spot.strikes)}</b><span>${esc(spot.outs)} out</span>${spot.pitcher ? `<span>P ${esc(spot.pitcher)}</span>` : ""}${spot.batter ? `<span>AB ${esc(spot.batter)}</span>` : ""}</p></div>`;
 }
 
-function playList(gameId: string, cast: GameCast, full: boolean): string {
+function playList(gameId: string, cast: GameCast, full: boolean, track = ""): string {
   const rows = cast.plays;
   if (!rows.length) return `<p class="empty">${cast.pre ? "Fills in once the game starts" : "No play-by-play in this ESPN summary."}</p>`;
   const shown = full ? rows : rows.slice(0, 10);
   const list = shown.map(playRow).join("");
   const more = rows.length > 10
-    ? `<button type="button" class="linkrow" data-act="feed-full" data-game="${esc(gameId)}">${full ? "Latest plays" : `Full play-by-play (${rows.length})`}</button>`
+    ? `<button type="button" class="linkrow" ${track ? `data-act="play-full" data-track="${esc(track)}"` : `data-act="feed-full" data-game="${esc(gameId)}"`}>${full ? "Latest plays" : `Full play-by-play (${rows.length})`}</button>`
     : "";
   return `${list}${more}`;
 }
@@ -544,22 +586,19 @@ function boxBody(game: LiveGame): string {
   return `${yours}<p class="empty">No data yet</p>`;
 }
 
-function vsBody(game: LiveGame): string {
-  if (game.liveFeed?.real) {
-    const rows = game.liveFeed.teamStats;
-    if (!rows.length) return `<p class="empty">No data yet</p>`;
-    const body = rows
-      .map((row) => `<tr><td>${esc(row.name)}</td><td>${esc(row.away)}</td><td>${esc(row.home)}</td></tr>`)
-      .join("");
-    const source = rowLooksRanked(rows) ? "Desk team ranks published in data.json" : "ESPN team stats. Values only — ranks are not invented.";
-    const built = game.liveFeed?.built ? `<div class="stamp">${esc(game.liveFeed.built)}</div>` : "";
-    return `<div class="sub">${source}</div>${built}<div class="vsh"><b>${esc(game.away)} <span class="sub">vs</span> ${esc(game.home)}</b></div><table class="vst"><tr><th>Stat</th><th>${esc(game.away)}</th><th>${esc(game.home)}</th></tr>${body}</table>`;
-  }
-  return `<p class="empty">No data yet</p>`;
+function rankCell(rank: string | undefined, of: string | undefined, value: string, tone: string | undefined): string {
+  const chip = rank ? `<b class="${esc(tone || "")}">${esc(rank)}</b>${of ? `<span class="rk-n">${esc(of)}</span>` : ""}` : "";
+  return `<td>${chip}${value ? ` <span class="rk-val">${esc(value)}</span>` : ""}</td>`;
 }
 
-function rowLooksRanked(rows: { away: string }[]): boolean {
-  return rows.some((row) => row.away.startsWith("#"));
+function vsBody(game: LiveGame): string {
+  const rows = game.liveFeed?.teamStats ?? [];
+  if (!rows.length) return `<p class="empty">No offensive/defensive rank data for this matchup.</p>`;
+  const body = rows
+    .map((row) => `<tr><td>${esc(row.name)}</td>${rankCell(row.awayRank, row.awayOf, row.away, row.awayTone)}${rankCell(row.homeRank, row.homeOf, row.home, row.homeTone)}</tr>`)
+    .join("");
+  const built = game.liveFeed?.built ? `<div class="stamp">${esc(game.liveFeed.built)}</div>` : "";
+  return `<p class="sub vsleg">⚔️ Off #1 = most · 🛡️ Def #1 = fewest allowed</p>${built}<div class="vsh"><b>${esc(game.away)} <span class="sub">vs</span> ${esc(game.home)}</b></div><table class="vst"><tr><th>Stat</th><th>${esc(game.away)}</th><th>${esc(game.home)}</th></tr>${body}</table>`;
 }
 
 function live(state: AppState, board: Board): string {
@@ -728,7 +767,7 @@ function cappers(state: AppState, board: Board): string {
     const blocks = items
       .map((capper) => {
         const plays = capper.plays.length
-          ? capper.plays.map((play) => renderPlay(play, state.book, state.selected, !listedOn(play, state.book))).join("")
+          ? capper.plays.map((play) => renderPlay(play, state.book, state.selected, !listedOn(play, state.book), playTracker(board, state, capper.id, play, state.book))).join("")
           : `<p class="empty">${esc(capper.note ?? "No play.")}</p>`;
         const off = capper.plays.some((play) => !listedOn(play, state.book));
         const body = off && capper.plays.length && capper.plays.every((play) => !listedOn(play, state.book))

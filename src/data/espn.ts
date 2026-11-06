@@ -1,5 +1,5 @@
 import type { Board } from "./board.ts";
-import type { LegPace, LiveFeed, LiveGame, LiveLeg, LiveTicket, Mood, Play, Ticket, WhyBlock } from "./types.ts";
+import type { BookId, LegPace, LiveFeed, LiveGame, LiveLeg, LiveTicket, Mood, Play, TeamStat, Ticket, WhyBlock } from "./types.ts";
 import { propLine } from "../lib/propLine.ts";
 import { gcHum, isFreeThrow, parseCast } from "./gamecast.ts";
 import { gradeTeamBet, sortLiveGames, teamBet } from "./liveCard.ts";
@@ -76,6 +76,12 @@ const ABBR_ALIAS: Record<string, string[]> = {
   WAS: ["WSH"],
   NY: ["NYK"],
   NYK: ["NY"],
+  GS: ["GSW"],
+  GSW: ["GS"],
+  NO: ["NOP"],
+  NOP: ["NO"],
+  SA: ["SAS"],
+  SAS: ["SA"],
 };
 
 const DIVISION: Record<string, string> = {
@@ -387,11 +393,11 @@ function legFor(play: Play, event: EventRow, awayScore: number, homeScore: numbe
     const known = current != null;
     return {
       name: play.name,
-      current: known ? value : 0,
+      current: value,
       line: prop.line,
       unit: prop.unit,
-      pace: !started ? "pre" : known ? paceOf(value, prop.line, prop.under, prop.plus, event) : "pre",
-      source: !started ? "Not started · ESPN" : known ? "ESPN box score" : "Not in the ESPN box score yet",
+      pace: !started ? "pre" : paceOf(value, prop.line, prop.under, prop.plus, event),
+      source: !started ? "Not started · ESPN" : known ? "ESPN box score" : "0 so far · ESPN",
       why: play.why,
     };
   }
@@ -432,7 +438,7 @@ function pbp(summary: Json | undefined, away: string, home: string, league: Live
   });
 }
 
-function box(summary: Json | undefined, names: string[]): LiveFeed["box"] {
+export function box(summary: Json | undefined, names: string[]): LiveFeed["box"] {
   const teams = summary && isObj(summary.boxscore) && Array.isArray(summary.boxscore.players) ? summary.boxscore.players : [];
   const rows: LiveFeed["box"]["rows"] = [];
   let headers: string[] = [];
@@ -445,7 +451,7 @@ function box(summary: Json | undefined, names: string[]): LiveFeed["box"] {
     const labels = (Array.isArray(group.labels) ? group.labels : Array.isArray(group.keys) ? group.keys : []).map((item) => str(item)).slice(0, 5);
     if (!headers.length) headers = ["Player", ...labels];
     rows.push({ cells: [title], mine: false, header: title });
-    for (const athlete of Array.isArray(group.athletes) ? group.athletes.slice(0, 8) : []) {
+    for (const athlete of Array.isArray(group.athletes) ? group.athletes.slice(0, 20) : []) {
       if (!isObj(athlete)) continue;
       const name = str(isObj(athlete.athlete) ? athlete.athlete.displayName : "");
       const stats = (Array.isArray(athlete.stats) ? athlete.stats : []).map((item) => str(item)).slice(0, labels.length);
@@ -455,26 +461,15 @@ function box(summary: Json | undefined, names: string[]): LiveFeed["box"] {
   return { headers, rows };
 }
 
-function espnTeamStats(summary: Json | undefined): { name: string; away: string; home: string }[] {
-  const teams = summary && isObj(summary.boxscore) && Array.isArray(summary.boxscore.teams) ? summary.boxscore.teams : [];
-  const parsed = teams.flatMap((team) => {
-    if (!isObj(team) || !isObj(team.team) || !Array.isArray(team.statistics)) return [];
-    return [{ home: str(team.homeAway) === "home", stats: team.statistics.filter(isObj) }];
-  });
-  const away = parsed.find((team) => !team.home);
-  const home = parsed.find((team) => team.home);
-  if (!away || !home) return [];
-  const homeBy = new Map(home.stats.map((stat) => [str(stat.name) || str(stat.abbreviation), str(stat.displayValue)]));
-  return away.stats.slice(0, 8).flatMap((stat) => {
-    const key = str(stat.name) || str(stat.abbreviation);
-    const label = str(stat.label) || str(stat.abbreviation) || key;
-    const theirs = homeBy.get(key);
-    if (!label || !str(stat.displayValue) || !theirs) return [];
-    return [{ name: label, away: str(stat.displayValue), home: theirs }];
-  });
-}
-
-type VsTeam = { ab?: string; ha?: string; rec?: string | null; v?: Record<string, { val?: number; rank?: number; n?: number }> };
+const SPORT_KEY: Record<string, string> = {
+  NBA: "NBA",
+  NHL: "NHL",
+  NFL: "NFL",
+  MLB: "MLB",
+  WNBA: "WNBA",
+  NCAAF: "NCAA F",
+  NCAAB: "NCAAM",
+};
 
 const RANK_LABEL: Record<string, string> = {
   pts_o: "Points / gm",
@@ -490,48 +485,146 @@ const RANK_LABEL: Record<string, string> = {
   adjo: "Adj. offense",
   adjd: "Adj. defense",
   tempo: "Tempo",
+  r_o: "Off. rank",
+  r_d: "Def. rank",
 };
 
-function deskRanks(teamVs: unknown, away: string, home: string): { name: string; away: string; home: string }[] {
-  if (!isObj(teamVs) || !isObj(teamVs.sports)) return [];
-  for (const sport of Object.values(teamVs.sports)) {
-    if (!isObj(sport) || !Array.isArray(sport.games)) continue;
+const OFF_KEYS = new Set(["pts_o", "yds_o", "ortg", "gf", "sf", "r_o", "adjo"]);
+const DEF_KEYS = new Set(["pts_d", "yds_d", "drtg", "ga", "sa", "r_d", "adjd"]);
+
+type RankCell = { val?: number; rank?: number; n?: number };
+
+export function rankTone(rank: number, total: number): "rk-good" | "rk-mid" | "rk-bad" {
+  const third = Math.ceil(total / 3);
+  if (rank <= third) return "rk-good";
+  if (rank > total - third) return "rk-bad";
+  return "rk-mid";
+}
+
+export function formatRankValue(key: string, value: number): string {
+  const shown = key === "ortg" || key === "drtg" ? value * 100 : value;
+  return shown.toFixed(1);
+}
+
+function rankIcon(key: string, side: string): string {
+  if (key === "tempo") return "⏱";
+  if (side === "def" || DEF_KEYS.has(key)) return "🛡️";
+  if (side === "off" || OFF_KEYS.has(key)) return "⚔️";
+  return "";
+}
+
+function aliasHit(abbr: string, other: string): boolean {
+  const left = abbr.toUpperCase();
+  const right = other.toUpperCase();
+  if (!left || !right) return false;
+  if (left === right) return true;
+  return (ABBR_ALIAS[left] ?? []).includes(right) || (ABBR_ALIAS[right] ?? []).includes(left);
+}
+
+function looseName(want: string, have: string): boolean {
+  const left = want.toLowerCase().trim();
+  const right = have.toLowerCase().trim();
+  if (!left || !right || left.length < 3 || right.length < 3) return false;
+  if (left === right || left.includes(right) || right.includes(left)) return true;
+  return left.split(/\s+/).filter((word) => word.length > 3).some((word) => right.includes(word));
+}
+
+function teamHit(abbr: string, name: string, team: Json): boolean {
+  const code = str(team.ab);
+  const label = str(team.name);
+  if (aliasHit(abbr, code)) return true;
+  return looseName(name, label) || looseName(abbr, label) || looseName(name, code);
+}
+
+/** Team VS ignores the live box score. `summary` is accepted so a live game cannot swap these ranks out. */
+export function teamStatsFor(summary: unknown, teamVs: unknown, league: string, awayAbbr: string, awayName: string, homeAbbr: string, homeName: string): { rows: TeamStat[]; stamp: string } {
+  void summary;
+  return matchupRanks(teamVs, league, awayAbbr, awayName, homeAbbr, homeName);
+}
+
+/** Season offense and defense ranks from teamvs. Never the live box score. */
+export function matchupRanks(teamVs: unknown, league: string, awayAbbr: string, awayName: string, homeAbbr: string, homeName: string): { rows: TeamStat[]; stamp: string } {
+  if (!isObj(teamVs) || !isObj(teamVs.sports)) return { rows: [], stamp: "" };
+  const sports = teamVs.sports;
+  const preferred = str(SPORT_KEY[league] || league);
+  const order = [sports[preferred], ...Object.values(sports).filter((sport) => sport !== sports[preferred])].filter(isObj);
+  for (const sport of order) {
+    if (!Array.isArray(sport.games)) continue;
+    const meta = new Map((Array.isArray(sport.stats) ? sport.stats : []).filter(isObj).map((stat) => [str(stat.key), stat]));
     for (const game of sport.games) {
       if (!isObj(game) || !Array.isArray(game.teams)) continue;
-      const teams = game.teams.filter(isObj) as VsTeam[];
-      const left = teams.find((team) => team.ab === away);
-      const right = teams.find((team) => team.ab === home);
-      if (!left?.v || !right?.v) continue;
-      return Object.keys(left.v).flatMap((key) => {
-        const a = left.v?.[key];
-        const b = right.v?.[key];
-        if (!a || !b || a.rank == null || b.rank == null) return [];
-        const aval = typeof a.val === "number" ? a.val.toFixed(1) : "";
-        const bval = typeof b.val === "number" ? b.val.toFixed(1) : "";
-        return [{ name: RANK_LABEL[key] ?? key, away: `#${a.rank}${aval ? ` · ${aval}` : ""}`, home: `#${b.rank}${bval ? ` · ${bval}` : ""}` }];
-      });
+      const sides = game.teams.filter(isObj);
+      const away = sides.find((team) => teamHit(awayAbbr, awayName, team));
+      const home = sides.find((team) => teamHit(homeAbbr, homeName, team));
+      if (!away || !home || away === home || !isObj(away.v) || !isObj(home.v)) continue;
+      const keys = [...meta.keys()];
+      for (const key of Object.keys(away.v)) if (!keys.includes(key)) keys.push(key);
+      const rows: TeamStat[] = [];
+      const sources = new Set<string>();
+      for (const key of keys) {
+        const a = away.v[key] as RankCell | undefined;
+        const b = home.v[key] as RankCell | undefined;
+        if (!a || !b || a.rank == null || b.rank == null) continue;
+        const spec = meta.get(key);
+        const side = spec ? str(spec.side) : "";
+        const label = spec ? str(spec.label) : RANK_LABEL[key] ?? key;
+        const icon = rankIcon(key, side);
+        const total = a.n || b.n || (spec ? num(spec.n) ?? 0 : 0);
+        if (spec) {
+          const src = [str(spec.src), str(spec.as_of) ? `as of ${str(spec.as_of)}` : ""].filter(Boolean).join(" ");
+          if (src) sources.add(src);
+        }
+        rows.push({
+          name: icon ? `${icon} ${label}` : label,
+          away: typeof a.val === "number" ? formatRankValue(key, a.val) : "",
+          home: typeof b.val === "number" ? formatRankValue(key, b.val) : "",
+          awayRank: `#${a.rank}`,
+          homeRank: `#${b.rank}`,
+          awayOf: total ? `/${total}` : "",
+          homeOf: total ? `/${total}` : "",
+          awayTone: total ? rankTone(a.rank, total) : "",
+          homeTone: total ? rankTone(b.rank, total) : "",
+        });
+      }
+      const built = str(teamVs.built);
+      return { rows, stamp: [built, ...sources].filter(Boolean).join(" · ") };
     }
   }
-  return [];
+  return { rows: [], stamp: str(isObj(teamVs) ? teamVs.built : "") };
 }
 
 function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: string | null, standings?: Board["standings"]): LiveGame {
-  const names = plays.map((play) => propOf(play.name, event.league)?.player ?? "").filter(Boolean);
-  const fromEspn = espnTeamStats(event.summary);
-  const fromDesk = fromEspn.length ? [] : deskRanks(teamVs, event.away.abbr, event.home.abbr);
+  const names = plays.flatMap((play) => {
+    const prop = propOf(play.name, event.league);
+    if (prop) return [prop.player];
+    return isFirstBloodPlay(play) ? [play.name] : [];
+  });
+  const ranks = teamStatsFor(event.summary, teamVs, event.league, event.away.abbr, event.away.name, event.home.abbr, event.home.name);
   const pre = event.state === "pre";
   const cast = event.summary ? parseCast(event.summary, event.league) ?? undefined : undefined;
   const awayScore = cast?.away.score ? Number(cast.away.score) : event.away.score;
   const homeScore = cast?.home.score ? Number(cast.home.score) : event.home.score;
   const teams = { away: { abbr: event.away.abbr, names: event.away.names }, home: { abbr: event.home.abbr, names: event.home.names } };
   const buckets = new Map<string, LiveLeg>();
+  const scoredAway = Number.isFinite(awayScore) ? awayScore : event.away.score;
+  const scoredHome = Number.isFinite(homeScore) ? homeScore : event.home.score;
   for (const play of plays) {
-    const leg = legFor(play, event, Number.isFinite(awayScore) ? awayScore : event.away.score, Number.isFinite(homeScore) ? homeScore : event.home.score);
-    if (!leg) continue;
-    const key = liveLegKey(play.name, event.league, teams);
-    const next = { ...leg, key, name: cleanLiveTitle(play.name) };
-    const prev = buckets.get(key);
-    buckets.set(key, prev ? absorbLiveLeg(prev, next) : next);
+    const titles = [play.name];
+    if (play.dkName && cleanLiveTitle(play.dkName) !== cleanLiveTitle(play.name)) titles.push(play.dkName);
+    for (const title of titles) {
+      const source = title === play.name ? play : { ...play, name: title };
+      if (isFirstBloodPlay(source)) {
+        const special = firstBloodLeg(source.name, event.summary, event.state === "post" ? "post" : event.state === "pre" ? "pre" : "in", scoredAway, scoredHome);
+        if (special) buckets.set(special.key ?? title, special);
+        continue;
+      }
+      const leg = legFor(source, event, scoredAway, scoredHome);
+      if (!leg) continue;
+      const key = liveLegKey(source.name, event.league, teams);
+      const next = { ...leg, key, name: cleanLiveTitle(source.name) };
+      const prev = buckets.get(key);
+      buckets.set(key, prev ? absorbLiveLeg(prev, next) : next);
+    }
   }
   const legs = [...buckets.values()];
   const clock = cast?.clock || (pre ? event.detail || "Not started" : event.state === "post" ? "Final" : event.detail || event.clock || "Live");
@@ -563,9 +656,9 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
           }))
         : pbp(event.summary, event.away.abbr, event.home.abbr, event.league),
       box: box(event.summary, names),
-      teamStats: fromEspn.length ? fromEspn : fromDesk,
+      teamStats: ranks.rows,
       real: true,
-      built: fromEspn.length ? undefined : teamBuilt || undefined,
+      built: ranks.stamp || teamBuilt || undefined,
       cast,
     },
   };
@@ -574,6 +667,93 @@ function gameOf(event: EventRow, plays: Play[], teamVs: unknown, teamBuilt: stri
 function keyTeams(game: LiveGame): { away: LiveKeySide; home: LiveKeySide } {
   const names = (abbr: string, name: string) => [abbr, name, ...name.split(/\s+/)];
   return { away: { abbr: game.away, names: names(game.away, game.awayName) }, home: { abbr: game.home, names: names(game.home, game.homeName) } };
+}
+
+const emptyWhy: WhyBlock = { ours: false, line: "", why: [], whyNot: [] };
+
+function list(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+export function isFirstBloodPlay(play: Pick<Play, "id" | "name" | "detail">): boolean {
+  return play.id.startsWith("first-") || /first (basket|point|player to score)|1st player to score/i.test(`${play.name} ${play.detail}`);
+}
+
+function scorerName(row: Json): string {
+  for (const participant of list(row.participants)) {
+    if (!isObj(participant)) continue;
+    const athlete = isObj(participant.athlete) ? participant.athlete : participant;
+    const name = str(athlete.displayName) || str(athlete.shortName);
+    if (name) return name;
+  }
+  return "";
+}
+
+function didNotStart(summary: Json | undefined, player: string): boolean {
+  const teams = summary && isObj(summary.boxscore) && Array.isArray(summary.boxscore.players) ? summary.boxscore.players : [];
+  for (const team of teams) {
+    if (!isObj(team) || !Array.isArray(team.statistics)) continue;
+    for (const group of team.statistics) {
+      if (!isObj(group) || !Array.isArray(group.athletes)) continue;
+      for (const athlete of group.athletes) {
+        if (!isObj(athlete) || !isObj(athlete.athlete)) continue;
+        if (!samePlayer(player, str(athlete.athlete.displayName))) continue;
+        const stats = (Array.isArray(athlete.stats) ? athlete.stats : []).map((item) => str(item)).join(" ");
+        if (athlete.didNotPlay === true || /\bDNP\b/i.test(stats)) return true;
+        if (athlete.starter === false && stats.trim() === "") return true;
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
+/** First point of the game. Null before tip so Today does not show an empty bar. */
+export function firstBloodLeg(player: string, summary: unknown, state: "pre" | "in" | "post", awayScore: number, homeScore: number): LiveLeg | null {
+  if (state === "pre") return null;
+  const key = `first:${normBit(player)}`;
+  const rows = isObj(summary) ? list(summary.plays).filter(isObj) : [];
+  const scored = rows
+    .filter((row) => row.scoringPlay === true && (num(row.scoreValue) ?? 0) > 0 && list(row.participants).some(isObj))
+    .sort((a, b) => (num(a.sequenceNumber) ?? 0) - (num(b.sequenceNumber) ?? 0));
+  const first = scored[0];
+  if (!first) {
+    if (state === "in" && awayScore + homeScore === 0) {
+      return { name: player, current: 0, line: 1, unit: "", pace: "on", source: "ESPN play-by-play", why: emptyWhy, label: "LIVE · Waiting on 1st score", key };
+    }
+    return null;
+  }
+  const scorer = scorerName(first);
+  const clock = str(isObj(first.clock) ? first.clock.displayValue : first.clock);
+  const period = str(isObj(first.period) ? first.period.displayValue : "");
+  const when = [clock, period].filter(Boolean).join(" ");
+  if (scorer && samePlayer(player, scorer)) {
+    return { name: player, current: 1, line: 1, unit: "", pace: "hit", source: "ESPN play-by-play", why: emptyWhy, label: `HIT · 1st point: ${scorer} (${when || "scored"})`, key };
+  }
+  if (didNotStart(isObj(summary) ? summary : undefined, player)) {
+    return { name: player, current: 0, line: 1, unit: "", pace: "dead", source: "ESPN play-by-play", why: emptyWhy, label: "VOID · did not start", key };
+  }
+  return { name: player, current: 0, line: 1, unit: "", pace: "dead", source: "ESPN play-by-play", why: emptyWhy, label: `MISS · 1st point: ${scorer || "another player"} (${when || "scored"})`, key };
+}
+
+export function trackPlayOnBoard(play: Play, board: Board, book: BookId): { game: LiveGame; leg: LiveLeg | null } | null {
+  const game = board.liveGames.find((item) => playMatchesLive(play, item));
+  if (!game) return null;
+  if (isFirstBloodPlay(play)) {
+    const key = `first:${normBit(play.name)}`;
+    return { game, leg: game.pre ? null : game.legs.find((leg) => leg.key === key) ?? null };
+  }
+  const line = book === "dk" && play.dkName ? play.dkName : play.name;
+  return { game, leg: findLiveLeg(line, game) ?? null };
+}
+
+function playMatchesLive(play: Play, game: LiveGame): boolean {
+  const away = play.matchup?.away.abbr;
+  const home = play.matchup?.home.abbr;
+  if (away && home && [game.away, game.home].includes(away) && [game.away, game.home].includes(home)) return true;
+  const blob = `${play.gameText ?? ""} ${play.detail} ${play.name}`.toLowerCase();
+  const names = [game.away, game.home, game.awayName, game.homeName].map((name) => name.toLowerCase()).filter((name) => name.length > 2);
+  return names.filter((name) => blob.includes(name)).length >= 2;
 }
 
 export function findLiveLeg(playName: string, game: LiveGame): LiveLeg | undefined {
@@ -635,7 +815,7 @@ export async function attachLive(board: Board): Promise<void> {
   const fetched: EventRow[][] = [];
   for (const [group, path, league, extra] of LVL) fetched.push(await scoreboard(group, path, league, extra, date));
   const events = fetched.flat();
-  const plays = board.tickets.flatMap((ticket) => ticket.plays);
+  const plays = [...board.tickets.flatMap((ticket) => ticket.plays), ...board.cappers.flatMap((capper) => capper.plays)];
   const wanted = events.filter((event) => plays.some((play) => matches(play, event)));
   await Promise.all(
     wanted.slice(0, 24).map(async (event) => {

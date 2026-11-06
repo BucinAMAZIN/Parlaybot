@@ -205,10 +205,22 @@ export type LiveGame = {
   liveFeed?: LiveFeed;
 };
 
+export type TeamStat = {
+  name: string;
+  away: string;
+  home: string;
+  awayRank?: string;
+  homeRank?: string;
+  awayOf?: string;
+  homeOf?: string;
+  awayTone?: string;
+  homeTone?: string;
+};
+
 export type LiveFeed = {
   pbp: { team: string; event: string; when: string; score: string; desc: string; period: string }[];
   box: { headers: string[]; rows: { cells: string[]; mine: boolean; header?: string }[] };
-  teamStats: { name: string; away: string; home: string }[];
+  teamStats: TeamStat[];
   real: boolean;
   /** Desk `teamvs.built`, only when this panel is showing that table. */
   built?: string;

@@ -37,6 +37,14 @@ export type AppState = {
   /** Sport chip inside Today's Games. Separate from the plays filter. Not saved. */
   gamesSport: "All" | "NHL" | "NBA" | "NFL" | "NCAAF" | "NCAAB" | "MLB" | "NASCAR";
   feedFilter: Record<string, { team: string; period: string }>;
+  /** Open Today prop drawers, keyed by ticket id and play id. Not saved. */
+  openPlayTracks: Set<string>;
+  /** Feed / Box / Team VS inside one Today play. Separate from the Live tab. */
+  playPanel: Record<string, Panel>;
+  /** Team filter inside one Today play's feed. */
+  castTeam: Record<string, string>;
+  /** Period filter inside one Today play's feed. */
+  castPeriod: Record<string, string>;
   /** Games whose play-by-play is expanded past the latest 10. Not saved. */
   feedFull: Set<string>;
   /** In-progress games the phone closed on Live. Not saved, so a fresh visit opens the first one. */
@@ -101,6 +109,10 @@ export function defaultState(): AppState {
     gamesOpen: false,
     gamesSport: "All",
     feedFilter: {},
+    openPlayTracks: new Set(),
+    playPanel: {},
+    castTeam: {},
+    castPeriod: {},
     feedFull: new Set(),
     liveDismissed: new Set(),
     profitRange: "14d",

@@ -61,16 +61,38 @@ export function listedOn(play: Play, book: BookId): boolean {
   return canOpen(play, book);
 }
 
-export function renderWhy(block: WhyBlock): string {
+export function renderWhy(block: WhyBlock, keep = ""): string {
   if (!block.why.length && !block.whyNot.length) return "";
   const tag = block.ours ? "Our read" : "Why";
   const ours = block.ours ? `<span class="ours">ours, not the capper's</span>` : "";
   const whyItems = block.why.length ? `<ul>${block.why.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : "";
   const notItems = block.whyNot.length ? `<h5 class="no">Why not</h5><ul>${block.whyNot.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : "";
-  return `<details class="why"><summary class="whychip">Why <span class="car shut" aria-hidden="true">▸</span><span class="car open" aria-hidden="true">▾</span></summary><div class="wb"><h5 class="yes">${tag}${ours}</h5>${whyItems}${notItems}</div></details>`;
+  const mark = keep ? ` data-keep="${esc(keep)}"` : "";
+  return `<details class="why"${mark}><summary class="whychip">Why <span class="car shut" aria-hidden="true">▸</span><span class="car open" aria-hidden="true">▾</span></summary><div class="wb"><h5 class="yes">${tag}${ours}</h5>${whyItems}${notItems}</div></details>`;
 }
 
-export function renderPlay(play: Play, book: BookId, selected: Set<string>, off = false): string {
+/** Animated status on a live prop. A .5 miss is the hook. */
+export function reactionOf(leg: { pace: LegPace; current: number; line: number }): { emoji: string; cls: string } {
+  if (leg.pace === "hit") return { emoji: "💰", cls: "emr-cash" };
+  if (leg.pace === "on") return { emoji: "🔥", cls: "emr-fire" };
+  if (leg.pace === "behind") return { emoji: "😓", cls: "emr-sweat" };
+  if (leg.pace === "cold") return { emoji: "🥶", cls: "emr-cold" };
+  if (leg.pace === "dead") return Math.abs(leg.current - leg.line) === 0.5 ? { emoji: "🪝", cls: "emr-hook" } : { emoji: "❌", cls: "emr-miss" };
+  return { emoji: "", cls: "" };
+}
+
+export function paceWord(leg: { pace: LegPace; label?: string }, final: boolean): string {
+  const label = leg.label ?? "";
+  if (/Waiting|HIT ·|MISS ·|VOID ·|Leading|Trailing|Tied|covering|Push/.test(label)) return label;
+  if (leg.pace === "hit") return final ? "Final · Hit" : "Hit!";
+  if (leg.pace === "on") return "On pace";
+  if (leg.pace === "behind") return "Sweating";
+  if (leg.pace === "cold") return "Behind pace";
+  if (leg.pace === "dead") return final ? "Final · Missed" : "Missed";
+  return "";
+}
+
+export function renderPlay(play: Play, book: BookId, selected: Set<string>, off = false, track = ""): string {
   const offered = priceOn(play, book);
   const odds = off ? play.hr ?? play.dk ?? "—" : offered ?? "—";
   const blocked = !off && play.blocked;
@@ -120,8 +142,8 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
   const box = check
     ? `<label class="chk"><input type="checkbox" data-id="${esc(play.id)}" ${checked} aria-label="Select ${esc(title)}"></label>`
     : "";
-  const why = play.showWhy === false ? "" : renderWhy(play.why);
-  return `<div class="play">${box}<div class="pbody"><div class="prow"><b>${esc(title)}</b><span class="odds">${esc(odds)}</span></div><div class="sub">${esc(play.detail)}</div>${posted}${live}${fee}${ctx}${rank}${alt}${flag}${marks}${chipRow}${grade}${why}<div class="btns">${button}</div></div></div>`;
+  const why = play.showWhy === false ? "" : renderWhy(play.why, `why:${play.id}`);
+  return `<div class="play">${box}<div class="pbody"><div class="prow"><b>${esc(title)}</b><span class="odds">${esc(odds)}</span></div><div class="sub">${esc(play.detail)}</div>${posted}${live}${fee}${ctx}${rank}${alt}${flag}${marks}${chipRow}${grade}${why}${track}<div class="btns">${button}</div></div></div>`;
 }
 
 /** >=55 green, 50–54.9 yellow, 40–49.9 orange, under 40 red. */

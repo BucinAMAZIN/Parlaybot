@@ -255,8 +255,47 @@ html.lg .brand .logo,html.xl .brand .logo{height:54px}
 .tk-bar i{flex:1;height:8px;border-radius:9px}
 .lv-leg{display:flex;gap:10px;border-top:1px solid #1e2631;padding:9px 0 4px;margin-top:8px}
 .lv-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 8px;font-size:.92rem}
-.lv-bar{width:100%;height:8px;border-radius:9px;background:#232c38;margin:6px 0 3px;overflow:hidden}
-.lv-bar i{display:block;height:100%;border-radius:9px}
+.lv-bar,.ptrack-bar{width:100%;height:8px;border-radius:9px;background:#232c38;margin:6px 0 3px;overflow:hidden;position:relative}
+.ptrack-bar{height:6px}
+.lv-bar i,.ptrack-bar i{display:block;height:100%;border-radius:9px;position:relative}
+.lv-bar.live i::after,.ptrack-bar.live i::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.45),transparent);animation:bar-sheen 1.6s linear infinite}
+@keyframes bar-sheen{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+.ptrack{margin:8px 0 2px;border:1px solid #2c3644;border-radius:12px;background:#10161d;max-width:100%;min-width:0}
+.ptrack-sum{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 10px;cursor:pointer;list-style:none}
+.ptrack-sum::-webkit-details-marker{display:none}
+.ptrack-score,.ptrack-fig{font-variant-numeric:tabular-nums}
+.ptrack-score b{font-size:1.05rem}
+.ptrack-clock{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:700}
+.ptrack-hint{flex-basis:100%;color:#8b97a8;font-size:.72rem}
+.ptrack-prop{display:flex;align-items:center;gap:8px;flex:1 0 100%;min-width:0}
+.ptrack-bar{flex:1 0 100%}
+.ptrack-wait{color:#8b97a8;font-size:.8rem}
+.ptrack .feed{padding:0 10px 10px}
+.pdot{width:8px;height:8px;border-radius:99px;background:#ff4d4d;box-shadow:0 0 0 0 #ff4d4d88;animation:pdot 1.4s ease-out infinite}
+@keyframes pdot{70%{box-shadow:0 0 0 6px transparent}100%{box-shadow:0 0 0 0 transparent}}
+.final{border:1px solid #3a4452;border-radius:99px;padding:1px 6px;font-size:.68rem}
+.emr{font-size:1.15rem;line-height:1;display:inline-block}
+.emr-cash{animation:emr-cash .8s ease-in-out infinite}
+.emr-fire{animation:emr-fire .55s ease-in-out infinite}
+.emr-sweat{animation:emr-sweat .7s ease-in-out infinite}
+.emr-cold{animation:emr-cold .35s linear infinite}
+.emr-hook{animation:emr-hook 1s ease-in-out infinite;transform-origin:top center}
+.emr-miss{animation:emr-miss .9s ease-in-out infinite}
+@keyframes emr-cash{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.12);filter:drop-shadow(0 0 6px #76f53a)}}
+@keyframes emr-fire{0%,100%{transform:scale(1) rotate(-4deg)}50%{transform:scale(1.14) rotate(5deg);filter:drop-shadow(0 0 6px #ff8c28)}}
+@keyframes emr-sweat{0%,100%{transform:translateX(0)}25%{transform:translateX(-1px)}75%{transform:translateX(1px)}}
+@keyframes emr-cold{0%,100%{transform:translateX(0)}50%{transform:translateX(1.5px)}}
+@keyframes emr-hook{0%,100%{transform:rotate(-18deg)}50%{transform:rotate(18deg)}}
+@keyframes emr-miss{0%,100%{opacity:1}50%{opacity:.55}}
+.rk-good{color:#3fb950}
+.rk-mid{color:#f0b429}
+.rk-bad{color:#ff6b6b}
+.rk-n{color:#8b97a8;font-size:.75rem}
+.rk-val{color:#c9d3df}
+.vsleg{margin:4px 0}
+@media (prefers-reduced-motion: reduce){
+  .emr,.pdot,.lv-bar.live i::after,.ptrack-bar.live i::after{animation:none}
+}
 .pace{font-size:.75rem;font-weight:700}
 .pace.p-hit{color:#76f53a}
 .pace.p-on{color:#ff8c28}
@@ -434,6 +473,12 @@ html.day .court-line{stroke:#1d4e34}
 html.day .court-paint{fill:#1d4e34;opacity:.1}
 html.day .court-note{fill:#1d4e34}
 html.day .shot-ring{stroke:#17202b}
+html.day .ptrack{background:#f7f9fb;border-color:#d5dde6}
+html.day .ptrack-hint,html.day .rk-n{color:#5c6b7c}
+html.day .rk-good{color:#146c2e}
+html.day .rk-mid{color:#8a5a00}
+html.day .rk-bad{color:#b42318}
+html.day .rk-val{color:#243040}
 html.day .rink-ice{fill:#f3f8fd;stroke:#4a607a}
 html.day .pbp .lg.neutral{background:#eef2f6;border-color:#d5dde6;color:#5c6b7c}
 html.day .legendline,html.day .pbp .ps{color:inherit}

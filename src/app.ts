@@ -78,10 +78,15 @@ function revealLive() {
 function paint(toTop: boolean) {
   revealLive();
   const y = window.scrollY;
+  const kept = [...document.querySelectorAll("details[open][data-keep]")].map((node) => (node as HTMLElement).dataset.keep).filter((key): key is string => !!key);
   applyChrome();
   const app = document.getElementById("app");
   if (!app) return;
   app.innerHTML = render(state, board);
+  for (const key of kept) {
+    const node = app.querySelector(`details[data-keep="${CSS.escape(key)}"]`);
+    if (node instanceof HTMLDetailsElement) node.open = true;
+  }
   if (toTop) window.scrollTo(0, 0);
   else window.scrollTo(0, y);
 }
@@ -415,6 +420,34 @@ function onClick(event: Event) {
     paint(false);
     return;
   }
+  if (act === "play-panel") {
+    const track = action.dataset.track;
+    const panel = action.dataset.panel;
+    if (track && (panel === "feed" || panel === "box" || panel === "vs")) {
+      state.playPanel[track] = panel;
+      state.openPlayTracks.add(track);
+      paint(false);
+    }
+    return;
+  }
+  if (act === "play-feed") {
+    const track = action.dataset.track;
+    if (!track) return;
+    state.castTeam[track] = action.dataset.team ?? state.castTeam[track] ?? "All";
+    state.castPeriod[track] = action.dataset.period ?? state.castPeriod[track] ?? "All";
+    state.openPlayTracks.add(track);
+    paint(false);
+    return;
+  }
+  if (act === "play-full") {
+    const track = action.dataset.track;
+    if (!track) return;
+    if (state.feedFull.has(track)) state.feedFull.delete(track);
+    else state.feedFull.add(track);
+    state.openPlayTracks.add(track);
+    paint(false);
+    return;
+  }
   if (act === "feed") {
     const game = action.dataset.game;
     if (!game) return;
@@ -514,6 +547,12 @@ export function start() {
     "toggle",
     (event) => {
       const details = event.target as HTMLDetailsElement;
+      const play = details.dataset?.playLive;
+      if (play) {
+        if (details.open) state.openPlayTracks.add(play);
+        else state.openPlayTracks.delete(play);
+        return;
+      }
       const id = details.dataset?.game;
       if (!id) return;
       if (details.open) {
@@ -579,7 +618,8 @@ function busyPainting(): boolean {
 
 async function refreshLiveOnly() {
   if (document.visibilityState !== "visible" || refreshing) return;
-  const watching = state.view === "live" || board.liveGames.some((game) => !game.pre && !game.final);
+  const onCard = state.view === "live" || state.view === "today" || state.view === "cappers";
+  const watching = onCard || board.liveGames.some((game) => !game.pre && !game.final);
   if (!watching) return;
   refreshing = true;
   try {
