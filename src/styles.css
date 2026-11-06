@@ -19,11 +19,14 @@ h1,h2,h3{margin:0;font-size:1.375rem;line-height:1.25}
 .ticket{background:#161b22;border:1px solid #2a313c;border-radius:18px;padding:16px;margin:16px 0}
 .ticket header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px;flex-wrap:wrap}
 .ticket header h3{font-size:1.375rem;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.play{display:flex;gap:12px;padding:14px 0;border-top:1px solid #232a34}
+.play{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:12px;row-gap:8px;align-items:start;padding:14px 0;border-top:1px solid #232a34}
+.play>.pbody{grid-column:1 / -1;min-width:0}
+.play>.chk+.pbody{grid-column:2}
+.play>.ptrack{grid-column:1 / -1;width:100%;min-width:0;margin:0}
 .chk{display:flex;align-items:flex-start;padding-top:2px;min-width:44px;min-height:44px;justify-content:center}
 .chk input{width:26px;height:26px;accent-color:#7b3fe4}
 body.book-dk .chk input{accent-color:#2ea85a}
-.pbody{flex:1;min-width:0}
+.pbody{min-width:0}
 .prow{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
 .prow b{font-size:1.0625rem;flex:1;min-width:0}
 .odds{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}

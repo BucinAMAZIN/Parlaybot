@@ -1,8 +1,7 @@
 import assert from "node:assert/strict";
 import { absorbLiveLeg, abbrsMatch, box, firstBloodLeg, formatRankValue, liveTitle, mergeTags, propOf, readStat, teamStatsFor, trackPlayOnBoard } from "../src/data/espn.ts";
 import { adaptDesk } from "../src/data/desk.ts";
-import { reactionOf } from "../src/ui/bits.ts";
-import { renderPlay } from "../src/ui/bits.ts";
+import { PACE, mascot, renderPlay } from "../src/ui/bits.ts";
 import type { LiveGame, LiveLeg, Play, WhyBlock } from "../src/data/types.ts";
 
 const why: WhyBlock = { ours: false, line: "", why: [], whyNot: [] };
@@ -11,13 +10,16 @@ function leg(partial: Partial<LiveLeg> & Pick<LiveLeg, "pace" | "current" | "lin
   return { name: "Play", unit: "", source: "ESPN", why, ...partial };
 }
 
-assert.equal(reactionOf(leg({ pace: "hit", current: 7, line: 6.5 })).emoji, "💰");
-assert.equal(reactionOf(leg({ pace: "on", current: 4, line: 6.5 })).emoji, "🔥");
-assert.equal(reactionOf(leg({ pace: "behind", current: 2, line: 6.5 })).emoji, "😓");
-assert.equal(reactionOf(leg({ pace: "cold", current: 0, line: 6.5 })).emoji, "🥶");
-assert.equal(reactionOf(leg({ pace: "dead", current: 6, line: 6.5 })).emoji, "🪝");
-assert.equal(reactionOf(leg({ pace: "dead", current: 2, line: 6.5 })).emoji, "❌");
-assert.equal(Math.abs(6 - 6.5) === 0.5, true);
+assert.equal(PACE.hit.mood, "cash");
+assert.equal(PACE.on.mood, "fire");
+assert.equal(PACE.behind.mood, "sweat");
+assert.equal(PACE.cold.mood, "ice");
+assert.equal(PACE.dead.mood, "hook");
+assert.match(mascot("cash", 36), /class="mascot cash"/);
+assert.match(mascot("fire", 36), /class="mascot fire"/);
+assert.match(mascot("sweat", 36), /class="mascot sweat"/);
+assert.match(mascot("ice", 36), /class="mascot ice"/);
+assert.match(mascot("hook", 36), /class="mascot hook"/);
 
 const athletes = Array.from({ length: 12 }, (_, index) => ({
   athlete: { displayName: `Skater ${index + 1}` },
@@ -130,7 +132,10 @@ assert.notEqual(formatRankValue("ortg", 1.0398), "1.0");
 
 const html = renderPlay(play("Justice Hill Over 4.5 Receptions"), "hr", new Set(), false, `<div class="ptrack">bar</div>`);
 const label = html.match(/<label[\s\S]*?<\/label>/)?.[0] ?? "";
-assert.match(html, /class="ptrack"/);
+const pbodyEnd = html.indexOf(`</div><div class="ptrack">`);
+const pbody = html.slice(html.indexOf(`<div class="pbody">`), pbodyEnd);
+assert.match(html, /<div class="btns">[\s\S]*<\/div><\/div><div class="ptrack">bar<\/div><\/div>$/);
+assert.equal(pbody.includes("ptrack"), false);
 assert.equal(label.includes("ptrack"), false);
 
 assert.equal(propOf("A. Johnson u5.5 tackles + assists", "NFL")?.key, "totalTackles");

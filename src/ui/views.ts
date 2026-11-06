@@ -16,7 +16,6 @@ import {
   mascot,
   listedOn,
   paceWord,
-  reactionOf,
   renderPlay,
   renderWhy,
   ringSvg,
@@ -176,14 +175,13 @@ function playTracker(board: Board, state: AppState, ticketId: string, play: Play
 function propBar(leg: LiveLeg, final: boolean): string {
   const pace = PACE[leg.pace];
   const width = Math.max(0, Math.min(100, leg.line ? (leg.current / leg.line) * 100 : 0));
-  const face = reactionOf(leg);
+  const face = pace.mood ? mascot(pace.mood, 36) : "";
   const current = Number.isInteger(leg.current) ? String(leg.current) : String(leg.current);
   const line = Number.isInteger(leg.line) ? String(leg.line) : String(leg.line);
   const figure = /Waiting|HIT ·|MISS ·|VOID ·|Leading|Trailing|Tied|covering/.test(leg.label ?? "") ? "" : `${current} / ${line}${leg.unit ? ` ${leg.unit}` : ""}`;
   const word = paceWord(leg, final);
   const live = !final && leg.pace !== "dead" && leg.pace !== "pre" ? " live" : "";
-  const emoji = face.emoji ? `<span class="emr ${face.cls}" aria-hidden="true">${face.emoji}</span>` : "";
-  return `<span class="ptrack-prop"><span class="ptrack-fig"><b>${esc(figure)}</b> ${figure ? "· " : ""}${esc(word)}</span>${emoji}</span><span class="ptrack-bar${live}"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></span>`;
+  return `<span class="ptrack-prop">${face}<span class="ptrack-fig"><b>${esc(figure)}</b> ${figure ? "· " : ""}${esc(word)}</span></span><span class="ptrack-bar${live}"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></span>`;
 }
 
 function noteList(rows: { capper: string; pick: string; reason: string }[] | undefined, label: string): string {
@@ -390,10 +388,8 @@ function renderLiveLeg(leg: LiveLeg): string {
   const current = Number.isInteger(leg.current) ? String(leg.current) : String(leg.current);
   const line = Number.isInteger(leg.line) ? String(leg.line) : String(leg.line);
   const figure = leg.label || `${current}/${line}${leg.unit ? ` ${leg.unit}` : ""}`;
-  const mood = reactionOf(leg);
-  const emoji = mood.emoji ? `<span class="emr ${mood.cls}" aria-hidden="true">${mood.emoji}</span>` : "";
   const live = leg.pace !== "dead" && leg.pace !== "pre" ? " live" : "";
-      return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${esc(figure)}${emoji}</span></div>${legTags(leg.tags)}<div class="lv-bar${live}"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace p-${leg.pace}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why, `why:${leg.key || leg.name}`)}</div></div>`;
+  return `<div class="lv-leg">${face}<div class="lv-main"><div class="lv-row"><b>${esc(leg.name)}</b><span>${esc(figure)}</span></div>${legTags(leg.tags)}<div class="lv-bar${live}"><i style="width:${width.toFixed(0)}%;background:${pace.color}"></i></div><div class="lv-row"><span class="pace p-${leg.pace}">${esc(pace.label)}</span><span class="sub">${esc(leg.source)}</span></div>${renderWhy(leg.why, `why:${leg.key || leg.name}`)}</div></div>`;
 }
 
 function sideLine(side: LiveGame["awaySide"]): string {

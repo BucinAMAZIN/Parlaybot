@@ -71,16 +71,6 @@ export function renderWhy(block: WhyBlock, keep = ""): string {
   return `<details class="why"${mark}><summary class="whychip">Why <span class="car shut" aria-hidden="true">▸</span><span class="car open" aria-hidden="true">▾</span></summary><div class="wb"><h5 class="yes">${tag}${ours}</h5>${whyItems}${notItems}</div></details>`;
 }
 
-/** Animated status on a live prop. A .5 miss is the hook. */
-export function reactionOf(leg: { pace: LegPace; current: number; line: number }): { emoji: string; cls: string } {
-  if (leg.pace === "hit") return { emoji: "💰", cls: "emr-cash" };
-  if (leg.pace === "on") return { emoji: "🔥", cls: "emr-fire" };
-  if (leg.pace === "behind") return { emoji: "😓", cls: "emr-sweat" };
-  if (leg.pace === "cold") return { emoji: "🥶", cls: "emr-cold" };
-  if (leg.pace === "dead") return Math.abs(leg.current - leg.line) === 0.5 ? { emoji: "🪝", cls: "emr-hook" } : { emoji: "❌", cls: "emr-miss" };
-  return { emoji: "", cls: "" };
-}
-
 export function paceWord(leg: { pace: LegPace; label?: string }, final: boolean): string {
   const label = leg.label ?? "";
   if (/Waiting|HIT ·|MISS ·|VOID ·|Leading|Trailing|Tied|covering|Push/.test(label)) return label;
@@ -143,7 +133,7 @@ export function renderPlay(play: Play, book: BookId, selected: Set<string>, off 
     ? `<label class="chk"><input type="checkbox" data-id="${esc(play.id)}" ${checked} aria-label="Select ${esc(title)}"></label>`
     : "";
   const why = play.showWhy === false ? "" : renderWhy(play.why, `why:${play.id}`);
-  return `<div class="play">${box}<div class="pbody"><div class="prow"><b>${esc(title)}</b><span class="odds">${esc(odds)}</span></div><div class="sub">${esc(play.detail)}</div>${posted}${live}${fee}${ctx}${rank}${alt}${flag}${marks}${chipRow}${grade}${why}${track}<div class="btns">${button}</div></div></div>`;
+  return `<div class="play">${box}<div class="pbody"><div class="prow"><b>${esc(title)}</b><span class="odds">${esc(odds)}</span></div><div class="sub">${esc(play.detail)}</div>${posted}${live}${fee}${ctx}${rank}${alt}${flag}${marks}${chipRow}${grade}${why}<div class="btns">${button}</div></div>${track}</div>`;
 }
 
 /** >=55 green, 50–54.9 yellow, 40–49.9 orange, under 40 red. */
