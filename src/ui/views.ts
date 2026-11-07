@@ -925,9 +925,9 @@ ${statsSports(state, board, windowed.from, windowed.to, (rows, prefix) => gradeH
 ${clvCard(board, windowed.from, windowed.to, state.statsSection)}`;
 }
 
-function bookAct(book: { state: string; reason: string; url?: string; checkedAt?: string }, name: "hr" | "dk"): string {
+function bookAct(book: { state: string; reason: string; url?: string; checkedAt?: string; live?: string }, name: "hr" | "dk"): string {
   const label = name === "hr" ? "Hard Rock" : "DraftKings";
-  if (book.url) return `<span class="bookact"><a class="btn ${name}" href="${esc(book.url)}">${label}</a><span class="sub">Verified</span></span>`;
+  if (book.url) return `<span class="bookact"><a class="btn ${name}" href="${esc(book.url)}">${label}</a><span class="sub">Verified</span>${book.live ? `<span class="sub">${esc(book.live)}</span>` : ""}</span>`;
   const withheld = /withheld/i.test(book.reason);
   return `<span class="bookact"><span class="na">${label} ${withheld ? "withheld" : "unavailable"}</span></span>`;
 }

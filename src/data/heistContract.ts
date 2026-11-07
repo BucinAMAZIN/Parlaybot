@@ -9,6 +9,8 @@ export type PrepBook = {
   reason: string;
   url?: string;
   checkedAt?: string;
+  /** Present only on a verified action. It is the link object's current live label. */
+  live?: string;
 };
 
 export type PrepPick = {
@@ -158,7 +160,9 @@ function actionable(book: unknown, link: Row, side: "hr" | "dk"): PrepBook {
   const linkUrl = side === "hr" ? str(link.hr_link) : str(link.dk_link);
   const matched = verified && linkSid === sid && linkUrl === url;
   const singleDk = side !== "dk" || (/\/event\//.test(url) && !url.includes(","));
-  if (matched && singleDk) return { state, reason: reason || "VERIFIED", url, checkedAt: str(row.verified_at_et) };
+  const liveValue = link[side === "hr" ? "hr_live_label" : "dk_live_label"];
+  const live = isRow(liveValue) ? str(liveValue.label) : "";
+  if (matched && singleDk) return { state, reason: reason || "VERIFIED", url, checkedAt: str(row.verified_at_et), live: live || undefined };
   if (verified && !matched) return { state: "UNVERIFIED", reason: "Link withheld: the audit object does not match this original." };
   if (verified && !singleDk) return { state: "UNVERIFIED", reason: "DraftKings whole-ticket link withheld." };
   return { state, reason };
@@ -333,15 +337,9 @@ export function readHeistContract(raw: unknown): HeistPrep | null {
     activation === "approved_activation" ? "" : `Activation is ${activation || "missing"}.`,
     effectiveAt ? "" : "effective_at_et is null.",
     flags.retire_separate_cappers_tab === true ? "" : "retire_separate_cappers_tab is false.",
-    meta.persistent_build_integrated === true ? "" : "Persistent build path is not marked integrated.",
     ...gates.map((gate) => `Open gate: ${gate}`),
   ].filter(Boolean);
-  const retireReady =
-    flags.retire_separate_cappers_tab === true &&
-    activation === "approved_activation" &&
-    Boolean(effectiveAt) &&
-    meta.persistent_build_integrated === true &&
-    meta.frontend_acceptance === true;
+  const retireReady = flags.retire_separate_cappers_tab === true && activation === "approved_activation" && Boolean(effectiveAt);
   const picksFlat = groups.flatMap((group) => group.picks);
   return {
     policyVersion: policy,

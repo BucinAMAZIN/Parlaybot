@@ -1550,22 +1550,32 @@ if (cutoverPath) {
   const cutover = JSON.parse(readFileSync(cutoverPath, "utf8"));
   const cut = readHeistContract(cutover);
   assert.ok(cut);
-  assert.equal(cut.pickCount, 37);
+  assert.equal(cut.pickCount, cut.groups.reduce((sum, group) => sum + group.picks.length, 0));
   assert.equal(cut.groups.length, 10);
-  assert.equal(cut.verifiedHr, 10);
-  assert.equal(cut.verifiedDk, 8);
   assert.equal(cut.groups.find((group) => group.capperId === "@the_oddsmaker")?.picks.length, 0);
-  assert.equal(cut.groups.find((group) => group.capperId === "@bigmikepickz")?.picks.length, 0);
+  if (cut.effectiveAt === "2026-11-06T20:18:25-05:00") {
+    assert.equal(cut.activationState, "approved_activation");
+    assert.equal(cut.pickCount, 43);
+    assert.equal(cut.verifiedHr, 14);
+    assert.equal(cut.verifiedDk, 3);
+    assert.equal(cut.groups.find((group) => group.capperId === "@bigmikepickz")?.picks.length, 6);
+    assert.equal(cut.playCount, 485);
+  } else {
+    assert.equal(cut.effectiveAt, null);
+    assert.equal(cut.pickCount, 37);
+    assert.equal(cut.verifiedHr, 10);
+    assert.equal(cut.verifiedDk, 8);
+    assert.equal(cut.groups.find((group) => group.capperId === "@bigmikepickz")?.picks.length, 0);
+    assert.equal(cut.playCount, 479);
+  }
   assert.equal(cut.groups.some((group) => group.capperId === "@tonestakes"), false);
   assert.equal(cut.groups.some((group) => group.capperId === "@habibtings"), false);
   assert.equal(cut.tree.find((node) => node.capperId === "@tonestakes")?.dropped, true);
   assert.equal(cut.tree.find((node) => node.capperId === "@habibtings")?.dropped, true);
-  assert.equal(cut.playCount, 479);
   assert.equal(cut.personalEntryCount, 0);
   assert.equal(cut.countedPersonal, 0);
   assert.equal(cut.pooledRows, 0);
   assert.equal(cut.retireReady, false);
-  assert.equal(cut.effectiveAt, null);
   assert.equal(resolveHashView("#cappers", cut)?.view, "cappers");
   const board = adaptDesk(cutover, ncaab);
   const bare = { ...cutover };
@@ -1577,13 +1587,13 @@ if (cutoverPath) {
   assert.equal(names(heistPlays), names(untouched.tickets.find((ticket) => ticket.productKey === "heist")?.plays ?? []));
   assert.equal(board.grades.length, untouched.grades.length);
   const page = renderPage(blank(), board);
-  assert.equal((page.match(/data-original="/g) ?? []).length, 37);
+  assert.equal((page.match(/data-original="/g) ?? []).length, cut.pickCount);
   assert.match(page, /data-view="cappers"/);
   assert.match(page, />\+100</);
   assert.match(page, /Zero historical adoption/);
   assert.doesNotMatch(page, /data-personal=/);
   const blocks = page.match(/<article class="hit origpick" data-original="[\s\S]*?<\/article>/g) ?? [];
-  assert.equal(blocks.length, 37);
+  assert.equal(blocks.length, cut.pickCount);
   const allowed = new Set(cut.groups.flatMap((group) => group.picks.flatMap((pick) => [pick.hr.url, pick.dk.url].filter(Boolean))));
   let links = 0;
   for (const block of blocks) {
@@ -1593,7 +1603,7 @@ if (cutoverPath) {
       assert.equal(allowed.has(match[1]), true);
     }
   }
-  assert.equal(links, 18);
+  assert.equal(links, cut.verifiedHr + cut.verifiedDk);
   const closed = renderPage({ ...blank(), view: "results", statsSection: "cappers" }, board);
   assert.equal((closed.match(/data-capper="/g) ?? []).length, 12);
   let records = 0;
@@ -1610,9 +1620,11 @@ if (cutoverPath) {
     assert.equal(found, node.props.reduce((sum, prop) => sum + prop.days.reduce((days, day) => days + day.plays.length, 0), 0));
     records += found;
   }
-  assert.equal(records, 479);
+  assert.equal(records, cut.playCount);
   const live = renderPage({ ...blank(), view: "live" }, board);
-  assert.equal((live.match(/data-live-original="/g) ?? []).length, 37);
+  const liveIds = [...live.matchAll(/data-live-original="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(liveIds.length, cut.pickCount);
+  assert.equal(new Set(liveIds).size, cut.pickCount);
   console.log("cutover fixture ok", cutoverPath);
 }
 
