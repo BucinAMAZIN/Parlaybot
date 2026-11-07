@@ -40,13 +40,27 @@ export type PrepPlay = {
   odds: string;
 };
 
+export type PrepCount = {
+  w: number;
+  l: number;
+  p: number;
+  voided: number;
+  pending: number;
+  unavailable: number;
+  rows: number;
+};
+
 export type PrepTree = {
   capperId: string;
   dropped: boolean;
   profile: string;
+  profileW: number | null;
+  profileL: number | null;
+  profileP: number | null;
   pct: number | null;
   rows: string;
-  props: { propId: string; prop: string; totals: string; days: { date: string; count: number; totals: string; plays: PrepPlay[] }[] }[];
+  counts: PrepCount;
+  props: { propId: string; prop: string; totals: string; counts: PrepCount; days: { date: string; count: number; totals: string; plays: PrepPlay[] }[] }[];
 };
 
 export type PrepAlt = {
@@ -102,16 +116,30 @@ function num(value: unknown): number | null {
 
 const SIX = ["heist_originals", "results_cappers", "heist_pooled_originals", "personal_heist_alt", "heist_originals_meta", "heist_original_links"] as const;
 
-function totals(value: unknown): string {
+/** Sport on the first line, market on the second. Parentheticals stay in the market name. */
+export function propFace(prop: string): { sport: string; market: string } {
+  const split = prop.match(/^(\S+)\s+(.+)$/);
+  if (!split) return { sport: "", market: prop };
+  const market = split[2].replace(/\(([^)]+)\)/g, " $1").replace(/\s+/g, " ").trim();
+  return { sport: split[1], market: market ? market.charAt(0).toUpperCase() + market.slice(1) : split[1] };
+}
+
+function countOf(value: unknown): PrepCount {
   const row = isRow(value) ? value : {};
-  const w = num(row.W) ?? 0;
-  const l = num(row.L) ?? 0;
-  const p = num(row.P) ?? 0;
-  const v = num(row.Void) ?? 0;
-  const pending = num(row.Pending) ?? 0;
-  const missing = num(row.Unavailable) ?? 0;
-  const rows = num(row.rows) ?? 0;
-  return `${w}-${l}${p ? `-${p}` : ""} · void ${v} · pending ${pending} · unavailable ${missing} · ${rows} rows`;
+  return {
+    w: num(row.W) ?? 0,
+    l: num(row.L) ?? 0,
+    p: num(row.P) ?? 0,
+    voided: num(row.Void) ?? 0,
+    pending: num(row.Pending) ?? 0,
+    unavailable: num(row.Unavailable) ?? 0,
+    rows: num(row.rows) ?? 0,
+  };
+}
+
+function totals(value: unknown): string {
+  const row = countOf(value);
+  return `${row.w}-${row.l}${row.p ? `-${row.p}` : ""} · void ${row.voided} · pending ${row.pending} · unavailable ${row.unavailable} · ${row.rows} rows`;
 }
 
 function actionable(book: unknown, link: Row, side: "hr" | "dk"): PrepBook {
@@ -264,15 +292,19 @@ export function readHeistContract(raw: unknown): HeistPrep | null {
         });
         return [{ date: str(day.date), count: ids.length, totals: totals(day.totals), plays }];
       });
-      return [{ propId: str(prop.prop_id) || str(prop.prop), prop: str(prop.prop), totals: totals(prop.totals), days }];
+      return [{ propId: str(prop.prop_id) || str(prop.prop), prop: str(prop.prop), totals: totals(prop.totals), counts: countOf(prop.totals), days }];
     });
     const capperId = str(node.capper_id);
     return [{
       capperId,
       dropped: dropped.has(capperId),
       profile: w == null && l == null ? "No legacy profile" : `${w ?? 0}-${l ?? 0}${num(profile.p) ? `-${num(profile.p)}` : ""}${num(profile.pct) == null ? "" : ` · ${num(profile.pct)}%`}`,
+      profileW: w,
+      profileL: l,
+      profileP: num(profile.p),
       pct: num(profile.pct),
       rows: totals(node.totals),
+      counts: countOf(node.totals),
       props,
     }];
   });

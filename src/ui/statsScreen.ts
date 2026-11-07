@@ -1,5 +1,5 @@
 import type { Board } from "../data/board.ts";
-import type { HeistPrep } from "../data/heistContract.ts";
+import { propFace, type HeistPrep, type PrepCount } from "../data/heistContract.ts";
 import { sectionMatch, sportRank, sportTitle } from "../data/gradeLabels.ts";
 import type { GradeMark } from "../data/types.ts";
 import { fileBounds, prettyDay, windowGrades } from "../lib/history.ts";
@@ -249,15 +249,60 @@ function sameCapper(grade: GradeMark, handle: string): boolean {
     .includes(want);
 }
 
+function profileLine(node: { profileW: number | null; profileL: number | null; profileP: number | null }): string {
+  if (node.profileW == null && node.profileL == null) return "No profile";
+  return `${node.profileW ?? 0}-${node.profileL ?? 0}${node.profileP ? `-${node.profileP}` : ""}`;
+}
+
+function rowLine(counts: PrepCount): string {
+  return `${counts.w}-${counts.l}${counts.p ? `-${counts.p}` : ""}`;
+}
+
+function coverage(node: { profileW: number | null; profileL: number | null; profileP: number | null; counts: PrepCount; dropped: boolean }): { short: string; detail: string } | null {
+  const counts = node.counts;
+  const profile = profileLine(node);
+  const graded = rowLine(counts);
+  const mismatch = node.profileW != null && (node.profileW !== counts.w || node.profileL !== counts.l || (node.profileP ?? 0) !== counts.p);
+  const extras = [
+    counts.voided ? `${counts.voided} void` : "",
+    counts.pending ? `${counts.pending} pending` : "",
+    counts.unavailable ? `${counts.unavailable} unavailable` : "",
+  ].filter(Boolean);
+  const accounted = counts.w + counts.l + counts.p + counts.voided + counts.pending + counts.unavailable;
+  const gap = counts.rows !== accounted;
+  if (!mismatch && !extras.length && !gap && !node.dropped) return null;
+  const short = node.dropped && !mismatch && !extras.length && !gap ? "History only" : mismatch ? `Profile ${profile} · rows ${graded}` : extras.join(" · ") || `${counts.rows} rows`;
+  const detail = [
+    node.dropped ? "Dropped from current originals. Past plays stay." : "",
+    `Profile ${profile}.`,
+    `Graded rows ${graded}.`,
+    counts.voided ? `Void ${counts.voided}.` : "",
+    counts.pending ? `Pending ${counts.pending} ${counts.pending === 1 ? "is" : "are"} outside the circle.` : "",
+    counts.unavailable ? `Unavailable ${counts.unavailable}.` : "",
+    `${counts.rows} rows.`,
+    mismatch ? "Profile and graded rows differ." : "",
+    gap ? "Row count does not equal the graded, void, pending, and unavailable marks." : "",
+  ].filter(Boolean).join(" ");
+  return { short, detail };
+}
+
 function contractCappers(state: AppState, prep: HeistPrep): string {
   const cards = prep.tree
     .map((node) => {
       const ring = node.pct == null ? `<span class="sub">—</span>` : ringSvg(node.pct, "");
       const expanded = state.statsSport === node.capperId;
+      const note = coverage(node);
+      const cover = note ? `<details class="cover"><summary>${esc(note.short)}</summary><p class="sub">${esc(note.detail)}</p></details>` : "";
       const props = expanded
         ? node.props
             .map((prop) => {
               const open = state.openProps.has(propOpenKey(node.capperId, prop.propId, false));
+              const face = propFace(prop.prop);
+              const extra = [
+                prop.counts.voided ? `${prop.counts.voided} void` : "",
+                prop.counts.pending ? `${prop.counts.pending} pending` : "",
+                prop.counts.unavailable ? `${prop.counts.unavailable} unavailable` : "",
+              ].filter(Boolean).join(" · ");
               const days = open
                 ? prop.days
                     .map((day) => {
@@ -272,15 +317,14 @@ function contractCappers(state: AppState, prep: HeistPrep): string {
                     })
                     .join("")
                 : "";
-              return `<div class="propnest"><button type="button" class="pr" data-act="results-prop" data-sport="${esc(node.capperId)}" data-prop="${esc(prop.propId)}" data-alt="0" aria-expanded="${open}"><span class="prt"><b>${esc(prop.prop)}</b><span class="sub">${esc(prop.totals)}</span><span class="car">${open ? "▾" : "▸"}</span></span></button>${days}</div>`;
+              return `<div class="propnest"><button type="button" class="pr orig" data-act="results-prop" data-sport="${esc(node.capperId)}" data-prop="${esc(prop.propId)}" data-alt="0" aria-expanded="${open}"><span class="propface"><span class="propsport">${esc(face.sport)}</span><b>${esc(face.market)}</b>${extra ? `<span class="sub">${esc(extra)}</span>` : ""}</span><b class="proprec">${esc(rowLine(prop.counts))}</b><span class="car">${open ? "▾" : "▸"}</span></button>${days}</div>`;
             })
             .join("")
         : "";
-      const dropped = node.dropped ? `<div class="sub">Dropped from current originals. Past plays stay.</div>` : "";
-      return `<section class="card sp${expanded ? " ex" : ""}" data-capper="${esc(node.capperId)}"><button type="button" class="sprow" data-act="stats-sport" data-key="${esc(node.capperId)}" aria-expanded="${expanded}">${ring}<span class="spn"><b>${esc(node.capperId)}</b><span class="sub">${esc(node.profile)}</span></span><span class="car">${expanded ? "▴" : "▾"}</span></button>${dropped}<p class="sub">Row totals ${esc(node.rows)}. Not forced to match the profile.</p>${props}</section>`;
+      return `<section class="card sp${expanded ? " ex" : ""}" data-capper="${esc(node.capperId)}"><button type="button" class="sprow" data-act="stats-sport" data-key="${esc(node.capperId)}" aria-expanded="${expanded}">${ring}<span class="spn"><b>${esc(node.capperId)}</b><span class="sub">${esc(profileLine(node))}</span></span><span class="car">${expanded ? "▴" : "▾"}</span></button>${cover}${props}</section>`;
     })
     .join("");
-  return `<h2 class="grouph">By capper</h2><p class="sub">The circle is the legacy profile stored on the capper. Row totals stay separate. Personal Heist Alt is not applied to these plays. Open a capper, then a prop, then a date.</p>${cards || `<p class="empty">No capper history in this payload.</p>`}`;
+  return `<h2 class="grouph">By capper</h2>${cards || `<p class="empty">No capper history in this payload.</p>`}`;
 }
 
 function capperProfiles(state: AppState, board: Board, from: string | null, to: string | null, playsFor: GradePlays): string {

@@ -22,7 +22,7 @@ import {
 } from "./bits.ts";
 import { liveLegKey, liveWindowET, slateLabel, trackPlayOnBoard } from "../data/espn.ts";
 import { displayCat, sectionMatch } from "../data/gradeLabels.ts";
-import type { HeistPrep } from "../data/heistContract.ts";
+import { propFace, type HeistPrep } from "../data/heistContract.ts";
 import { legResultLabel, listedLegNames } from "../data/ticketLegs.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type FootballMotion, type GameCast } from "../data/gamecast.ts";
 import { courtHardware, footballField, nhlRink } from "./court.ts";
@@ -925,12 +925,18 @@ ${statsSports(state, board, windowed.from, windowed.to, (rows, prefix) => gradeH
 ${clvCard(board, windowed.from, windowed.to, state.statsSection)}`;
 }
 
-function bookPrep(book: { state: string; reason: string; url?: string; checkedAt?: string }, name: string): string {
-  if (book.url) {
-    const when = book.checkedAt ? `<span class="sub">Point-in-time ${esc(book.checkedAt)}. Not fresh on a later deploy.</span>` : "";
-    return `<a class="btn ${name}" href="${esc(book.url)}">${name.toUpperCase()} verified</a>${when}`;
-  }
-  return `<span class="na">${name.toUpperCase()} unavailable: ${esc(book.reason)}</span>`;
+function bookAct(book: { state: string; reason: string; url?: string; checkedAt?: string }, name: "hr" | "dk"): string {
+  const label = name === "hr" ? "Hard Rock" : "DraftKings";
+  if (book.url) return `<span class="bookact"><a class="btn ${name}" href="${esc(book.url)}">${label}</a><span class="sub">Verified</span></span>`;
+  const withheld = /withheld/i.test(book.reason);
+  return `<span class="bookact"><span class="na">${label} ${withheld ? "withheld" : "unavailable"}</span></span>`;
+}
+
+function gradeWord(grade: string): string {
+  if (grade === "W") return "Won";
+  if (grade === "L") return "Lost";
+  if (grade === "P") return "Push";
+  return grade || "—";
 }
 
 function preparationBlock(prep: HeistPrep | null | undefined, mode: "full" | "status" = "full"): string {
@@ -938,36 +944,46 @@ function preparationBlock(prep: HeistPrep | null | undefined, mode: "full" | "st
   const blockers = prep.blockers.map((item) => `<li>${esc(item)}</li>`).join("");
   const decisions = prep.decisions.map((item) => `<li>${esc(item)}</li>`).join("");
   const roster = `<p class="sub">Active originals: ${esc(prep.activeCappers.join(", ") || "none listed")}. Dropped, history kept: ${esc(prep.droppedCappers.join(", ") || "none listed")}. Conversion roster unchanged: ${esc(prep.conversionCappers.join(", ") || "none listed")}.</p>`;
-  const groups = prep.groups
+  const ordered = [...prep.groups].sort((a, b) => Number(a.picks.length === 0) - Number(b.picks.length === 0));
+  const groups = ordered
     .map((group) => {
       const picks = group.picks.length
         ? group.picks
             .map((pick) => {
-              const ticket = pick.ticketId ? `<div class="sub">Ticket ${esc(pick.ticketId)} · ${pick.legCount} legs · one record</div>` : "";
-              const source = pick.sourceIds ? `<div class="sub">Source ${esc(pick.sourceIds)}</div>` : "";
-              const cell = pick.legacyCell ? `<div class="sub">Legacy display cell ${esc(pick.legacyCell)}. Not a source price.</div>` : "";
-              const detail = [pick.gradeDetail, pick.gradeReason].filter(Boolean).join(" · ");
-              return `<article class="hit" data-original="${esc(pick.id)}"><div><b>${esc(pick.rawPick)}</b><div class="sub">${esc(pick.sport)} · ${esc(pick.prop)} · ${esc(pick.posted)}</div>${cell}${source}<div class="sub">${esc(pick.grade || "—")}${detail ? ` · ${esc(detail)}` : ""}</div>${ticket}<div class="btns">${bookPrep(pick.hr, "hr")}${bookPrep(pick.dk, "dk")}</div></div></article>`;
+              const face = propFace(pick.prop);
+              const market = face.sport ? `${face.sport} · ${face.market}` : pick.prop;
+              const odds = pick.posted.startsWith("Odds not posted") ? "" : pick.posted;
+              const bookNote = (book: { url?: string; reason: string }, code: string) => (book.url ? `${code} verified` : `${code} unavailable. ${book.reason}`);
+              const detail = [
+                pick.posted.startsWith("Odds not posted") ? pick.posted : "",
+                pick.legacyCell ? `Legacy display cell ${pick.legacyCell}. Not a source price.` : "",
+                pick.sourceIds ? `Source ${pick.sourceIds}` : "",
+                pick.gradeDetail,
+                pick.gradeReason,
+                pick.ticketId ? `Ticket ${pick.ticketId} · ${pick.legCount} legs · one record` : "",
+                bookNote(pick.hr, "HR"),
+                bookNote(pick.dk, "DK"),
+                pick.hr.checkedAt || pick.dk.checkedAt ? `Point-in-time ${pick.hr.checkedAt || pick.dk.checkedAt}. A later deployment has to verify these links again.` : "",
+              ].filter(Boolean);
+              const extra = detail.length ? `<details class="linkwhy"><summary>Link detail</summary><p class="sub">${detail.map((line) => esc(line)).join("<br>")}</p></details>` : "";
+              return `<article class="hit origpick" data-original="${esc(pick.id)}"><span class="res">${esc(gradeWord(pick.grade))}</span><div><b>${esc(pick.rawPick)}</b><div class="sub">${esc(market)}${odds ? ` · ${esc(odds)}` : ""}</div><div class="btns">${bookAct(pick.hr, "hr")}${bookAct(pick.dk, "dk")}</div>${extra}</div></article>`;
             })
             .join("")
-        : `<p class="empty">No original picks in this snapshot.</p>`;
-      return `<section class="ticket" data-original-capper="${esc(group.capperId)}"><header><div><h3>${esc(group.capperId)}</h3><div class="sub">${group.picks.length} original${group.picks.length === 1 ? "" : "s"}</div></div></header>${picks}</section>`;
+        : `<p class="empty">No picks in this snapshot.</p>`;
+      return `<section class="ticket" data-original-capper="${esc(group.capperId)}"><header><div><h3>${esc(group.capperId)}</h3><div class="sub">${group.picks.length} pick${group.picks.length === 1 ? "" : "s"}</div></div></header>${picks}</section>`;
     })
     .join("");
   const personal = prep.personal
-    .map((row) => `<article class="hit" data-personal="${esc(row.id)}"><div><b>${esc(row.pick)}</b><div class="sub">${esc(row.date)} · ${esc(row.reason)}</div></div><span class="res">${esc(row.grade || "—")}</span></article>`)
+    .map((row) => `<article class="hit" data-personal="${esc(row.id)}"><div><b>${esc(row.pick)}</b><div class="sub">${esc(row.date)} · ${esc(row.reason)}</div></div><span class="res">${esc(gradeWord(row.grade))}</span></article>`)
     .join("");
-  const label = (value: string) => esc(value).replaceAll("_", "_<wbr>");
   const fresh = prep.pointInTime
     ? `Point-in-time check ${prep.pointInTime}. A later deployment has to verify these links again.`
     : "No verified check time is on this payload. Links are not treated as fresh.";
   const tab = prep.retireReady
     ? "Retirement conditions are met. #cappers opens Results."
     : "The Cappers tab stays. #cappers still opens this tab. The redirect is prepared and stays off.";
-  const originals = mode === "full"
-    ? `<h2>Original picks by capper</h2><p class="sub">${esc(prep.date)} · ${prep.pickCount} grouped originals · ${prep.verifiedHr} HR and ${prep.verifiedDk} DK verified at selection. Unverified and mismatched urls are not links. ${esc(fresh)}</p>${groups}`
-    : `<p class="sub">${prep.pickCount} grouped originals are on Today and Cappers. Results below is the historical drilldown.</p>`;
-  return `<section class="card prep" data-prep="heist-originals" data-original-count="${prep.pickCount}" data-retire="${prep.retireReady ? "ready" : "off"}"><p class="stamp">Staged · ${esc(prep.policyVersion)} · ${label(prep.activationState || "not activated")} · not the live feed</p><ul>${decisions}</ul>${roster}${originals}<h2>Personal Heist Alt</h2><p class="sub">${prep.personalEntryCount} entries · ${prep.countedPersonal} counted. Active totals ${esc(prep.personalActive)}. Empty totals are not a 0-0 record. Zero historical adoption.</p>${personal}<h2>Pooled originals</h2><p class="sub">${label(prep.pooledState)} · ${prep.pooledRows} rows. Inactive and unpopulated. Not a performance record.</p><h2>Cappers tab</h2><p class="sub">${tab}</p><ul>${blockers}</ul></section>`;
+  const picks = mode === "full" ? `<h2>Original picks</h2><p class="sub">${esc(prep.date)} · ${prep.pickCount} picks</p>${groups}` : "";
+  return `<section class="card prep" data-prep="heist-originals" data-original-count="${prep.pickCount}" data-retire="${prep.retireReady ? "ready" : "off"}"><p class="stagetag">Staged preview—not live</p>${picks}<details class="tech" data-tech="heist"><summary>Technical details</summary><ul>${decisions}</ul>${roster}<p class="sub">${prep.verifiedHr} Hard Rock and ${prep.verifiedDk} DraftKings verified at selection. ${esc(fresh)}</p><h2>Personal Heist Alt</h2><p class="sub">${prep.personalEntryCount} entries · ${prep.countedPersonal} counted. Active totals ${esc(prep.personalActive)}. Empty totals are not a 0-0 record. Zero historical adoption.</p>${personal}<h2>Pooled originals</h2><p class="sub">${esc(prep.pooledState).replaceAll("_", "_<wbr>")} · ${prep.pooledRows} rows. Inactive and unpopulated. Not a performance record.</p><h2>Cappers tab</h2><p class="sub">${tab}</p><ul>${blockers}</ul></details></section>`;
 }
 
 function cappers(state: AppState, board: Board): string {

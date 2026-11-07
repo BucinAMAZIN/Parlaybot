@@ -1519,6 +1519,9 @@ assert.equal(resolveHashView("#cappers", null)?.view, "cappers");
 const prepBoard = adaptDesk(staged, ncaab);
 const prepPage = renderPage(blank(), prepBoard);
 assert.match(prepPage, /data-view="cappers"/);
+assert.match(prepPage, /Staged preview—not live/);
+const prepSlice = prepPage.slice(prepPage.indexOf('data-prep="heist-originals"'));
+assert.ok(prepSlice.indexOf("data-original=") < prepSlice.indexOf('data-tech="heist"'));
 assert.match(prepPage, /Anaheim Ducks ML/);
 assert.match(prepPage, /HR unavailable/);
 assert.match(prepPage, /Link withheld/);
@@ -1539,6 +1542,8 @@ const historyPage = renderPage({ ...blank(), view: "results", statsSection: "cap
 assert.match(historyPage, /data-record="r1"/);
 assert.match(historyPage, /7-7/);
 assert.match(historyPage, /Dropped from current originals/);
+assert.match(historyPage, /Profile 7-7 · rows 1-0/);
+assert.doesNotMatch(historyPage, /Not forced to match/);
 
 const cutoverPath = process.env.CUTOVER_FIXTURE;
 if (cutoverPath) {
@@ -1577,7 +1582,7 @@ if (cutoverPath) {
   assert.match(page, />\+100</);
   assert.match(page, /Zero historical adoption/);
   assert.doesNotMatch(page, /data-personal=/);
-  const blocks = page.match(/<article class="hit" data-original="[\s\S]*?<\/article>/g) ?? [];
+  const blocks = page.match(/<article class="hit origpick" data-original="[\s\S]*?<\/article>/g) ?? [];
   assert.equal(blocks.length, 37);
   const allowed = new Set(cut.groups.flatMap((group) => group.picks.flatMap((pick) => [pick.hr.url, pick.dk.url].filter(Boolean))));
   let links = 0;
