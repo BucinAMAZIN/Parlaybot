@@ -5,8 +5,8 @@ import type { Play, Ticket } from "./types.ts";
 
 /**
  * Feed contract for the tickets named +100 and +250.
- * safe100 is legacy Safe +100 through Nov 6. From Nov 7 the same key is +100.
- * safe250 is +250. These names are not Official Parlay +100.
+ * The active +100 tab is the official parlay, displayed as +100. alt100 is not an active tab.
+ * safe100_record stays the legacy Safe history. safe250 is +250.
  * availability means a ticket was built, not that its markets are still open.
  */
 
@@ -46,7 +46,6 @@ function rowsOf(value: unknown): Row[] {
 }
 
 const PRODUCTS = [
-  { stateKey: "safe100", ticketKey: "alt100", productKey: "plus100", label: "+100" },
   { stateKey: "safe250", ticketKey: "alt250", productKey: "plus250", label: "+250" },
 ] as const;
 
@@ -82,6 +81,16 @@ function recordLine(value: unknown): { w: number; l: number; p: number; pct: num
   return { w, l, p, pct: pct == null ? (w + l ? Math.round((w / (w + l)) * 100) : null) : pct };
 }
 
+function safe250Detail(raw: Row): string {
+  const record = isRow(raw.safe250_record) ? raw.safe250_record : {};
+  const trial = isRow(record.trial) ? record.trial : null;
+  const base = "Not the official +100 ticket. Not the Safe +100 record.";
+  if (!trial) return base;
+  const rule = str(trial.rule);
+  const since = str(trial.since);
+  return [base, rule ? `Trial ${rule}` : "", since ? `since ${since}` : ""].filter(Boolean).join(" · ");
+}
+
 function ledger(raw: unknown, key: PropLedger["key"], title: string, detail: string): PropLedger | null {
   if (!isRow(raw) || !isRow(raw.overall)) return null;
   const overall = recordLine(raw.overall);
@@ -100,8 +109,8 @@ export function propLedgersFrom(raw: Row, retirement: PropRetirement | null): Pr
   const retired = retirement ? `Retired ${retirement.retiredOn}. Legacy Safe +100 only. Not +100, not +250, and not Official Parlay +100.` : "Legacy Safe +100 only. Not +100, not +250, and not Official Parlay +100.";
   const specs: [string, PropLedger["key"], string, string][] = [
     ["safe100_record", "safe100", "Safe +100", retired],
-    ["alt100_record", "alt100", "+100", "Not Official Parlay +100. Not the Safe +100 record and not +250."],
-    ["safe250_record", "safe250", "+250", "Not Official Parlay +100. Not the Safe +100 record and not +100."],
+    ["alt100_record", "alt100", "alt100 record", "Still in this file. Not the official +100 tab and not the Safe +100 record."],
+    ["safe250_record", "safe250", "+250", safe250Detail(raw)],
   ];
   return specs.flatMap(([field, key, title, detail]) => {
     const item = ledger(raw[field], key, title, detail);
@@ -205,7 +214,6 @@ export function propTicketsFrom(
   for (const product of PRODUCTS) {
     const value = raw[product.stateKey];
     const state: Row = isRow(value) ? value : {};
-    const legacy = product.stateKey === "safe100" && isLegacySafeState(state, from);
     if (beforeStart) {
       tickets.push(statusCard(product.productKey, product.label, "Not Official Parlay +100", `Starts ${from} at 10:00 AM ET. No ticket in this file yet.`, "ALL_AND_BIG4"));
       continue;
@@ -214,7 +222,6 @@ export function propTicketsFrom(
       tickets.push(statusCard(product.productKey, product.label, "Not Official Parlay +100", "No ticket in this file yet.", "ALL_AND_BIG4"));
       continue;
     }
-    if (legacy) continue;
     const sports = isRow(state.sports) ? state.sports : {};
     const availability = isRow(state.availability) ? state.availability : {};
     const notes = isRow(state.notes) ? state.notes : {};

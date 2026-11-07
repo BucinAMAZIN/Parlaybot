@@ -1,4 +1,5 @@
 import type { Board } from "../data/board.ts";
+import type { HeistPrep } from "../data/heistContract.ts";
 import { sectionMatch, sportRank, sportTitle } from "../data/gradeLabels.ts";
 import type { GradeMark } from "../data/types.ts";
 import { fileBounds, prettyDay, windowGrades } from "../lib/history.ts";
@@ -101,13 +102,14 @@ function weekdayLabel(iso: string): string {
   return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-const PROP_SECTIONS = ["all", "heist", "safe", "plus100", "plus250", "edge", "cappers", "legday"] as const;
+const PROP_SECTIONS = ["all", "heist", "heistalt", "safe", "plus100", "plus250", "edge", "cappers", "legday"] as const;
 
 function sectionLabel(key: (typeof PROP_SECTIONS)[number]): string {
   if (key === "all") return "All sections";
   if (key === "legday") return "Props";
   if (key === "safe") return "Safe +100";
   if (key === "plus100") return "+100";
+  if (key === "heistalt") return "Heist Alt";
   if (key === "plus250") return "+250";
   return key[0].toUpperCase() + key.slice(1);
 }
@@ -230,12 +232,78 @@ export function statsCalendar(state: AppState, board: Board, from: string | null
 }
 
 export function statsSections(state: AppState): string {
-  return (["all", "heist", "safe", "plus100", "plus250", "edge", "cappers", "legday"] as const)
+  return (["all", "heist", "heistalt", "safe", "plus100", "plus250", "edge", "cappers", "legday"] as const)
     .map((key) => {
-      const label = key === "all" ? "All sections" : key === "legday" ? "Props" : key === "safe" ? "Safe +100" : key === "plus100" ? "+100" : key === "plus250" ? "+250" : key[0].toUpperCase() + key.slice(1);
+      const label = key === "all" ? "All sections" : key === "legday" ? "Props" : key === "safe" ? "Safe +100" : key === "plus100" ? "+100" : key === "plus250" ? "+250" : key === "heistalt" ? "Heist Alt" : key === "heist" ? "Heist" : key[0].toUpperCase() + key.slice(1);
       return `<button type="button" class="${state.statsSection === key ? "on" : ""}" data-act="stats-section" data-key="${key}" aria-label="${label}">${label}</button>`;
     })
     .join("");
+}
+
+function sameCapper(grade: GradeMark, handle: string): boolean {
+  const want = handle.toLowerCase().replace(/^@/, "");
+  return (grade.capper ?? "")
+    .toLowerCase()
+    .split(",")
+    .map((name) => name.trim().replace(/^@/, ""))
+    .includes(want);
+}
+
+function contractCappers(state: AppState, prep: HeistPrep): string {
+  const cards = prep.tree
+    .map((node) => {
+      const ring = node.pct == null ? `<span class="sub">—</span>` : ringSvg(node.pct, "");
+      const expanded = state.statsSport === node.capperId;
+      const props = expanded
+        ? node.props
+            .map((prop) => {
+              const open = state.openProps.has(propOpenKey(node.capperId, prop.propId, false));
+              const days = open
+                ? prop.days
+                    .map((day) => {
+                      const dateKey = `${propOpenKey(node.capperId, prop.propId, false)}|${day.date}`;
+                      const dateOpen = state.openResultDates.has(dateKey);
+                      const plays = dateOpen
+                        ? day.plays
+                            .map((play) => `<article class="hit" data-record="${esc(play.recordId)}" data-original-id="${esc(play.originalId)}"><div><b>${esc(play.pick)}</b><div class="sub">${esc(day.date)}${play.odds ? ` · ${esc(play.odds)}` : ""}${play.detail ? ` · ${esc(play.detail)}` : ""}</div></div><span class="res">${esc(play.grade || "—")}</span></article>`)
+                            .join("")
+                        : "";
+                      return `<section class="dategrp"><button type="button" class="datehead" data-act="result-date" data-key="${esc(dateKey)}" aria-expanded="${dateOpen}"><b>${esc(weekdayLabel(day.date))}</b><span>${day.count}</span><span class="car">${dateOpen ? "▾" : "▸"}</span></button>${plays}</section>`;
+                    })
+                    .join("")
+                : "";
+              return `<div class="propnest"><button type="button" class="pr" data-act="results-prop" data-sport="${esc(node.capperId)}" data-prop="${esc(prop.propId)}" data-alt="0" aria-expanded="${open}"><span class="prt"><b>${esc(prop.prop)}</b><span class="sub">${esc(prop.totals)}</span><span class="car">${open ? "▾" : "▸"}</span></span></button>${days}</div>`;
+            })
+            .join("")
+        : "";
+      const dropped = node.dropped ? `<div class="sub">Dropped from current originals. Past plays stay.</div>` : "";
+      return `<section class="card sp${expanded ? " ex" : ""}" data-capper="${esc(node.capperId)}"><button type="button" class="sprow" data-act="stats-sport" data-key="${esc(node.capperId)}" aria-expanded="${expanded}">${ring}<span class="spn"><b>${esc(node.capperId)}</b><span class="sub">${esc(node.profile)}</span></span><span class="car">${expanded ? "▴" : "▾"}</span></button>${dropped}<p class="sub">Row totals ${esc(node.rows)}. Not forced to match the profile.</p>${props}</section>`;
+    })
+    .join("");
+  return `<h2 class="grouph">By capper</h2><p class="sub">The circle is the legacy profile stored on the capper. Row totals stay separate. Personal Heist Alt is not applied to these plays. Open a capper, then a prop, then a date.</p>${cards || `<p class="empty">No capper history in this payload.</p>`}`;
+}
+
+function capperProfiles(state: AppState, board: Board, from: string | null, to: string | null, playsFor: GradePlays): string {
+  if (board.preparation) return contractCappers(state, board.preparation);
+  const fileGrades = board.grades.filter((grade) => sectionMatch(grade, "cappers"));
+  const shown = windowGrades(board.grades, from, to).filter((grade) => sectionMatch(grade, "cappers"));
+  const cards = [...board.cappers]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((capper) => {
+      const fileRows = fileGrades.filter((grade) => sameCapper(grade, capper.name));
+      const rows = shown.filter((grade) => sameCapper(grade, capper.name));
+      const wins = fileRows.filter((row) => row.win).length;
+      const losses = fileRows.length - wins;
+      const profile = capper.profile;
+      const ring = profile?.pct == null ? `<span class="sub">—</span>` : ringSvg(profile.pct, "");
+      const fileLine = profile ? `${profile.w}-${profile.l}${profile.p ? `-${profile.p}` : ""}` : "No profile record in this file";
+      const gap = profile && profile.w + profile.l !== fileRows.length ? `<div class="sub">File record ${fileLine}. Graded rows under this name: ${wins}-${losses}.</div>` : "";
+      const expanded = state.statsSport === capper.name;
+      const body = expanded ? (rows.length ? propBlock(rows, capper.name, state, playsFor) : `<p class="empty">No graded plays for ${esc(capper.name)} in these dates.</p>`) : "";
+      return `<section class="card sp${expanded ? " ex" : ""}"><button type="button" class="sprow" data-act="stats-sport" data-key="${esc(capper.name)}" aria-expanded="${expanded}">${ring}<span class="spn"><b>${esc(capper.name)}</b><span class="sub">${esc(fileLine)}${profile?.pct == null ? "" : ` · ${profile.pct}%`}</span></span><span class="car">${expanded ? "▴" : "▾"}</span></button>${gap}${body}</section>`;
+    })
+    .join("");
+  return `<h2 class="grouph">By capper</h2><p class="sub">The circle is the profile stored on the capper. It is not rebuilt from the rows below. Personal Heist Alt ownership is forward-only and is not applied to these rows. Open a capper for props, then a date, then the graded plays.</p>${cards || `<p class="empty">No capper profiles in this file.</p>`}`;
 }
 
 function sportNav(fileGrades: GradeMark[], shown: GradeMark[], state: AppState): string {
@@ -265,6 +333,7 @@ function missingSport(sport: string, fileGrades: GradeMark[]): string {
 }
 
 export function statsSports(state: AppState, board: Board, from: string | null, to: string | null, playsFor: GradePlays): string {
+  if (state.statsSection === "cappers") return capperProfiles(state, board, from, to, playsFor);
   const fileGrades = board.grades.filter((grade) => sectionMatch(grade, state.statsSection));
   const grades = windowGrades(board.grades, from, to).filter((grade) => sectionMatch(grade, state.statsSection));
   const span = fileBounds(board.grades, board.series, state.statsSection);

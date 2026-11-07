@@ -16,7 +16,7 @@ import { canOpen, linkMismatch, toLinkPlay } from "./ui/bits.ts";
 import { propOpenKey } from "./ui/statsScreen.ts";
 import { cardForShare, liveSlice, render, sportsFor } from "./ui/views.ts";
 import { disablePush, readPushDelivery, resyncPush, subscribePush } from "./lib/pushClient.ts";
-import { defaultState, knownView, loadPrefs, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
+import { defaultState, loadPrefs, resolveHashView, savePrefs, type AppState, type ViewId } from "./ui/state.ts";
 import { buildNumber, newerBuild } from "./lib/buildWatch.ts";
 
 const EMPTY_NCAAB: StandingLeague = { note: "No data yet", columns: [], groups: [] };
@@ -365,7 +365,7 @@ function onClick(event: Event) {
   }
   if (act === "stats-section") {
     const key = action.dataset.key;
-    if (key === "all" || key === "heist" || key === "safe" || key === "plus100" || key === "plus250" || key === "edge" || key === "cappers" || key === "legday") state.statsSection = key;
+    if (key === "all" || key === "heist" || key === "heistalt" || key === "safe" || key === "plus100" || key === "plus250" || key === "edge" || key === "cappers" || key === "legday") state.statsSection = key;
     paint(false);
     return;
   }
@@ -394,7 +394,7 @@ function onClick(event: Event) {
     const propKey = action.dataset.prop || "";
     const key = action.dataset.key;
     if (!propKey) return;
-    if (key === "all" || key === "heist" || key === "safe" || key === "plus100" || key === "plus250" || key === "edge" || key === "cappers" || key === "legday") {
+    if (key === "all" || key === "heist" || key === "heistalt" || key === "safe" || key === "plus100" || key === "plus250" || key === "edge" || key === "cappers" || key === "legday") {
       state.propSection[propKey] = key;
       paint(false);
     }
@@ -605,6 +605,15 @@ export function start() {
     }
   });
   window.addEventListener("hashchange", () => {
+    const resolved = resolveHashView(location.hash, board.preparation);
+    if (location.hash === "#cappers" && resolved?.view === "results") {
+      history.replaceState(null, "", "#results");
+      state.view = "results";
+      state.statsSection = "cappers";
+      state.sheet = null;
+      paint(true);
+      return;
+    }
     if (location.hash === "#stats") {
       history.replaceState(null, "", "#results");
       if (state.view !== "results") {
@@ -614,9 +623,8 @@ export function start() {
       }
       return;
     }
-    const next = knownView(location.hash);
-    if (!next || next === state.view) return;
-    state.view = next;
+    if (!resolved || resolved.view === state.view) return;
+    state.view = resolved.view;
     state.sheet = null;
     paint(true);
   });

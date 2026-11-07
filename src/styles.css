@@ -32,6 +32,11 @@ body.book-dk .chk input{accent-color:#2ea85a}
 .prow b{font-size:1.0625rem;flex:1;min-width:0}
 .odds{font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
 .btns,.tfoot{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;max-width:100%}
+.prep .btns{align-items:flex-start}
+.prep .btn{white-space:normal;text-align:center;max-width:100%}
+.prep .hit{min-width:0;max-width:100%}
+.prep .hit > div{min-width:0;flex:1}
+.prep,.prep ul,.prep li,.prep .hit,.prep .sub,.prep .na{overflow-wrap:anywhere;max-width:100%}
 .tfoot .btn{white-space:normal;text-align:center;max-width:100%}
 .bd{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;overflow-wrap:anywhere}
 .warnline{color:#ffcc66;margin:4px 0;overflow-wrap:anywhere}

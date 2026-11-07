@@ -22,6 +22,7 @@ import {
 } from "./bits.ts";
 import { liveLegKey, liveWindowET, slateLabel, trackPlayOnBoard } from "../data/espn.ts";
 import { displayCat, sectionMatch } from "../data/gradeLabels.ts";
+import type { HeistPrep } from "../data/heistContract.ts";
 import { legResultLabel, listedLegNames } from "../data/ticketLegs.ts";
 import { fgLine, filterShots, sogLine, type CourtShot, type FootballMotion, type GameCast } from "../data/gamecast.ts";
 import { courtHardware, footballField, nhlRink } from "./court.ts";
@@ -63,7 +64,6 @@ const NAV: [ViewId, string][] = [
 const PRODUCTS: [string, string][] = [
   ["heist", "Heist"],
   ["heist-alt", "Heist Alt"],
-  ["plus100", "+100"],
   ["plus250", "+250"],
   ["safe", "Safe +100"],
   ["potd", "POTD"],
@@ -273,7 +273,8 @@ function productChips(board: Board, state: AppState): string {
     if (!total && !any && !noted) return "";
     const on = state.product === key ? "on" : "";
     const dim = filtered === 0 ? " dim" : "";
-    return `<button type="button" class="${on}${dim}" data-act="product" data-key="${key}">${label}<i>${filtered}</i></button>`;
+    const shown = key === "parlay" && board.ticketLabels?.parlay100 ? board.ticketLabels.parlay100 : key === "plus250" && board.ticketLabels?.safe250 ? board.ticketLabels.safe250 : label;
+    return `<button type="button" class="${on}${dim}" data-act="product" data-key="${key}">${shown}<i>${filtered}</i></button>`;
   }).join("");
   const sports = sportsFor(board, state.product);
   const prepared = state.product === "potd" || state.product === "parlay";
@@ -358,7 +359,7 @@ function propLedgerBlock(board: Board): string {
       return `<section class="ticket ${tone}"><header><div><h3>${esc(row.title)}</h3><p class="stamp">${esc(row.detail)}</p><div class="sub">${row.w}-${row.l}${pushes} · ${esc(pct)}</div></div></header>${sports}</section>`;
     })
     .join("");
-  return `<h2 class="grouph">Prop ticket records</h2><p class="sub">Safe +100 stays retired on its own record. +100 and +250 are separate from each other and from Official Parlay +100.</p>${cards}`;
+  return `<h2 class="grouph">Prop ticket records</h2><p class="sub">Safe +100 stays its own retired record. The +100 tab is the official parlay. +250 stays separate. An alt100 record in the file is not that tab.</p>${cards}`;
 }
 
 export function renderPage(state: AppState, board: Board): string {
@@ -379,7 +380,7 @@ function today(state: AppState, board: Board): string {
   const tickets = visibleTickets(board, state);
   const visiblePlays = tickets.flatMap((ticket) => ticket.plays);
   const gameList = board.liveGames.filter((game) => visiblePlays.some((play) => playOnGame(play, game)));
-  const sections = ["heist", "heist-alt", "plus100", "plus250", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
+  const sections = ["heist", "heist-alt", "plus250", "safe", "potd", "parlay", "edge", "legday", "first", "lotto", "props", "cappers"];
   const blocks = sections
     .map((section) => {
       if (state.product && state.product !== section) return "";
@@ -416,7 +417,7 @@ function today(state: AppState, board: Board): string {
         ? "No all-sports pick in the file."
         : "No prepared board for this sport."
       : "No plays in this filter.";
-  const right = `${gameHead}${productChips(board, state)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${blocks || `<p class="empty">${empty}</p>`}`;
+  const right = `${gameHead}${productChips(board, state)}${preparationBlock(board.preparation)}<div class="sub" style="margin:-4px 0 10px">${bookNote}</div>${blocks || `<p class="empty">${empty}</p>`}`;
   return `<div class="sub date-line">${esc(board.dateLabel)}</div><div class="home"><div>${left}</div><div>${right}</div></div>`;
 }
 
@@ -784,7 +785,15 @@ function live(state: AppState, board: Board): string {
     : `<p class="empty">No data yet</p>`;
   const lock = board.lockCheck ? `<p class="stamp">${esc(board.lockCheck)}</p>` : "";
   const updated = shown.liveUpdated ? ` · ${esc(shown.liveUpdated)}` : "";
-  return `<h1 style="font-size:1.75rem">Live</h1><div class="sub">Your legs in games now${updated}</div>${liveNightBar(state, board)}${lock}${moodBlock}<section class="game"><div class="sub"><b>Tickets</b></div>${bars || `<p class="empty">No data yet</p>`}</section>${games || `<p class="empty">No data yet</p>`}<div class="sub" style="margin:4px 0">${esc(shown.liveNote)}</div><button type="button" class="linkrow" data-act="standings" data-from="live">Standings · NBA · NHL · NFL ›</button>`;
+  return `<h1 style="font-size:1.75rem">Live</h1><div class="sub">Your legs in games now${updated}</div>${liveNightBar(state, board)}${lock}${moodBlock}<section class="game"><div class="sub"><b>Tickets</b></div>${bars || `<p class="empty">No data yet</p>`}</section>${capperLive(board.preparation)}${games || `<p class="empty">No data yet</p>`}<div class="sub" style="margin:4px 0">${esc(shown.liveNote)}</div><button type="button" class="linkrow" data-act="standings" data-from="live">Standings · NBA · NHL · NFL ›</button>`;
+}
+
+function capperLive(prep: HeistPrep | null | undefined): string {
+  if (!prep) return "";
+  const rows = prep.groups
+    .flatMap((group) => group.picks.map((pick) => `<article class="hit" data-live-original="${esc(pick.id)}"><div><b>${esc(group.capperId)}</b> ${esc(pick.rawPick)}</div><span class="res">${esc(pick.grade || "—")}</span></article>`))
+    .join("");
+  return `<section class="card" data-live="capper-originals"><h2>Capper originals</h2><p class="sub">This list is the capper's own original. It is not the Heist parlay above and it is not a personal Alt.</p>${rows || `<p class="empty">No current originals.</p>`}<p class="sub">${prep.countedPersonal} personal Alt ${prep.countedPersonal === 1 ? "entry is" : "entries are"} counted. Past Alt lines stay on their old record.</p></section>`;
 }
 
 function recordedTeam(board: Board, date: string, name: string): string {
@@ -900,7 +909,7 @@ function gradeHits(state: AppState, board: Board, rows: GradeMark[], prefix: str
 function results(state: AppState, board: Board): string {
   const windowed = chartWindow(board, state.profitRange, state.statsFrom, state.statsTo, state.statsSection);
   const head = `<div class="hdr"><h1 style="font-size:1.75rem">Results</h1><button type="button" class="stdchip" data-act="standings" data-from="results">Standings</button></div><div class="priv">🔒 Only you can see units and win rate</div>`;
-  if (!board.series.length && !board.grades.length && !board.clv && !board.results.length) return `${head}${nightBlock(state, board)}<p class="empty">No data yet</p>`;
+  if (!board.series.length && !board.grades.length && !board.clv && !board.results.length && !board.preparation) return `${head}${nightBlock(state, board)}<p class="empty">No data yet</p>`;
   const four = windowed.rings.slice(0, 4).map((ring) => ringSvg(ring.pct, ring.label)).join("");
   return `${head}
 ${nightBlock(state, board)}
@@ -911,8 +920,54 @@ ${statsCalendar(state, board, windowed.from, windowed.to)}
 <div class="card"><h2>Profit</h2><div class="sub">${esc(windowed.headline)}</div><div class="sub">${esc(windowed.note)}</div>${chartSvg(windowed.points)}</div>
 ${four ? `<div class="card"><div class="rings">${four}</div></div>` : ""}
 ${propLedgerBlock(board)}
+${preparationBlock(board.preparation, "status")}
 ${statsSports(state, board, windowed.from, windowed.to, (rows, prefix) => gradeHits(state, board, rows, prefix))}
 ${clvCard(board, windowed.from, windowed.to, state.statsSection)}`;
+}
+
+function bookPrep(book: { state: string; reason: string; url?: string; checkedAt?: string }, name: string): string {
+  if (book.url) {
+    const when = book.checkedAt ? `<span class="sub">Point-in-time ${esc(book.checkedAt)}. Not fresh on a later deploy.</span>` : "";
+    return `<a class="btn ${name}" href="${esc(book.url)}">${name.toUpperCase()} verified</a>${when}`;
+  }
+  return `<span class="na">${name.toUpperCase()} unavailable: ${esc(book.reason)}</span>`;
+}
+
+function preparationBlock(prep: HeistPrep | null | undefined, mode: "full" | "status" = "full"): string {
+  if (!prep) return "";
+  const blockers = prep.blockers.map((item) => `<li>${esc(item)}</li>`).join("");
+  const decisions = prep.decisions.map((item) => `<li>${esc(item)}</li>`).join("");
+  const roster = `<p class="sub">Active originals: ${esc(prep.activeCappers.join(", ") || "none listed")}. Dropped, history kept: ${esc(prep.droppedCappers.join(", ") || "none listed")}. Conversion roster unchanged: ${esc(prep.conversionCappers.join(", ") || "none listed")}.</p>`;
+  const groups = prep.groups
+    .map((group) => {
+      const picks = group.picks.length
+        ? group.picks
+            .map((pick) => {
+              const ticket = pick.ticketId ? `<div class="sub">Ticket ${esc(pick.ticketId)} · ${pick.legCount} legs · one record</div>` : "";
+              const source = pick.sourceIds ? `<div class="sub">Source ${esc(pick.sourceIds)}</div>` : "";
+              const cell = pick.legacyCell ? `<div class="sub">Legacy display cell ${esc(pick.legacyCell)}. Not a source price.</div>` : "";
+              const detail = [pick.gradeDetail, pick.gradeReason].filter(Boolean).join(" · ");
+              return `<article class="hit" data-original="${esc(pick.id)}"><div><b>${esc(pick.rawPick)}</b><div class="sub">${esc(pick.sport)} · ${esc(pick.prop)} · ${esc(pick.posted)}</div>${cell}${source}<div class="sub">${esc(pick.grade || "—")}${detail ? ` · ${esc(detail)}` : ""}</div>${ticket}<div class="btns">${bookPrep(pick.hr, "hr")}${bookPrep(pick.dk, "dk")}</div></div></article>`;
+            })
+            .join("")
+        : `<p class="empty">No original picks in this snapshot.</p>`;
+      return `<section class="ticket" data-original-capper="${esc(group.capperId)}"><header><div><h3>${esc(group.capperId)}</h3><div class="sub">${group.picks.length} original${group.picks.length === 1 ? "" : "s"}</div></div></header>${picks}</section>`;
+    })
+    .join("");
+  const personal = prep.personal
+    .map((row) => `<article class="hit" data-personal="${esc(row.id)}"><div><b>${esc(row.pick)}</b><div class="sub">${esc(row.date)} · ${esc(row.reason)}</div></div><span class="res">${esc(row.grade || "—")}</span></article>`)
+    .join("");
+  const label = (value: string) => esc(value).replaceAll("_", "_<wbr>");
+  const fresh = prep.pointInTime
+    ? `Point-in-time check ${prep.pointInTime}. A later deployment has to verify these links again.`
+    : "No verified check time is on this payload. Links are not treated as fresh.";
+  const tab = prep.retireReady
+    ? "Retirement conditions are met. #cappers opens Results."
+    : "The Cappers tab stays. #cappers still opens this tab. The redirect is prepared and stays off.";
+  const originals = mode === "full"
+    ? `<h2>Original picks by capper</h2><p class="sub">${esc(prep.date)} · ${prep.pickCount} grouped originals · ${prep.verifiedHr} HR and ${prep.verifiedDk} DK verified at selection. Unverified and mismatched urls are not links. ${esc(fresh)}</p>${groups}`
+    : `<p class="sub">${prep.pickCount} grouped originals are on Today and Cappers. Results below is the historical drilldown.</p>`;
+  return `<section class="card prep" data-prep="heist-originals" data-original-count="${prep.pickCount}" data-retire="${prep.retireReady ? "ready" : "off"}"><p class="stamp">Staged · ${esc(prep.policyVersion)} · ${label(prep.activationState || "not activated")} · not the live feed</p><ul>${decisions}</ul>${roster}${originals}<h2>Personal Heist Alt</h2><p class="sub">${prep.personalEntryCount} entries · ${prep.countedPersonal} counted. Active totals ${esc(prep.personalActive)}. Empty totals are not a 0-0 record. Zero historical adoption.</p>${personal}<h2>Pooled originals</h2><p class="sub">${label(prep.pooledState)} · ${prep.pooledRows} rows. Inactive and unpopulated. Not a performance record.</p><h2>Cappers tab</h2><p class="sub">${tab}</p><ul>${blockers}</ul></section>`;
 }
 
 function cappers(state: AppState, board: Board): string {
@@ -926,7 +981,24 @@ function cappers(state: AppState, board: Board): string {
         const body = off && capper.plays.length && capper.plays.every((play) => !listedOn(play, state.book))
           ? `<details class="off" open><summary>1 play not on ${bookCode(state.book)}, tap to view ▾</summary>${plays}</details>`
           : plays;
-        return `<section class="ticket"><header><div><h3>${esc(capper.name)} <button type="button" class="info" data-act="rules" data-id="cappers" aria-label="Rules">i</button></h3><div class="sub">${esc(capper.record)}</div></div></header>${body}</section>`;
+        const recent = (capper.recentParlays ?? [])
+          .map((item) => {
+            const title = item.parts.length ? `${item.parts.length}-leg parlay` : item.pick;
+            const head = legResultLabel(item.result);
+            const parts = item.parts.length
+              ? item.parts
+                  .map((part) => {
+                    const label = legResultLabel(part.result);
+                    const note = [part.score, part.reason].filter(Boolean).join(" · ");
+                    return `<div class="part"><div><b>${esc(part.name)}</b>${note ? `<div class="sub">${esc(note)}</div>` : ""}</div><span class="res ${label.tone}">${esc(label.text)}</span></div>`;
+                  })
+                  .join("")
+              : `<p class="sub">Leg result unavailable</p>`;
+            return `<article class="hit ticketleg"><div><b>${esc(title)}</b><div class="sub">${esc(item.date)}${item.ticketId ? ` · ${esc(item.ticketId)}` : ""}</div></div><span class="res ${head.tone}">${esc(head.text)}</span>${parts}</article>`;
+          })
+          .join("");
+        const recentBlock = recent ? `<h3 style="margin:12px 0 4px">Recent parlays</h3>${recent}` : "";
+        return `<section class="ticket"><header><div><h3>${esc(capper.name)} <button type="button" class="info" data-act="rules" data-id="cappers" aria-label="Rules">i</button></h3><div class="sub">${esc(capper.record)}</div></div></header>${body}${recentBlock}</section>`;
       })
       .join("");
     return `<h2 class="grouph">${name}</h2>${blocks}`;
@@ -936,7 +1008,7 @@ function cappers(state: AppState, board: Board): string {
   const quiet = board.cappers.filter((capper) => !capper.plays.length).map((capper) => capper.name);
   const note = quiet.length ? `<p class="sub">No play today: ${esc(quiet.join(", "))}. Those names are still in the file.</p>` : "";
   const body = withPlays.length ? group("Cappers", withPlays) : `<p class="empty">No data yet</p>`;
-  return `<h1 style="font-size:1.75rem">Cappers</h1><div class="sub" style="margin-bottom:8px">${withPlays.length} with a play today · every play stays · ${bookName(state.book)} view</div>${bookToggle(state.book)}${note}${body}`;
+  return `<h1 style="font-size:1.75rem">Cappers</h1><div class="sub" style="margin-bottom:8px">${withPlays.length} with a play today · every play stays · ${bookName(state.book)} view</div>${bookToggle(state.book)}${preparationBlock(board.preparation)}${note}${body}`;
 }
 
 function signedPct(n: number): string {

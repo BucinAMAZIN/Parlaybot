@@ -305,6 +305,10 @@ export type Capper = {
   record: string;
   plays: Play[];
   note?: string;
+  /** File profile. Not recomputed from graded rows. */
+  profile?: { w: number; l: number; p: number; pct: number | null };
+  /** recent_parlays from the feed, with nested legs only. */
+  recentParlays?: { date: string; pick: string; result: string; ticketId: string; parts: TicketPart[] }[];
 };
 
 export type StandingRow = {

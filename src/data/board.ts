@@ -1,6 +1,7 @@
 import type { EdgePick } from "./adaptEdgePicks.ts";
 import type { ClvCard } from "./adaptClv.ts";
 import type { CardNote } from "../lib/cardFilter.ts";
+import type { HeistPrep } from "./heistContract.ts";
 import type { PropLedger, PropRetirement } from "./propTickets.ts";
 import type { Capper, GradeMark, LiveGame, LiveTicket, Mood, Play, Recap, SeriesPoint, SettledTicket, StandingsFile, Ticket } from "./types.ts";
 
@@ -60,6 +61,10 @@ export type Board = {
   /** Safe +100, +100, and +250 ledgers. They are not Official Parlay +100. */
   propLedgers: PropLedger[];
   propRetirement: PropRetirement | null;
+  /** Present only when the feed sent ticket_labels. */
+  ticketLabels?: { parlay100?: string; safe250?: string };
+  /** Present only when the six cutover keys are on the payload. Not the live feed. */
+  preparation?: HeistPrep | null;
 };
 
 export type NightLive = {
