@@ -23,6 +23,7 @@ import { dedupePlays } from "./dedupePlays.ts";
 import { isTicketRow, ticketParts } from "./ticketLegs.ts";
 import { capperOf, displayCat, normProp, normSide, normSport } from "./gradeLabels.ts";
 import { buildHeist } from "./heist.ts";
+import { readHeistContract } from "./heistContract.ts";
 import { propLedgersFrom, propRetirementFrom, propTicketsFrom } from "./propTickets.ts";
 import { builtLabel, dkLabel, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../lib/stamps.ts";
 
@@ -649,6 +650,8 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     if (card) tickets.push(card);
   }
 
+  const labelMap = isRow(data.ticket_labels) ? data.ticket_labels : {};
+  const officialName = str(labelMap.parlay100) || "Parlay +100";
   const allSports = isRow(sports.ALL) ? sports.ALL : {};
   const allParlay = isRow(allSports.parlay) ? allSports.parlay : null;
   const sharedParlay = !parlayReady(allParlay);
@@ -667,7 +670,7 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     const baseTag = board === "BIG4" ? "+100 · Big 4" : "+100";
     const voidTicket = ticketVoid(item);
     const plays = withTags(rawPlays, voidTicket ? `${baseTag} · Void` : baseTag, voidTicket);
-    const title = sharedParlay ? "Parlay +100" : "Parlay +100 · Big 4";
+    const title = sharedParlay ? officialName : `${officialName} · Big 4`;
     const meta = [voidTicket ? "Void" : "", sharedParlay ? "All sports · Big 4" : "Big 4 · MLB · NHL · NBA · NFL", str(item.desc) || str(item.pick)].filter(Boolean).join(" · ");
     const card = ticket(`parlay-${norm(name).replace(/ /g, "-")}`, "parlay", title, meta, plays, "official", oddsOf(item.odds) ?? undefined, builtLabel(item), board);
     if (card) tickets.push(card);
@@ -678,14 +681,14 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     if (board === "ALL") {
       const voidTicket = ticketVoid(value.parlay);
       const plays = withTags(takePlays(legsOrSelf(value.parlay), "parlay-all", statuses, new Set()), voidTicket ? "+100 · All · Void" : "+100 · All", voidTicket);
-      const card = ticket("parlay-all", "parlay", "Parlay +100 · All sports", [voidTicket ? "Void" : "", "Best picks", str(value.parlay.pick) || str(value.parlay.desc)].filter(Boolean).join(" · "), plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay), "ALL");
+      const card = ticket("parlay-all", "parlay", `${officialName} · All sports`, [voidTicket ? "Void" : "", "Best picks", str(value.parlay.pick) || str(value.parlay.desc)].filter(Boolean).join(" · "), plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay), "ALL");
       if (card) tickets.push(card);
       continue;
     }
     if (board === "Other") continue;
     const voidTicket = ticketVoid(value.parlay);
     const plays = withTags(takePlays(legsOrSelf(value.parlay), `parlay-${board}`, statuses, new Set(), sport), voidTicket ? `+100 · ${board} · Void` : `+100 · ${board}`, voidTicket);
-    const card = ticket(`parlay-${board}`, "parlay", `Parlay +100 · ${sportLabel(board)}`, [voidTicket ? "Void" : "", str(value.parlay.pick) || sportLabel(board)].filter(Boolean).join(" · "), plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay), board);
+    const card = ticket(`parlay-${board}`, "parlay", `${officialName} · ${sportLabel(board)}`, [voidTicket ? "Void" : "", str(value.parlay.pick) || sportLabel(board)].filter(Boolean).join(" · "), plays, "official", oddsOf(value.parlay.odds) ?? undefined, builtLabel(value.parlay), board);
     if (card) tickets.push(card);
   }
 
@@ -712,13 +715,25 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
       .filter((play): play is Play => !!play)
       .map((play) => ({ ...play, tags: [...new Set([...(play.tags ?? []), handle])] }));
     const record = recordLine(item);
+    const profile = num(item.w) != null || num(item.l) != null || num(item.pct) != null
+      ? { w: num(item.w) ?? 0, l: num(item.l) ?? 0, p: num(item.p) ?? 0, pct: num(item.pct) }
+      : undefined;
+    const recentParlays = rowsOf(item.recent_parlays).map((row) => ({
+      date: str(row.date),
+      pick: str(row.pick),
+      result: str(row.result) || str(row.res),
+      ticketId: str(row.ticket_id),
+      parts: ticketParts(row, [row]) ?? [],
+    }));
     cappers.push({
       id: norm(name).replace(/ /g, "-"),
       name,
       group: plays.some((play) => /action network/i.test(play.name)) ? "an" : "heist",
-      record: `${record.w}-${record.l}${record.p ? `-${record.p}` : ""} · ${record.pct ?? pctOf(record.w, record.l) ?? "—"}%`,
+      record: profile ? `${profile.w}-${profile.l}${profile.p ? `-${profile.p}` : ""} · ${profile.pct ?? "—"}%` : `${record.w}-${record.l}${record.p ? `-${record.p}` : ""} · ${record.pct ?? "—"}%`,
       plays,
       note: plays.length ? undefined : "No play in today's file.",
+      profile,
+      recentParlays,
     });
     capperPlays.push(...plays);
   }
@@ -755,6 +770,23 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     ? night(unique.rows, graded, clv ? clvLookup(clv.plays) : new Map())
     : { results: [], recap: { when: "No graded night in the file", units: "—", summary: "Nothing to total.", rows: [] } };
   const year = Number((iso || graded || "2026").slice(0, 4)) || 2026;
+  const preparation = readHeistContract(data);
+  if (preparation) {
+    const hold = "Legacy row link is not an original action.";
+    const strip = (play: Play): Play => ({
+      ...play,
+      hrSid: undefined,
+      hrLink: undefined,
+      dkSid: undefined,
+      dkLink: undefined,
+      hrUnverified: hold,
+      dkHold: hold,
+    });
+    for (const capper of cappers) capper.plays = capper.plays.map(strip);
+    for (const card of tickets) {
+      if (card.id === "cappers") card.plays = card.plays.map(strip);
+    }
+  }
 
   return {
     dateLabel: iso ? dateLabel(iso) : "Desk",
@@ -796,6 +828,10 @@ export function adaptDesk(raw: unknown, ncaab: StandingLeague): Board {
     nightLive: null,
     propLedgers: propLedgersFrom(data, retirement),
     propRetirement: retirement,
+    ticketLabels: isRow(data.ticket_labels)
+      ? { parlay100: str(data.ticket_labels.parlay100) || undefined, safe250: str(data.ticket_labels.safe250) || undefined }
+      : undefined,
+    preparation,
   };
 }
 

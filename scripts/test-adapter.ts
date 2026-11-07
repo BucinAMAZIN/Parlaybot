@@ -8,8 +8,8 @@ import { movedAltLine, readHrLive, verifiedLegSid } from "../src/data/heist.ts";
 import { renderPage, sportsFor, visibleTickets } from "../src/ui/views.ts";
 import { noteVisible } from "../src/lib/cardFilter.ts";
 import { fileBounds, historyScope, sliceHistory } from "../src/lib/history.ts";
-import { matchingPlays } from "../src/ui/statsScreen.ts";
-import { knownView, viewFromHash, type AppState } from "../src/ui/state.ts";
+import { matchingPlays, propOpenKey } from "../src/ui/statsScreen.ts";
+import { knownView, resolveHashView, viewFromHash, type AppState } from "../src/ui/state.ts";
 import { dedupePlays, playKey } from "../src/data/dedupePlays.ts";
 import { isTicketRow, legResultLabel, listedLegNames, ticketId, ticketParts } from "../src/data/ticketLegs.ts";
 import { normProp, normSide, normSport, sectionMatch } from "../src/data/gradeLabels.ts";
@@ -17,6 +17,7 @@ import { classifySport, sportLabel } from "../src/lib/sport.ts";
 import { adaptClv } from "../src/data/adaptClv.ts";
 import { adaptDeskStandings } from "../src/data/adaptStandings.ts";
 import { adaptDesk, gradeOf, showsPreparedBoard } from "../src/data/desk.ts";
+import { readHeistContract } from "../src/data/heistContract.ts";
 import { builtLabel, clockEt, heistLabel, injuryLabel, lockLabel, standingsLabel, uiBuildLabel, updatedLabel } from "../src/lib/stamps.ts";
 import { shareCardIsPrivate, shareFromPending, shareFromSettled } from "../src/lib/shareCard.ts";
 import { results, rings, sampleTickets } from "../src/data/sampleBoard.ts";
@@ -829,13 +830,10 @@ const nov6 = adaptDesk(
 );
 const plus100 = nov6.tickets.find((item) => item.productKey === "plus100");
 const plus250 = nov6.tickets.find((item) => item.productKey === "plus250");
-assert.equal(plus100?.title, "+100");
+assert.equal(plus100, undefined);
 assert.equal(plus250?.title, "+250");
-assert.equal(plus100?.plays.length, 0);
 assert.equal(plus250?.plays.length, 0);
-assert.match(plus100?.emptyNote ?? "", /2026-11-07 at 10:00 AM ET/);
-assert.match(plus100?.meta ?? "", /Not Official Parlay \+100/);
-assert.equal((plus100?.emptyNote ?? "").includes("legacy note"), false);
+assert.match(plus250?.emptyNote ?? "", /2026-11-07 at 10:00 AM ET/);
 assert.equal(nov6.notices.some((note) => /legacy note/.test(note.text)), false);
 assert.equal(nov6.tickets.find((item) => item.productKey === "parlay")?.title, "Parlay +100");
 assert.equal(nov6.tickets.some((item) => item.title.startsWith("Alt +")), false);
@@ -845,9 +843,9 @@ assert.equal(nov6.propLedgers.find((item) => item.key === "safe250")?.w, 0);
 assert.equal(nov6.grades[0]?.ticketKey, undefined);
 assert.equal(sectionMatch(nov6.grades[0], "safe"), true);
 assert.equal(sectionMatch(nov6.grades[0], "plus100"), false);
-assert.equal(sectionMatch({ cat: "Parlay +100" }, "plus100"), false);
+assert.equal(sectionMatch({ cat: "Parlay +100" }, "plus100"), true);
 const nov6Page = renderPage(blank(), nov6);
-assert.match(nov6Page, /<h3>\+100 /);
+assert.doesNotMatch(nov6Page, /data-key="plus100"/);
 assert.match(nov6Page, /<h3>\+250 /);
 assert.match(nov6Page, /Parlay \+100/);
 assert.equal(nov6Page.includes("Alt +100"), false);
@@ -931,18 +929,10 @@ const nov7 = adaptDesk(
 const built100 = nov7.tickets.find((item) => item.id === "2026-11-07|alt100|NHL|1");
 const repost = nov7.tickets.find((item) => item.id === "2026-11-07|alt250|NBA|2");
 const unavailable = nov7.tickets.find((item) => item.productKey === "plus100" && item.board === "NBA");
-assert.equal(built100?.title, "+100");
-assert.equal(built100?.plays.length, 2);
-assert.equal(built100?.plays[0]?.hrLink, verifiedHr);
-assert.equal(built100?.plays[0]?.hrSid, "9100000000000000101");
-assert.equal(built100?.plays[1]?.hrLink, undefined);
-assert.equal(built100?.plays[1]?.hrSid, undefined);
-assert.match(built100?.hrSlip ?? "", /9100000000000000101/);
-assert.equal((built100?.hrSlip ?? "").includes("9100000000000000999"), false);
+assert.equal(built100, undefined);
+assert.equal(unavailable, undefined);
 assert.equal(repost?.title, "+250");
 assert.notEqual(repost?.id, nov7.tickets.find((item) => item.id === "2026-11-07|alt250|NHL|1")?.id);
-assert.match(unavailable?.emptyNote ?? "", /No combo cleared the \+100 window/);
-assert.equal(unavailable?.plays.length, 0);
 assert.equal(nov7.propLedgers.find((item) => item.key === "safe100")?.w, 9);
 assert.equal(nov7.propLedgers.find((item) => item.key === "alt100")?.w, 1);
 assert.equal(nov7.propLedgers.find((item) => item.key === "safe250")?.l, 1);
@@ -952,21 +942,21 @@ const next250 = nov7.grades.find((grade) => grade.ticketKey === "alt250");
 const official = nov7.grades.find((grade) => grade.cat === "Parlay +100");
 assert.equal(sectionMatch(legacy!, "safe"), true);
 assert.equal(sectionMatch(legacy!, "plus100"), false);
-assert.equal(sectionMatch(next100!, "plus100"), true);
+assert.equal(sectionMatch(next100!, "plus100"), false);
 assert.equal(sectionMatch(next100!, "safe"), false);
 assert.equal(sectionMatch(next100!, "plus250"), false);
 assert.equal(sectionMatch(next250!, "plus250"), true);
 assert.equal(sectionMatch(next250!, "plus100"), false);
-assert.equal(sectionMatch(official!, "plus100"), false);
+assert.equal(sectionMatch(official!, "plus100"), true);
 assert.equal(sectionMatch(official!, "safe"), false);
 const page = renderPage(blank(), heistBoard);
 assert.match(page, /aria-label="Sport"/);
 assert.equal(page.indexOf('aria-label="Sport"') < page.indexOf('class="sportdiv"'), true);
 assert.equal(page.indexOf('class="sportdiv"') < page.indexOf('aria-label="Products"'), true);
 assert.match(page, /class="sportgrid"/);
-assert.match(page, /data-key="plus100">\+100/);
+assert.doesNotMatch(page, /data-key="plus100"/);
 assert.match(page, /data-key="plus250">\+250/);
-assert.doesNotMatch(page, /data-key="plus100">Parlay \+100|data-key="plus250">Parlay \+100/);
+assert.match(page, /data-view="cappers"/);
 assert.match(page, /data-key="NFL"/);
 assert.match(page, /data-key="MLB"/);
 assert.match(page, /data-key="NASCAR"/);
@@ -1423,5 +1413,219 @@ const sogAt = liveHtml.indexOf("Jack Eichel");
 const sogTag = liveHtml.indexOf("ltag props", sogAt);
 const sogBar = liveHtml.indexOf("lv-bar", sogAt);
 assert.ok(sogTag < sogBar);
+
+const verifiedBook = {
+  state: "VERIFIED", reason: "", sid: "2849962715762524570", event_id: null,
+  url: "https://share.hardrock.bet/Pt0T/bet?deep_link_value=hardrock://betslip/2849962715762524570",
+  odds: "-110", fingerprint: "abc", verified_at_et: "2026-11-06T19:14:16-05:00", audit_path: "/tmp/verdicts.json", absent: false, audit_verdict: "VERIFIED",
+};
+const stagedMeta = {
+  policy_version: "heist-originals-2026-11-06-forward",
+  decisions_received_at_et: "2026-11-06T19:11:00-05:00",
+  effective_at_et: null,
+  flags: { retire_separate_cappers_tab: false, historical_ownership_migration: false, generate_heist_parlays: true },
+  active_capper_ids: ["@nickm_hockey", "@the_oddsmaker"],
+  conversion_capper_ids_unchanged: ["@alexcaruso"],
+  dropped_capper_ids: ["@tonestakes"],
+  activation_state: "staged_not_approved_for_publish",
+  retirement_gates: ["exact_link_gate_coverage"],
+};
+const staged = {
+  heist_originals: {
+    date: "2026-11-06",
+    groups: [
+      { capper_id: "@nickm_hockey", original_ids: ["original-a", "original-b"] },
+      { capper_id: "@the_oddsmaker", original_ids: [] },
+    ],
+    picks: {
+      "original-a": {
+        original_id: "original-a", owner: "capper_original", capper_id: "@nickm_hockey", date: "2026-11-06", sport: "NHL", prop: "NHL ML", fam: "ML",
+        raw_pick: "Anaheim Ducks ML", raw_odds_cell: "+126", posted_odds_raw: "+126", posted_odds_reason: "", ticket_id: null, leg_count: 0, legs: [],
+        selection: null, selection_state: "Unavailable", provenance_state: "ledger_only", source_post_ids: ["post-1"], source_occurrences: [],
+        grade: { result: "W", detail: "ANA won", reason: "", evidence: null, revision: 0 },
+        books: {
+          hr: { state: "UNVERIFIED", reason: "Unavailable: no fresh exact-match evidence", sid: null, event_id: null, url: "https://evil.example/not-a-link", odds: null, fingerprint: null, verified_at_et: null, audit_path: null, absent: false, audit_verdict: null },
+          dk: { state: "UNVERIFIED", reason: "Unavailable: no fresh exact-match evidence", sid: null, event_id: null, url: null, odds: null, fingerprint: null, verified_at_et: null, audit_path: null, absent: false, audit_verdict: null },
+        },
+        analyst: null,
+      },
+      "original-b": {
+        original_id: "original-b", owner: "capper_original", capper_id: "@nickm_hockey", date: "2026-11-06", sport: "NHL", prop: "NHL ML", fam: "ML",
+        raw_pick: "Boston Bruins ML", raw_odds_cell: null, posted_odds_raw: null, posted_odds_reason: "Odds not on the post", ticket_id: null, leg_count: 0, legs: [],
+        selection: null, selection_state: "Unavailable", provenance_state: "ledger_only", source_post_ids: [], source_occurrences: [],
+        grade: { result: "Pending", detail: "", reason: "Game not finished", evidence: null, revision: 0 },
+        books: { hr: verifiedBook, dk: { ...verifiedBook, sid: "0QA1", url: "https://sportsbook.draftkings.com/event/1?outcomes=0QA1", event_id: "1" } },
+        analyst: null,
+      },
+    },
+    source_occurrences: [],
+  },
+  heist_original_links: {
+    state: "selection_time_checked",
+    items: {
+      "original-a": { pick: "Anaheim Ducks ML", date: "2026-11-06", sport: "NHL", original_id: "original-a", hr_why: "Unavailable on HR", dk_why: "Unavailable on DK" },
+      "original-b": {
+        pick: "Boston Bruins ML", date: "2026-11-06", sport: "NHL", original_id: "original-b",
+        hr_sid: "999", hr_link: "https://evil.example/mismatch",
+        dk_sid: "0QA1", dk_eid: "1", dk_link: "https://sportsbook.draftkings.com/event/1?outcomes=0QA1",
+      },
+    },
+  },
+  heist_originals_meta: stagedMeta,
+  results_cappers: {
+    rows: [{ record_id: "r1", original_id: "original-a", capper_id: "@nickm_hockey", date: "2026-11-06", prop: "NHL ML", fam: "ML", scope: "capper_original", countable: true, grade: { result: "W", detail: "ANA won", reason: "", evidence: null, revision: 0 }, legacy_row: { pick: "Anaheim Ducks ML", odds: "+126", res: "W" } }],
+    capper_tree: [
+      { capper_id: "@nickm_hockey", totals: { W: 1, L: 0, P: 0, Void: 0, Pending: 0, Unavailable: 0, rows: 1 }, legacy_profile: { w: 7, l: 7, p: 0, pct: 50 }, props: [{ prop_id: "p1", prop: "NHL ML", totals: { W: 1, L: 0, P: 0, Void: 0, Pending: 0, Unavailable: 0, rows: 1 }, days: [{ date: "2026-11-06", record_ids: ["r1"], totals: { W: 1, L: 0, P: 0, Void: 0, Pending: 0, Unavailable: 0, rows: 1 } }] }] },
+      { capper_id: "@tonestakes", totals: { W: 1, L: 0, P: 0, Void: 0, Pending: 0, Unavailable: 0, rows: 1 }, legacy_profile: { w: 27, l: 36, p: 3, pct: 43 }, props: [] },
+    ],
+    totals: { W: 1, L: 0, P: 0, Void: 0, Pending: 0, Unavailable: 0, rows: 1 },
+  },
+  heist_pooled_originals: { state: "awaiting_policy_and_verified_event_mapping", rows: [], totals: { W: 0, L: 0, P: 0, Void: 0, Pending: 0, Unavailable: 0, rows: 0 } },
+  personal_heist_alt: {
+    entries: { p1: { personal_id: "p1", owner: "personal", product: "heist_alt", date: "2026-11-06", pick: "Anaheim Ducks alt line", odds_raw: "-140", sport: "NHL", origin_original_ids: ["original-a"], origin_attribution_raw: "@nickm_hockey", conversion_changed: true, migration_state: "proposed_legacy_ownership_review", selected_at: "2026-11-01T00:00:00-05:00", grade: { result: "L", detail: "", reason: "", evidence: null, revision: 0 }, counting: { scope: "personal_heist_alt", enabled: true } } },
+    active_totals: { W: 0, L: 0, P: 0, Void: 0, Pending: 0, Unavailable: 0, rows: 0 },
+    proposed_legacy_totals: { W: 0, L: 0, P: 0, Void: 0, Pending: 0, Unavailable: 0, rows: 0 },
+  },
+  cappers: [{ name: "@nickm_hockey", w: 7, l: 7, pct: 50, today: [{ pick: "Anaheim Ducks ML", sport: "NHL", hr_link: "https://evil.example/legacy", hr_sid: "111" }] }],
+  today: { date: "2026-11-06" },
+};
+const prep = readHeistContract(staged);
+assert.equal(prep?.pickCount, 2);
+assert.equal(prep?.groups[1]?.picks.length, 0);
+assert.equal(prep?.groups[0]?.picks[0]?.grade, "W");
+assert.equal(prep?.personal[0]?.grade, "L");
+assert.equal(prep?.personal[0]?.counted, false);
+assert.equal(prep?.countedPersonal, 0);
+assert.equal(prep?.retireReady, false);
+assert.equal(prep?.groups[0]?.picks[0]?.hr.url, undefined);
+assert.equal(prep?.groups[0]?.picks[1]?.hr.url, undefined);
+assert.match(prep?.groups[0]?.picks[1]?.dk.url ?? "", /draftkings\.com\/event\//);
+assert.equal(resolveHashView("#cappers", prep)?.view, "cappers");
+const armed = readHeistContract({
+  ...staged,
+  heist_originals_meta: {
+    ...stagedMeta,
+    activation_state: "approved_activation",
+    effective_at_et: "2026-11-07T12:00:00-05:00",
+    persistent_build_integrated: true,
+    frontend_acceptance: true,
+    flags: { ...stagedMeta.flags, retire_separate_cappers_tab: true },
+  },
+});
+assert.equal(armed?.retireReady, true);
+assert.equal(resolveHashView("#cappers", armed)?.view, "results");
+assert.equal(resolveHashView("#cappers", armed)?.statsSection, "cappers");
+assert.equal(resolveHashView("#cappers", null)?.view, "cappers");
+const prepBoard = adaptDesk(staged, ncaab);
+const prepPage = renderPage(blank(), prepBoard);
+assert.match(prepPage, /data-view="cappers"/);
+assert.match(prepPage, /Staged preview—not live/);
+const prepSlice = prepPage.slice(prepPage.indexOf('data-prep="heist-originals"'));
+assert.ok(prepSlice.indexOf("data-original=") < prepSlice.indexOf('data-tech="heist"'));
+assert.match(prepPage, /Anaheim Ducks ML/);
+assert.match(prepPage, /HR unavailable/);
+assert.match(prepPage, /Link withheld/);
+assert.doesNotMatch(prepPage, /evil\.example/);
+assert.match(prepPage, /Not counted/);
+assert.match(prepPage, /Zero historical adoption/);
+assert.match(prepPage, /The Cappers tab stays/);
+const livePrep = renderPage({ ...blank(), view: "live" }, prepBoard);
+assert.match(livePrep, /data-live="capper-originals"/);
+assert.match(livePrep, /Anaheim Ducks ML/);
+assert.doesNotMatch(livePrep, /evil\.example/);
+assert.match(prepPage, /Frozen Heist tickets are not edited/);
+assert.equal(prepBoard.cappers[0]?.plays[0]?.hrLink, undefined);
+assert.equal(readHeistContract({ today: { date: "2026-11-06" } }), null);
+const openProps = new Set([propOpenKey("@nickm_hockey", "p1", false)]);
+const openResultDates = new Set([`${propOpenKey("@nickm_hockey", "p1", false)}|2026-11-06`]);
+const historyPage = renderPage({ ...blank(), view: "results", statsSection: "cappers", statsSport: "@nickm_hockey", openProps, openResultDates }, prepBoard);
+assert.match(historyPage, /data-record="r1"/);
+assert.match(historyPage, /7-7/);
+assert.match(historyPage, /Dropped from current originals/);
+assert.match(historyPage, /Profile 7-7 · rows 1-0/);
+assert.doesNotMatch(historyPage, /Not forced to match/);
+
+const cutoverPath = process.env.CUTOVER_FIXTURE;
+if (cutoverPath) {
+  const cutover = JSON.parse(readFileSync(cutoverPath, "utf8"));
+  const cut = readHeistContract(cutover);
+  assert.ok(cut);
+  assert.equal(cut.pickCount, cut.groups.reduce((sum, group) => sum + group.picks.length, 0));
+  assert.equal(cut.groups.length, 10);
+  assert.equal(cut.groups.find((group) => group.capperId === "@the_oddsmaker")?.picks.length, 0);
+  if (cut.effectiveAt === "2026-11-06T20:18:25-05:00") {
+    assert.equal(cut.activationState, "approved_activation");
+    assert.equal(cut.pickCount, 43);
+    assert.equal(cut.verifiedHr, 14);
+    assert.equal(cut.verifiedDk, 3);
+    assert.equal(cut.groups.find((group) => group.capperId === "@bigmikepickz")?.picks.length, 6);
+    assert.equal(cut.playCount, 485);
+  } else {
+    assert.equal(cut.effectiveAt, null);
+    assert.equal(cut.pickCount, 37);
+    assert.equal(cut.verifiedHr, 10);
+    assert.equal(cut.verifiedDk, 8);
+    assert.equal(cut.groups.find((group) => group.capperId === "@bigmikepickz")?.picks.length, 0);
+    assert.equal(cut.playCount, 479);
+  }
+  assert.equal(cut.groups.some((group) => group.capperId === "@tonestakes"), false);
+  assert.equal(cut.groups.some((group) => group.capperId === "@habibtings"), false);
+  assert.equal(cut.tree.find((node) => node.capperId === "@tonestakes")?.dropped, true);
+  assert.equal(cut.tree.find((node) => node.capperId === "@habibtings")?.dropped, true);
+  assert.equal(cut.personalEntryCount, 0);
+  assert.equal(cut.countedPersonal, 0);
+  assert.equal(cut.pooledRows, 0);
+  assert.equal(cut.retireReady, false);
+  assert.equal(resolveHashView("#cappers", cut)?.view, "cappers");
+  const board = adaptDesk(cutover, ncaab);
+  const bare = { ...cutover };
+  for (const key of ["heist_originals", "results_cappers", "heist_pooled_originals", "personal_heist_alt", "heist_originals_meta", "heist_original_links"]) delete bare[key];
+  const untouched = adaptDesk(bare, ncaab);
+  const names = (rows: { name: string; hrLink?: string }[]) => rows.map((row) => `${row.name}|${row.hrLink ?? ""}`).join("\n");
+  const heistPlays = board.tickets.find((ticket) => ticket.productKey === "heist")?.plays ?? [];
+  assert.ok(heistPlays.length > 0);
+  assert.equal(names(heistPlays), names(untouched.tickets.find((ticket) => ticket.productKey === "heist")?.plays ?? []));
+  assert.equal(board.grades.length, untouched.grades.length);
+  const page = renderPage(blank(), board);
+  assert.equal((page.match(/data-original="/g) ?? []).length, cut.pickCount);
+  assert.match(page, /data-view="cappers"/);
+  assert.match(page, />\+100</);
+  assert.match(page, /Zero historical adoption/);
+  assert.doesNotMatch(page, /data-personal=/);
+  const blocks = page.match(/<article class="hit origpick" data-original="[\s\S]*?<\/article>/g) ?? [];
+  assert.equal(blocks.length, cut.pickCount);
+  const allowed = new Set(cut.groups.flatMap((group) => group.picks.flatMap((pick) => [pick.hr.url, pick.dk.url].filter(Boolean))));
+  let links = 0;
+  for (const block of blocks) {
+    assert.doesNotMatch(block, /evil\.example/);
+    for (const match of block.matchAll(/href="([^"]+)"/g)) {
+      links += 1;
+      assert.equal(allowed.has(match[1]), true);
+    }
+  }
+  assert.equal(links, cut.verifiedHr + cut.verifiedDk);
+  const closed = renderPage({ ...blank(), view: "results", statsSection: "cappers" }, board);
+  assert.equal((closed.match(/data-capper="/g) ?? []).length, 12);
+  let records = 0;
+  for (const node of cut.tree) {
+    const props = new Set<string>();
+    const dates = new Set<string>();
+    for (const prop of node.props) {
+      const key = propOpenKey(node.capperId, prop.propId, false);
+      props.add(key);
+      for (const day of prop.days) dates.add(`${key}|${day.date}`);
+    }
+    const html = renderPage({ ...blank(), view: "results", statsSection: "cappers", statsSport: node.capperId, openProps: props, openResultDates: dates }, board);
+    const found = (html.match(/data-record="/g) ?? []).length;
+    assert.equal(found, node.props.reduce((sum, prop) => sum + prop.days.reduce((days, day) => days + day.plays.length, 0), 0));
+    records += found;
+  }
+  assert.equal(records, cut.playCount);
+  const live = renderPage({ ...blank(), view: "live" }, board);
+  const liveIds = [...live.matchAll(/data-live-original="([^"]+)"/g)].map((match) => match[1]);
+  assert.equal(liveIds.length, cut.pickCount);
+  assert.equal(new Set(liveIds).size, cut.pickCount);
+  console.log("cutover fixture ok", cutoverPath);
+}
 
 console.log("adapter tests ok", adapted.picks.length, "picks");

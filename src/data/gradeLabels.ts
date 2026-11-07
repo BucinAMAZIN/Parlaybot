@@ -79,14 +79,26 @@ export function normSide(pick: string, prop: string, alt: boolean): "over" | "un
 
 /** User-facing section name. The desk file still says LEG DAY. */
 export function displayCat(cat: string): string {
-  return /^leg\s*day$/i.test(cat.trim()) ? "Props" : cat;
+  const name = cat.trim();
+  if (/^leg\s*day$/i.test(name)) return "Props";
+  if (name === "Parlay +100") return "+100";
+  return cat;
 }
 
-export function sectionMatch(cat: string | { cat: string; cats?: string[]; ticketKey?: string }, section: string): boolean {
+export function sectionMatch(cat: string | { cat: string; cats?: string[]; ticketKey?: string; side?: string }, section: string): boolean {
   if (cat && typeof cat === "object") {
     if (!section || section === "all") return true;
-    if (section === "plus100") return cat.ticketKey === "alt100" || sectionMatch(cat.cat, section) || (cat.cats ?? []).some((name) => sectionMatch(name, section));
+    if (section === "plus100") {
+      if (cat.ticketKey === "alt100" || cat.ticketKey === "alt250") return false;
+      const names = cat.cats?.length ? cat.cats : [cat.cat];
+      return names.some((name) => sectionMatch(name, section)) || cat.ticketKey === "parlay100";
+    }
     if (section === "plus250") return cat.ticketKey === "alt250" || sectionMatch(cat.cat, section) || (cat.cats ?? []).some((name) => sectionMatch(name, section));
+    if (section === "cappers" && cat.side === "alt") return false;
+    if (section === "heistalt") {
+      const names = cat.cats?.length ? cat.cats : [cat.cat];
+      return names.some((name) => /alt lines/i.test(name)) || (cat.side === "alt" && names.some((name) => /heist/i.test(name)));
+    }
     if (section === "safe") {
       if (cat.ticketKey === "alt100" || cat.ticketKey === "alt250") return false;
       const names = cat.cats?.length ? cat.cats : [cat.cat];
@@ -97,8 +109,9 @@ export function sectionMatch(cat: string | { cat: string; cats?: string[]; ticke
   }
   if (!section || section === "all") return true;
   const name = cat.toLowerCase();
-  if (section === "plus100") return cat.trim() === "+100";
+  if (section === "plus100") return cat.trim() === "+100" || cat.trim() === "Parlay +100" || name === "parlay100";
   if (section === "plus250") return cat.trim() === "+250";
+  if (section === "heistalt") return name.includes("alt lines");
   if (section === "heist") return name.includes("heist");
   if (section === "safe") return name.includes("safe");
   if (section === "edge") return name === "edge" || name.startsWith("edge ");

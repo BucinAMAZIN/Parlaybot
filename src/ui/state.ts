@@ -1,3 +1,4 @@
+import type { HeistPrep } from "../data/heistContract.ts";
 import type { BookId } from "../data/types.ts";
 import type { LeagueId } from "../data/standings.ts";
 
@@ -58,7 +59,7 @@ export type AppState = {
   statsTo: string;
   statsCalOpen: boolean;
   statsMode: "day" | "week" | "range";
-  statsSection: "all" | "heist" | "safe" | "plus100" | "plus250" | "edge" | "cappers" | "legday";
+  statsSection: "all" | "heist" | "heistalt" | "safe" | "plus100" | "plus250" | "edge" | "cappers" | "legday";
   statsSport: string;
   statsAnchor: string;
   statsDraft: string;
@@ -91,6 +92,17 @@ export function knownView(hash: string): ViewId | null {
 /** #stats from the old tab lands on the combined Results tab. An empty hash opens Today. */
 export function viewFromHash(hash: string): ViewId {
   return knownView(hash) ?? "today";
+}
+
+/**
+ * #cappers stays on the Cappers tab until retirement is actually armed.
+ * The redirect is prepared and does not run on live data or a staged overlay.
+ */
+export function resolveHashView(hash: string, prep?: HeistPrep | null): { view: ViewId; statsSection?: AppState["statsSection"] } | null {
+  const name = hash.replace(/^#/, "");
+  if (name === "cappers" && prep?.retireReady) return { view: "results", statsSection: "cappers" };
+  const view = knownView(hash);
+  return view ? { view } : null;
 }
 
 const PREF_KEY = "parlaybot-v1";
